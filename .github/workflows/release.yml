@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: 
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Fetch tags
+        run: git fetch --prune --tags
+        
+      - name: Calculate semantic version
+        id: semver
+        uses: paulhatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          major_pattern: "(BREAKING CHANGE|!:)"
+          minor_pattern: "(feat|feature)"
+          patch_pattern: "(fix|bug|hotfix)"
+          version_format: "${major}.${minor}.${patch}"
+          change_path: "."
+          search_commit_body: true
+          user_format_type: "csv"
+          enable_prerelease_mode: false
+          debug: false
+          
+      - name: Check if release is needed
+        id: check
+        run: |
+          if [ -z "${{ steps.semver.outputs.version_tag }}" ]; then
+            echo "No conventional commits found - skipping release"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version to release: ${{ steps.semver.outputs.version_tag }}"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Set up Go
+        if: steps.check.outputs.skip == 'false'
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          cache: true
+          
+      - name: Build Linux binary
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o buzz-linux-amd64 .
+          
+      - name: Create Release
+        if: steps.check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.semver.outputs.version_tag }}
+          name: Release ${{ steps.semver.outputs.version_tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            buzz-linux-amd64
+            README.md
+            LICENSE
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
