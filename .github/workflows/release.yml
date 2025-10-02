@@ -5,23 +5,26 @@ on:
     branches:
       - main
 
-concurrency: 
+permissions:
+  contents: write
+
+concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Fetch tags
         run: git fetch --prune --tags
-        
+
       - name: Calculate semantic version
         id: semver
         uses: paulhatch/semantic-version@v5.4.0
@@ -36,7 +39,7 @@ jobs:
           user_format_type: "csv"
           enable_prerelease_mode: false
           debug: false
-          
+
       - name: Check if release is needed
         id: check
         run: |
@@ -47,19 +50,19 @@ jobs:
             echo "Version to release: ${{ steps.semver.outputs.version_tag }}"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Set up Go
         if: steps.check.outputs.skip == 'false'
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-          
+
       - name: Build Linux binary
         if: steps.check.outputs.skip == 'false'
         run: |
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o buzz-linux-amd64 .
-          
+
       - name: Create Release
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1
