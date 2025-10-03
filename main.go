@@ -154,17 +154,41 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-		// Navigation keys - only work when modal is closed
-		// The "up" and "k" keys move the cursor up
+		// Navigation keys - spatial movement through grid (only when modal is closed)
 		case "up", "k":
-			if !m.appModel.showModal && m.appModel.cursor > 0 {
-				m.appModel.cursor--
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				cols := calculateColumns(m.appModel.width)
+				newCursor := m.appModel.cursor - cols
+				if newCursor >= 0 {
+					m.appModel.cursor = newCursor
+				}
 			}
 
-		// The "down" and "j" keys move the cursor down
 		case "down", "j":
-			if !m.appModel.showModal && m.appModel.cursor < len(m.appModel.goals)-1 {
-				m.appModel.cursor++
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				cols := calculateColumns(m.appModel.width)
+				newCursor := m.appModel.cursor + cols
+				if newCursor < len(m.appModel.goals) {
+					m.appModel.cursor = newCursor
+				}
+			}
+
+		case "left", "h":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				cols := calculateColumns(m.appModel.width)
+				currentCol := m.appModel.cursor % cols
+				if currentCol > 0 {
+					m.appModel.cursor--
+				}
+			}
+
+		case "right", "l":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				cols := calculateColumns(m.appModel.width)
+				currentCol := m.appModel.cursor % cols
+				if currentCol < cols-1 && m.appModel.cursor+1 < len(m.appModel.goals) {
+					m.appModel.cursor++
+				}
 			}
 
 		// The "enter" key shows goal details modal (only when modal is closed)

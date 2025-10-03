@@ -98,7 +98,7 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	}
 	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
 	
-	return fmt.Sprintf("\nPress q to quit%s%s | Enter for details, Space to select\n", scrollInfo, refreshInfo)
+	return fmt.Sprintf("\nPress q to quit%s%s | Arrow keys to navigate, Enter for details, Space to select\n", scrollInfo, refreshInfo)
 }
 
 // RenderModal renders a modal with detailed goal information
