@@ -14,7 +14,6 @@ import (
 type appModel struct {
 	goals         []Goal           // Beeminder goals
 	cursor        int              // which goal our cursor is pointing at
-	selected      map[int]struct{} // which goals are selected
 	config        *Config          // Beeminder credentials
 	loading       bool             // whether we're loading goals
 	err           error            // error from loading goals
@@ -48,7 +47,6 @@ type model struct {
 func initialAppModel(config *Config) appModel {
 	return appModel{
 		goals:         []Goal{},
-		selected:      make(map[int]struct{}),
 		config:        config,
 		loading:       true,
 		refreshActive: true,
@@ -344,17 +342,6 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				currentCol := m.appModel.cursor % cols
 				if currentCol < cols-1 && m.appModel.cursor+1 < len(m.appModel.goals) {
 					m.appModel.cursor++
-				}
-			}
-
-		// The spacebar toggles the selected state (only when modal is closed)
-		case " ":
-			if !m.appModel.showModal {
-				_, ok := m.appModel.selected[m.appModel.cursor]
-				if ok {
-					delete(m.appModel.selected, m.appModel.cursor)
-				} else {
-					m.appModel.selected[m.appModel.cursor] = struct{}{}
 				}
 			}
 
