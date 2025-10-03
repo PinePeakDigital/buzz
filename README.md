@@ -1,14 +1,14 @@
 # buzz
 
-Beeminder TUI - A terminal user interface built with Bubble Tea.
+A terminal user interface for [Beeminder](https://beeminder.com) built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-## Prerequisites
-
-- Go 1.21 or later
+View your goals in a colorful grid, navigate with arrow keys, and add datapoints directly from your terminal.
 
 ## Installation
 
-You can install `buzz` using [bin](https://github.com/marcosnils/bin):
+### Using bin (Recommended)
+
+Install using [bin](https://github.com/marcosnils/bin):
 
 ```bash
 bin install https://github.com/narthur/buzz
@@ -16,28 +16,16 @@ bin install https://github.com/narthur/buzz
 
 This will download the latest release and make it available in your PATH.
 
-## Building
+### Direct Download
 
-To build the application:
+You can also download pre-built binaries directly from the [releases page](https://github.com/narthur/buzz/releases). Choose the appropriate binary for your operating system and architecture.
+
+### From Source
+
+If you have Go installed:
 
 ```bash
-go build
-```
-
-This will create a `buzz` executable in the current directory.
-
-## Running
-
-You can run the application in two ways:
-
-### Run directly with Go:
-```bash
-go run main.go
-```
-
-### Run the compiled binary:
-```bash
-./buzz
+go install github.com/narthur/buzz@latest
 ```
 
 ## Authentication
@@ -51,18 +39,32 @@ On first run, you'll be prompted to authenticate with Beeminder:
 
 Your credentials will be stored securely in `~/.buzzrc` with read/write permissions for your user only.
 
-On subsequent runs, the application will automatically load your saved credentials.
-
 ## Usage
 
-- Use **arrow keys** or **j/k** (vim-style) to navigate
-- Press **Enter** or **Space** to select/deselect items
-- Press **q** or **Ctrl+C** to quit
+### Navigation
+- **Arrow keys** or **hjkl** (vim-style) - Navigate the goal grid spatially
+- **Page Up/Down** or **u/d** - Scroll when there are many goals
+- **Enter** - View goal details and add datapoints
+- **q** or **Ctrl+C** - Quit
+
+### Goal Grid
+Goals are displayed in a colorful grid based on their deadline urgency:
+- **Red** - Overdue or due today
+- **Orange** - Due within 1-2 days  
+- **Blue** - Due within 3-6 days
+- **Green** - Due within 7+ days
+- **Gray** - Far future deadlines
+
+### Adding Datapoints
+1. Navigate to a goal and press **Enter** to open details
+2. Press **a** to enter datapoint input mode
+3. Use **Tab/Shift+Tab** to navigate between fields
+4. **Enter** to submit, **Escape** to cancel
+
+### Auto-refresh
+- Press **t** to toggle auto-refresh (refreshes every 5 minutes)
+- Press **r** to manually refresh goals
 
 ## Development
 
-To install dependencies:
-
-```bash
-go mod tidy
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and contribution guidelines.
