@@ -30,6 +30,19 @@ go run main.go
 ./buzz
 ```
 
+## Authentication
+
+On first run, you'll be prompted to authenticate with Beeminder:
+
+1. Visit https://www.beeminder.com/api/v1/auth_token.json to get your credentials
+2. Copy the JSON output (format: `{"username":"your_username","auth_token":"your_token"}`)
+3. Paste it into the application when prompted
+4. Press Enter to save
+
+Your credentials will be stored securely in `~/.buzzrc` with read/write permissions for your user only.
+
+On subsequent runs, the application will automatically load your saved credentials.
+
 ## Usage
 
 - Use **arrow keys** or **j/k** (vim-style) to navigate
