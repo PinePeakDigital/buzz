@@ -56,49 +56,45 @@ func CreateGridStyles() map[string]lipgloss.Style {
 }
 
 // CreateHighlightedGridStyles returns the styled grid cell styles for highlighted/selected goals
+// Only changes border color - keeps original text colors
 func CreateHighlightedGridStyles() map[string]lipgloss.Style {
 	return map[string]lipgloss.Style{
 		"red": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
-			BorderForeground(lipgloss.Color("1")).
-			Foreground(lipgloss.Color("1")).
-			Background(lipgloss.Color("0")).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("1")).        // Original red text color
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
 		
 		"orange": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
-			BorderForeground(lipgloss.Color("208")).
-			Foreground(lipgloss.Color("208")).
-			Background(lipgloss.Color("0")).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("208")).      // Original orange text color
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
 		
 		"blue": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
-			BorderForeground(lipgloss.Color("4")).
-			Foreground(lipgloss.Color("4")).
-			Background(lipgloss.Color("0")).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("4")).        // Original blue text color
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
 		
 		"green": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
-			BorderForeground(lipgloss.Color("2")).
-			Foreground(lipgloss.Color("2")).
-			Background(lipgloss.Color("0")).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("2")).        // Original green text color
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
 		
 		"gray": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
-			BorderForeground(lipgloss.Color("8")).
-			Foreground(lipgloss.Color("8")).
-			Background(lipgloss.Color("0")).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("8")).        // Original gray text color
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),

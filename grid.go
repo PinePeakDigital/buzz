@@ -7,7 +7,7 @@ import (
 )
 
 // RenderGrid renders the goals grid based on the app model
-func RenderGrid(goals []Goal, width, height, scrollRow, cursor int) string {
+func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated bool) string {
 	if len(goals) == 0 {
 		return "No goals found.\n\nPress q to quit.\n"
 	}
@@ -45,17 +45,17 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int) string {
 			// Get color based on buffer
 			color := GetBufferColor(goal.Safebuf)
 			
-			// Choose style based on whether this goal is selected (cursor position)
+			// Choose style based on whether this goal is selected and user has navigated
 			var style lipgloss.Style
 			var exists bool
-			if idx == cursor {
-				// Use highlighted style for selected goal
+			if idx == cursor && hasNavigated {
+				// Use highlighted style for selected goal (only after navigation)
 				style, exists = highlightedStyles[color]
 				if !exists {
 					style = highlightedStyles["gray"]
 				}
 			} else {
-				// Use normal style for non-selected goals
+				// Use normal style for non-selected goals or when not navigated yet
 				style, exists = styles[color]
 				if !exists {
 					style = styles["gray"]

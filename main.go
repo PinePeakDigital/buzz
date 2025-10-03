@@ -22,6 +22,7 @@ type appModel struct {
 	refreshActive bool             // whether auto-refresh is active
 	showModal     bool             // whether to show goal details modal
 	modalGoal     *Goal            // the goal to show in modal
+	hasNavigated  bool             // whether user has used arrow keys
 }
 
 // model is the top-level model that switches between auth and app
@@ -157,6 +158,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Navigation keys - spatial movement through grid (only when modal is closed)
 		case "up", "k":
 			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
 				cols := calculateColumns(m.appModel.width)
 				newCursor := m.appModel.cursor - cols
 				if newCursor >= 0 {
@@ -166,6 +168,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down", "j":
 			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
 				cols := calculateColumns(m.appModel.width)
 				newCursor := m.appModel.cursor + cols
 				if newCursor < len(m.appModel.goals) {
@@ -175,6 +178,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "left", "h":
 			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
 				cols := calculateColumns(m.appModel.width)
 				currentCol := m.appModel.cursor % cols
 				if currentCol > 0 {
@@ -184,6 +188,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "right", "l":
 			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
 				cols := calculateColumns(m.appModel.width)
 				currentCol := m.appModel.cursor % cols
 				if currentCol < cols-1 && m.appModel.cursor+1 < len(m.appModel.goals) {
@@ -267,7 +272,7 @@ func (m model) viewApp() string {
 	}
 
 	// Render the grid and footer
-	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor)
+	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated)
 	footer := RenderFooter(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 	
 	baseView := grid + footer
