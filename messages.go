@@ -15,6 +15,11 @@ type goalsLoadedMsg struct {
 // refreshTickMsg is sent when it's time to refresh data
 type refreshTickMsg struct{}
 
+// datapointSubmittedMsg is sent when a datapoint submission completes
+type datapointSubmittedMsg struct {
+	err error
+}
+
 // loadGoalsCmd fetches goals from Beeminder API
 func loadGoalsCmd(config *Config) tea.Cmd {
 	return func() tea.Msg {
@@ -32,4 +37,12 @@ func refreshTickCmd() tea.Cmd {
 	return tea.Tick(time.Minute*5, func(time.Time) tea.Msg {
 		return refreshTickMsg{}
 	})
+}
+
+// submitDatapointCmd submits a datapoint to Beeminder API
+func submitDatapointCmd(config *Config, goalSlug, timestamp, value, comment string) tea.Cmd {
+	return func() tea.Msg {
+		err := CreateDatapoint(config, goalSlug, timestamp, value, comment)
+		return datapointSubmittedMsg{err: err}
+	}
 }

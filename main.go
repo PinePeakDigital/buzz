@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -23,6 +25,15 @@ type appModel struct {
 	showModal     bool             // whether to show goal details modal
 	modalGoal     *Goal            // the goal to show in modal
 	hasNavigated  bool             // whether user has used arrow keys
+	
+	// Modal input fields
+	inputDate     string           // date input (YYYY-MM-DD format)
+	inputValue    string           // value input 
+	inputComment  string           // comment input
+	inputFocus    int              // which input field is focused (0=date, 1=value, 2=comment)
+	inputMode     bool             // whether we're in input mode vs viewing mode
+	inputError    string           // error message for input validation
+	submitting    bool             // whether we're currently submitting a datapoint
 }
 
 // model is the top-level model that switches between auth and app
@@ -136,6 +147,21 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case datapointSubmittedMsg:
+		// Datapoint submission completed
+		m.appModel.submitting = false
+		if msg.err != nil {
+			m.appModel.inputError = fmt.Sprintf("Failed to submit: %v", msg.err)
+		} else {
+			// Success - exit input mode and refresh goals (without showing loading state)
+			m.appModel.inputMode = false
+			m.appModel.inputFocus = 0
+			m.appModel.inputError = ""
+			// Don't set loading = true here to avoid the full-app loading state
+			return m, loadGoalsCmd(m.appModel.config)
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 
@@ -149,10 +175,135 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Escape key closes the modal or quits if no modal
 		case "esc":
 			if m.appModel.showModal {
-				m.appModel.showModal = false
-				m.appModel.modalGoal = nil
+				if m.appModel.inputMode {
+					// Exit input mode
+					m.appModel.inputMode = false
+					m.appModel.inputFocus = 0
+					m.appModel.inputError = ""
+				} else {
+					// Close modal
+					m.appModel.showModal = false
+					m.appModel.modalGoal = nil
+				}
 			} else {
 				return m, tea.Quit
+			}
+
+		// Enter input mode with 'a' (only when modal is open but not in input mode and not submitting)
+		case "a":
+			if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting {
+				m.appModel.inputMode = true
+				m.appModel.inputFocus = 0
+				m.appModel.inputError = "" // Clear any previous errors
+				// Set default values
+				m.appModel.inputDate = time.Now().Format("2006-01-02")
+				m.appModel.inputComment = "Added via buzz"
+				
+				// Try to get the last datapoint value, default to "1" if it fails
+				if lastValue, err := GetLastDatapointValue(m.appModel.config, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
+					m.appModel.inputValue = fmt.Sprintf("%.1f", lastValue)
+				} else {
+					m.appModel.inputValue = "1"
+				}
+			}
+
+		// Tab navigation between input fields (only in input mode and not submitting)
+		case "tab":
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+				m.appModel.inputFocus = (m.appModel.inputFocus + 1) % 3
+			}		// Shift+Tab navigation in input mode (reverse)
+		case "shift+tab":
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+				m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
+			}
+
+		// Backspace handling in input mode
+		case "backspace":
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+				switch m.appModel.inputFocus {
+				case 0: // Date field
+					if len(m.appModel.inputDate) > 0 {
+						m.appModel.inputDate = m.appModel.inputDate[:len(m.appModel.inputDate)-1]
+					}
+				case 1: // Value field
+					if len(m.appModel.inputValue) > 0 {
+						m.appModel.inputValue = m.appModel.inputValue[:len(m.appModel.inputValue)-1]
+					}
+				case 2: // Comment field
+					if len(m.appModel.inputComment) > 0 {
+						m.appModel.inputComment = m.appModel.inputComment[:len(m.appModel.inputComment)-1]
+					}
+				}
+			}
+
+		// Handle text input in input mode
+		default:
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+				char := msg.String()
+				if len(char) == 1 {
+					switch m.appModel.inputFocus {
+					case 0: // Date field - allow digits and dashes
+						if (char >= "0" && char <= "9") || char == "-" {
+							m.appModel.inputDate += char
+						}
+					case 1: // Value field - allow digits, decimal point, and negative sign
+						if (char >= "0" && char <= "9") || char == "." || char == "-" {
+							m.appModel.inputValue += char
+						}
+					case 2: // Comment field - allow all printable characters
+						if char >= " " && char <= "~" {
+							m.appModel.inputComment += char
+						}
+					}
+				}
+			}
+
+		// Submit form with Enter in input mode
+		case "enter":
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+				// Clear previous error
+				m.appModel.inputError = ""
+				
+				// Validate input fields
+				if m.appModel.inputDate == "" {
+					m.appModel.inputError = "Date cannot be empty"
+					return m, nil
+				}
+				
+				if m.appModel.inputValue == "" {
+					m.appModel.inputError = "Value cannot be empty"
+					return m, nil
+				}
+				
+				// Parse and validate date
+				date, err := time.Parse("2006-01-02", m.appModel.inputDate)
+				if err != nil {
+					m.appModel.inputError = "Invalid date format (use YYYY-MM-DD)"
+					return m, nil
+				}
+				
+				// Validate that date is not in the future beyond today
+				if date.After(time.Now().AddDate(0, 0, 1)) {
+					m.appModel.inputError = "Date cannot be more than 1 day in the future"
+					return m, nil
+				}
+				
+				// Parse and validate value (must be a valid number)
+				if _, err := strconv.ParseFloat(m.appModel.inputValue, 64); err != nil {
+					m.appModel.inputError = "Value must be a valid number"
+					return m, nil
+				}
+				
+				timestamp := fmt.Sprintf("%d", date.Unix())
+				
+				// Set submitting state and submit datapoint asynchronously
+				m.appModel.submitting = true
+				return m, submitDatapointCmd(m.appModel.config, m.appModel.modalGoal.Slug, 
+					timestamp, m.appModel.inputValue, m.appModel.inputComment)
+			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 && m.appModel.cursor < len(m.appModel.goals) {
+				// Show goal details modal (existing functionality)
+				m.appModel.showModal = true
+				m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
 			}
 
 		// Navigation keys - spatial movement through grid (only when modal is closed)
@@ -194,13 +345,6 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if currentCol < cols-1 && m.appModel.cursor+1 < len(m.appModel.goals) {
 					m.appModel.cursor++
 				}
-			}
-
-		// The "enter" key shows goal details modal (only when modal is closed)
-		case "enter":
-			if !m.appModel.showModal && len(m.appModel.goals) > 0 && m.appModel.cursor < len(m.appModel.goals) {
-				m.appModel.showModal = true
-				m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
 			}
 
 		// The spacebar toggles the selected state (only when modal is closed)
@@ -279,7 +423,7 @@ func (m model) viewApp() string {
 	
 	// Show modal overlay if modal is active
 	if m.appModel.showModal && m.appModel.modalGoal != nil {
-		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height)
+		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, m.appModel.inputDate, m.appModel.inputValue, m.appModel.inputComment, m.appModel.inputFocus, m.appModel.inputMode, m.appModel.inputError, m.appModel.submitting)
 		return modal
 	}
 	
