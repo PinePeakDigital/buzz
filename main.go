@@ -199,17 +199,17 @@ func (m model) viewApp() string {
 	s := "Beeminder Goals\n\n"
 
 	// Define grid margins and padding
-	const gridMarginRight = 1
-	const gridMarginBottom = 1
+	const gridMarginRight = 0  // No horizontal margin - borders will touch
+	const gridMarginBottom = 0 // No vertical margin - borders will touch
 	const paddingVertical = 0
 	const paddingHorizontal = 1
 
-	// Define color styles with borders instead of backgrounds
-	redStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("1")).Foreground(lipgloss.Color("1")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	orangeStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("208")).Foreground(lipgloss.Color("208")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	blueStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("4")).Foreground(lipgloss.Color("4")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	greenStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("2")).Foreground(lipgloss.Color("2")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	grayStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Foreground(lipgloss.Color("8")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	// Define color styles with collapsed borders
+	redStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("1")).Foreground(lipgloss.Color("1")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	orangeStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("208")).Foreground(lipgloss.Color("208")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	blueStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("4")).Foreground(lipgloss.Color("4")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	greenStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("2")).Foreground(lipgloss.Color("2")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	grayStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("8")).Foreground(lipgloss.Color("8")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
 
 	// Calculate grid dimensions (4 columns)
 	const cols = 4
