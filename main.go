@@ -24,6 +24,24 @@ func max(a, b int) int {
 	return b
 }
 
+// calculateColumns determines the optimal number of columns based on terminal width
+func calculateColumns(width int) int {
+	// Each cell needs approximately:
+	// - 16 chars for content (truncateString maxLen)
+	// - 2 chars for left/right borders
+	// - 2 chars for horizontal padding
+	// Total: ~20 chars per cell
+	const minCellWidth = 20
+	const minCols = 1
+	
+	if width < minCellWidth {
+		return minCols
+	}
+	
+	cols := width / minCellWidth
+	return max(minCols, cols)
+}
+
 // appModel is the main application model (previously just "model")
 type appModel struct {
 	goals      []Goal           // Beeminder goals
@@ -192,9 +210,9 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Scroll down with Page Down or 'd'
 		case "pgdown", "d":
-			const cols = 4
+			cols := calculateColumns(m.appModel.width)
 			totalRows := (len(m.appModel.goals) + cols - 1) / cols
-			maxVisibleRows := m.appModel.height / 4 // Rough estimate of rows that fit
+			maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
 			if m.appModel.scrollRow < totalRows-maxVisibleRows {
 				m.appModel.scrollRow++
 			}
@@ -242,8 +260,8 @@ func (m model) viewApp() string {
 	greenStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("2")).Foreground(lipgloss.Color("2")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
 	grayStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("8")).Foreground(lipgloss.Color("8")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
 
-	// Calculate grid dimensions (4 columns)
-	const cols = 4
+	// Calculate grid dimensions based on terminal width
+	cols := calculateColumns(m.appModel.width)
 	totalRows := (len(m.appModel.goals) + cols - 1) / cols
 	
 	// Calculate visible rows based on terminal height
@@ -295,14 +313,14 @@ func (m model) viewApp() string {
 	}
 
 	// The footer with scroll information
-var colsVal = 4
-totalRows = (len(m.appModel.goals) + colsVal - 1) / colsVal
-maxVisibleRows = max(1, (m.appModel.height-4)/4)
+	footerCols := calculateColumns(m.appModel.width)
+	footerTotalRows := (len(m.appModel.goals) + footerCols - 1) / footerCols
+	footerMaxVisibleRows := max(1, (m.appModel.height-4)/4)
 	
 	scrollInfo := ""
-	if totalRows > maxVisibleRows {
+	if footerTotalRows > footerMaxVisibleRows {
 		scrollInfo = fmt.Sprintf(" | Scroll: %d/%d (u/d or pgup/pgdown)", 
-			m.appModel.scrollRow+1, max(1, totalRows-maxVisibleRows+1))
+			m.appModel.scrollRow+1, max(1, footerTotalRows-footerMaxVisibleRows+1))
 	}
 	
 	s += fmt.Sprintf("\nPress q to quit%s\n", scrollInfo)
