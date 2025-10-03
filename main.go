@@ -26,8 +26,8 @@ type model struct {
 	state     string // "auth" or "app"
 	authModel authModel
 	appModel  appModel
-	width     int    // terminal width
-	height    int    // terminal height
+	width     int // terminal width
+	height    int // terminal height
 }
 
 // goalsLoadedMsg is sent when goals are loaded from the API
@@ -238,7 +238,7 @@ func (m model) viewApp() string {
 
 			// Format goal display
 			display := fmt.Sprintf("%s\n$%.0f | %s",
-				truncateString(goal.Title, 16),
+				truncateString(goal.Slug, 16),
 				goal.Pledge,
 				FormatDueDate(goal.Losedate))
 
