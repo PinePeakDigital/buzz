@@ -1,0 +1,45 @@
+#!/bin/bash
+# Git commit-msg hook to enforce conventional commit format
+# This hook validates that commit messages follow the conventional commit specification
+
+# Define the conventional commit regex pattern
+# Format: type(scope): description
+# Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
+conventional_commit_regex='^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,50}'
+
+# Read the commit message from the file passed as argument
+commit_message=$(head -n1 "$1")
+
+# Check if the commit message matches the conventional commit format
+if ! echo "$commit_message" | grep -qE "$conventional_commit_regex"; then
+    echo "❌ Invalid commit message format!"
+    echo ""
+    echo "📋 Your commit message:"
+    echo "   $commit_message"
+    echo ""
+    echo "📖 Expected format: type(scope): description"
+    echo ""
+    echo "✅ Valid types:"
+    echo "   feat:     A new feature"
+    echo "   fix:      A bug fix"
+    echo "   docs:     Documentation only changes"
+    echo "   style:    Changes that do not affect the meaning of the code"
+    echo "   refactor: A code change that neither fixes a bug nor adds a feature"
+    echo "   test:     Adding missing tests or correcting existing tests"
+    echo "   chore:    Changes to the build process or auxiliary tools"
+    echo "   perf:     A code change that improves performance"
+    echo "   ci:       Changes to CI configuration files and scripts"
+    echo "   build:    Changes that affect the build system or external dependencies"
+    echo "   revert:   Reverts a previous commit"
+    echo ""
+    echo "💡 Examples:"
+    echo "   feat: add user authentication"
+    echo "   fix(api): handle nil pointer in user service"
+    echo "   docs: update README with installation steps"
+    echo "   refactor(db): simplify connection pooling"
+    echo ""
+    exit 1
+fi
+
+echo "✅ Commit message format is valid!"
+exit 0
