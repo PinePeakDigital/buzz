@@ -6,6 +6,16 @@ Beeminder TUI - A terminal user interface built with Bubble Tea.
 
 - Go 1.21 or later
 
+## Installation
+
+You can install `buzz` using [bin](https://github.com/marcosnils/bin):
+
+```bash
+bin install https://github.com/narthur/buzz
+```
+
+This will download the latest release and make it available in your PATH.
+
 ## Building
 
 To build the application:
