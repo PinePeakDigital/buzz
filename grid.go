@@ -7,7 +7,7 @@ import (
 )
 
 // RenderGrid renders the goals grid based on the app model
-func RenderGrid(goals []Goal, width, height, scrollRow int) string {
+func RenderGrid(goals []Goal, width, height, scrollRow, cursor int) string {
 	if len(goals) == 0 {
 		return "No goals found.\n\nPress q to quit.\n"
 	}
@@ -17,6 +17,7 @@ func RenderGrid(goals []Goal, width, height, scrollRow int) string {
 
 	// Get grid styles
 	styles := CreateGridStyles()
+	highlightedStyles := CreateHighlightedGridStyles()
 
 	// Calculate grid dimensions based on terminal width
 	cols := calculateColumns(width)
@@ -43,9 +44,22 @@ func RenderGrid(goals []Goal, width, height, scrollRow int) string {
 
 			// Get color based on buffer
 			color := GetBufferColor(goal.Safebuf)
-			style, exists := styles[color]
-			if !exists {
-				style = styles["gray"]
+			
+			// Choose style based on whether this goal is selected (cursor position)
+			var style lipgloss.Style
+			var exists bool
+			if idx == cursor {
+				// Use highlighted style for selected goal
+				style, exists = highlightedStyles[color]
+				if !exists {
+					style = highlightedStyles["gray"]
+				}
+			} else {
+				// Use normal style for non-selected goals
+				style, exists = styles[color]
+				if !exists {
+					style = styles["gray"]
+				}
 			}
 
 			// Format goal display

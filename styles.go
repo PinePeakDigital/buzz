@@ -55,6 +55,56 @@ func CreateGridStyles() map[string]lipgloss.Style {
 	}
 }
 
+// CreateHighlightedGridStyles returns the styled grid cell styles for highlighted/selected goals
+func CreateHighlightedGridStyles() map[string]lipgloss.Style {
+	return map[string]lipgloss.Style{
+		"red": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("1")).
+			Foreground(lipgloss.Color("1")).
+			Background(lipgloss.Color("0")).
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"orange": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("208")).
+			Foreground(lipgloss.Color("208")).
+			Background(lipgloss.Color("0")).
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"blue": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("4")).
+			Foreground(lipgloss.Color("4")).
+			Background(lipgloss.Color("0")).
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"green": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("2")).
+			Foreground(lipgloss.Color("2")).
+			Background(lipgloss.Color("0")).
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"gray": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("8")).
+			Foreground(lipgloss.Color("8")).
+			Background(lipgloss.Color("0")).
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+	}
+}
+
 // CreateModalStyle returns the style for the goal details modal
 func CreateModalStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
