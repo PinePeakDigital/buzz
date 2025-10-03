@@ -17,6 +17,8 @@ type appModel struct {
 	config   *Config          // Beeminder credentials
 	loading  bool             // whether we're loading goals
 	err      error            // error from loading goals
+	width    int              // terminal width
+	height   int              // terminal height
 }
 
 // model is the top-level model that switches between auth and app
@@ -24,6 +26,8 @@ type model struct {
 	state     string // "auth" or "app"
 	authModel authModel
 	appModel  appModel
+	width     int    // terminal width
+	height    int    // terminal height
 }
 
 // goalsLoadedMsg is sent when goals are loaded from the API
@@ -82,6 +86,14 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle window size messages for both states
+	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = msg.Width
+		m.height = msg.Height
+		m.appModel.width = msg.Width
+		m.appModel.height = msg.Height
+	}
+
 	if m.state == "auth" {
 		// Handle auth state
 		switch msg := msg.(type) {
@@ -89,6 +101,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Authentication succeeded, switch to app
 			m.state = "app"
 			m.appModel = initialAppModel(msg.config)
+			m.appModel.width = m.width
+			m.appModel.height = m.height
 			return m, loadGoalsCmd(msg.config)
 		default:
 			var cmd tea.Cmd
@@ -251,7 +265,7 @@ func truncateString(s string, maxLen int) string {
 }
 
 func main() {
-	p := tea.NewProgram(initialModel())
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
