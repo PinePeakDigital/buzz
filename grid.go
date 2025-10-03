@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -98,7 +99,17 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	}
 	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
 	
-	return fmt.Sprintf("\nPress q to quit%s%s | Arrow keys to navigate, Enter for details, Space to select\n", scrollInfo, refreshInfo)
+	// Build the full footer text
+	footerText := fmt.Sprintf("Press q to quit%s%s | Arrow keys to navigate, Enter for details, Space to select", scrollInfo, refreshInfo)
+	
+	// If the footer is too wide, wrap it
+	if len(footerText) > width {
+		// Split into multiple lines based on available width
+		lines := wrapText(footerText, width)
+		return "\n" + strings.Join(lines, "\n") + "\n"
+	}
+	
+	return fmt.Sprintf("\n%s\n", footerText)
 }
 
 // RenderModal renders a modal with detailed goal information and data input form
