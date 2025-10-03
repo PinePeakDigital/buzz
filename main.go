@@ -20,6 +20,9 @@ type appModel struct {
 	height        int              // terminal height
 	scrollRow     int              // current scroll position (in rows)
 	refreshActive bool             // whether auto-refresh is active
+	showModal     bool             // whether to show goal details modal
+	modalGoal     *Goal            // the goal to show in modal
+	hasNavigated  bool             // whether user has used arrow keys
 }
 
 // model is the top-level model that switches between auth and app
@@ -143,54 +146,106 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.appModel.cursor > 0 {
-				m.appModel.cursor--
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			if m.appModel.cursor < len(m.appModel.goals)-1 {
-				m.appModel.cursor++
-			}
-
-		// The "enter" key and the spacebar (a literal space) toggle
-		// the selected state for the item that the cursor is pointing at.
-		case "enter", " ":
-			_, ok := m.appModel.selected[m.appModel.cursor]
-			if ok {
-				delete(m.appModel.selected, m.appModel.cursor)
+		// Escape key closes the modal or quits if no modal
+		case "esc":
+			if m.appModel.showModal {
+				m.appModel.showModal = false
+				m.appModel.modalGoal = nil
 			} else {
-				m.appModel.selected[m.appModel.cursor] = struct{}{}
+				return m, tea.Quit
 			}
 
-		// Scroll up with Page Up or 'u'
+		// Navigation keys - spatial movement through grid (only when modal is closed)
+		case "up", "k":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
+				cols := calculateColumns(m.appModel.width)
+				newCursor := m.appModel.cursor - cols
+				if newCursor >= 0 {
+					m.appModel.cursor = newCursor
+				}
+			}
+
+		case "down", "j":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
+				cols := calculateColumns(m.appModel.width)
+				newCursor := m.appModel.cursor + cols
+				if newCursor < len(m.appModel.goals) {
+					m.appModel.cursor = newCursor
+				}
+			}
+
+		case "left", "h":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
+				cols := calculateColumns(m.appModel.width)
+				currentCol := m.appModel.cursor % cols
+				if currentCol > 0 {
+					m.appModel.cursor--
+				}
+			}
+
+		case "right", "l":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+				m.appModel.hasNavigated = true
+				cols := calculateColumns(m.appModel.width)
+				currentCol := m.appModel.cursor % cols
+				if currentCol < cols-1 && m.appModel.cursor+1 < len(m.appModel.goals) {
+					m.appModel.cursor++
+				}
+			}
+
+		// The "enter" key shows goal details modal (only when modal is closed)
+		case "enter":
+			if !m.appModel.showModal && len(m.appModel.goals) > 0 && m.appModel.cursor < len(m.appModel.goals) {
+				m.appModel.showModal = true
+				m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+			}
+
+		// The spacebar toggles the selected state (only when modal is closed)
+		case " ":
+			if !m.appModel.showModal {
+				_, ok := m.appModel.selected[m.appModel.cursor]
+				if ok {
+					delete(m.appModel.selected, m.appModel.cursor)
+				} else {
+					m.appModel.selected[m.appModel.cursor] = struct{}{}
+				}
+			}
+
+		// Scroll up with Page Up or 'u' (only when modal is closed)
 		case "pgup", "u":
-			if m.appModel.scrollRow > 0 {
+			if !m.appModel.showModal && m.appModel.scrollRow > 0 {
 				m.appModel.scrollRow--
 			}
 
-		// Scroll down with Page Down or 'd'
+		// Scroll down with Page Down or 'd' (only when modal is closed)
 		case "pgdown", "d":
-			cols := calculateColumns(m.appModel.width)
-			totalRows := (len(m.appModel.goals) + cols - 1) / cols
-			maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
-			if m.appModel.scrollRow < totalRows-maxVisibleRows {
-				m.appModel.scrollRow++
+			if !m.appModel.showModal {
+				cols := calculateColumns(m.appModel.width)
+				totalRows := (len(m.appModel.goals) + cols - 1) / cols
+				maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
+				if m.appModel.scrollRow < totalRows-maxVisibleRows {
+					m.appModel.scrollRow++
+				}
 			}
 
-		// Manual refresh with 'r'
+		// Manual refresh with 'r' (only when modal is closed)
 		case "r":
-			m.appModel.loading = true
-			return m, loadGoalsCmd(m.appModel.config)
+			if !m.appModel.showModal {
+				m.appModel.loading = true
+				return m, loadGoalsCmd(m.appModel.config)
+			}
 
-		// Toggle auto-refresh with 't'
+		// Toggle auto-refresh with 't' (only when modal is closed)
 		case "t":
-			m.appModel.refreshActive = !m.appModel.refreshActive
-			if m.appModel.refreshActive {
-				// If we just enabled auto-refresh, start the timer
-				return m, refreshTickCmd()
+			if !m.appModel.showModal {
+				m.appModel.refreshActive = !m.appModel.refreshActive
+				if m.appModel.refreshActive {
+					// If we just enabled auto-refresh, start the timer
+					return m, refreshTickCmd()
+				}
 			}
 		}
 	}
@@ -217,10 +272,18 @@ func (m model) viewApp() string {
 	}
 
 	// Render the grid and footer
-	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow)
+	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated)
 	footer := RenderFooter(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 	
-	return grid + footer
+	baseView := grid + footer
+	
+	// Show modal overlay if modal is active
+	if m.appModel.showModal && m.appModel.modalGoal != nil {
+		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height)
+		return modal
+	}
+	
+	return baseView
 }
 
 func main() {

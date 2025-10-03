@@ -54,3 +54,67 @@ func CreateGridStyles() map[string]lipgloss.Style {
 			MarginBottom(GridMarginBottom),
 	}
 }
+
+// CreateHighlightedGridStyles returns the styled grid cell styles for highlighted/selected goals
+// Only changes border color - keeps original text colors
+func CreateHighlightedGridStyles() map[string]lipgloss.Style {
+	return map[string]lipgloss.Style{
+		"red": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("1")).        // Original red text color
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"orange": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("208")).      // Original orange text color
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"blue": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("4")).        // Original blue text color
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"green": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("2")).        // Original green text color
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+		
+		"gray": lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
+			Foreground(lipgloss.Color("8")).        // Original gray text color
+			Padding(PaddingVertical, PaddingHorizontal).
+			MarginRight(GridMarginRight).
+			MarginBottom(GridMarginBottom),
+	}
+}
+
+// CreateModalStyle returns the style for the goal details modal
+func CreateModalStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("4")).
+		Background(lipgloss.Color("0")).
+		Foreground(lipgloss.Color("15")).
+		Padding(1, 2).
+		Margin(1, 2)
+}
+
+// CreateOverlayStyle returns the semi-transparent overlay style
+func CreateOverlayStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color("8")).
+		Foreground(lipgloss.Color("0"))
+}
