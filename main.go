@@ -74,7 +74,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			var cmd tea.Cmd
 			updatedModel, cmd := m.authModel.Update(msg)
-			m.authModel = updatedModel.(authModel)
+			if authModel, ok := updatedModel.(authModel); ok {
+				m.authModel = authModel
+			} else {
+				// Type assertion failed - log error and keep current authModel unchanged
+				fmt.Fprintf(os.Stderr, "Warning: authModel.Update returned unexpected type %T, keeping current authModel\n", updatedModel)
+				cmd = nil // Return safe command
+			}
 			return m, cmd
 		}
 	}
