@@ -153,11 +153,11 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.appModel.inputError = fmt.Sprintf("Failed to submit: %v", msg.err)
 		} else {
-			// Success - exit input mode and refresh goals
+			// Success - exit input mode and refresh goals (without showing loading state)
 			m.appModel.inputMode = false
 			m.appModel.inputFocus = 0
 			m.appModel.inputError = ""
-			m.appModel.loading = true
+			// Don't set loading = true here to avoid the full-app loading state
 			return m, loadGoalsCmd(m.appModel.config)
 		}
 		return m, nil
