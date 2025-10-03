@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -15,6 +16,15 @@ type Goal struct {
 	Losedate int64   `json:"losedate"`
 	Pledge   float64 `json:"pledge"`
 	Safebuf  int     `json:"safebuf"`
+}
+
+// Datapoint represents a Beeminder datapoint
+type Datapoint struct {
+	ID        string  `json:"id"`
+	Timestamp int64   `json:"timestamp"`
+	Daystamp  string  `json:"daystamp"`
+	Value     float64 `json:"value"`
+	Comment   string  `json:"comment"`
 }
 
 // FetchGoals fetches the user's goals from Beeminder API
@@ -97,4 +107,56 @@ func FormatDueDate(losedate int64) string {
 		return "1 day"
 	}
 	return fmt.Sprintf("%d days", days)
+}
+
+// GetLastDatapointValue fetches the last datapoint value for a goal
+func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
+	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
+		config.Username, goalSlug, config.AuthToken)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch goal details: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		LastDatapoint *Datapoint `json:"last_datapoint"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("failed to decode goal details: %w", err)
+	}
+
+	if result.LastDatapoint == nil {
+		return 0, nil // No previous datapoints
+	}
+
+	return result.LastDatapoint.Value, nil
+}
+
+// CreateDatapoint submits a new datapoint to a Beeminder goal
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
+	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s/datapoints.json",
+		config.Username, goalSlug)
+
+	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
+		config.AuthToken, timestamp, value, comment)
+
+	resp, err := http.Post(url, "application/x-www-form-urlencoded", 
+		strings.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create datapoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }

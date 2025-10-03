@@ -101,8 +101,8 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	return fmt.Sprintf("\nPress q to quit%s%s | Arrow keys to navigate, Enter for details, Space to select\n", scrollInfo, refreshInfo)
 }
 
-// RenderModal renders a modal with detailed goal information
-func RenderModal(goal *Goal, width, height int) string {
+// RenderModal renders a modal with detailed goal information and data input form
+func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComment string, inputFocus int, inputMode bool, inputError string) string {
 	if goal == nil {
 		return ""
 	}
@@ -125,14 +125,44 @@ func RenderModal(goal *Goal, width, height int) string {
 		"Pledge: $%.2f\n"+
 		"Safe Buffer: %d days\n"+
 		"Due Date: %s\n"+
-		"Buffer Color: %s\n\n"+
-		"Press ESC to close",
+		"Buffer Color: %s",
 		goal.Slug,
 		goal.Title,
 		goal.Pledge,
 		goal.Safebuf,
 		FormatDueDate(goal.Losedate),
 		GetBufferColor(goal.Safebuf))
+
+	// Data input form
+	var formContent string
+	if inputMode {
+		// Create input fields with focus highlighting
+		dateField := inputDate
+		valueField := inputValue
+		commentField := inputComment
+		
+		if inputFocus == 0 {
+			dateField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(dateField)
+		}
+		if inputFocus == 1 {
+			valueField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(valueField)
+		}
+		if inputFocus == 2 {
+			commentField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(commentField)
+		}
+		
+		errorMsg := ""
+		if inputError != "" {
+			errorMsg = fmt.Sprintf("\n%s", lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("Error: "+inputError))
+		}
+		
+		formContent = fmt.Sprintf("\n\n--- Add Datapoint ---\nDate: %s\nValue: %s\nComment: %s%s\n\nTab/Shift+Tab: Navigate • Enter: Submit • Esc: Cancel", 
+			dateField, valueField, commentField, errorMsg)
+	} else {
+		formContent = "\n\nPress 'a' to add datapoint • Press ESC to close"
+	}
+	
+	content += formContent
 
 	// Apply width constraint to content
 	styledContent := modalStyle.Width(modalWidth).Render(content)
