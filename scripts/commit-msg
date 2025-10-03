@@ -5,7 +5,9 @@
 # Define the conventional commit regex pattern
 # Format: type(scope): description
 # Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
-conventional_commit_regex='^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,50}'
+# scripts/commit-msg
+
+conventional_commit_regex='^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\([^)]+\))?(!)?: .+$'
 
 # Read the commit message from the file passed as argument
 commit_message=$(head -n1 "$1")
