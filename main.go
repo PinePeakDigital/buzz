@@ -11,17 +11,17 @@ import (
 
 // appModel is the main application model (previously just "model")
 type appModel struct {
-	goals    []Goal             // Beeminder goals
-	cursor   int                // which goal our cursor is pointing at
-	selected map[int]struct{}   // which goals are selected
-	config   *Config            // Beeminder credentials
-	loading  bool               // whether we're loading goals
-	err      error              // error from loading goals
+	goals    []Goal           // Beeminder goals
+	cursor   int              // which goal our cursor is pointing at
+	selected map[int]struct{} // which goals are selected
+	config   *Config          // Beeminder credentials
+	loading  bool             // whether we're loading goals
+	err      error            // error from loading goals
 }
 
 // model is the top-level model that switches between auth and app
 type model struct {
-	state    string      // "auth" or "app"
+	state     string // "auth" or "app"
 	authModel authModel
 	appModel  appModel
 }
@@ -205,7 +205,7 @@ func (m model) viewApp() string {
 			}
 
 			goal := m.appModel.goals[idx]
-			
+
 			// Get color based on buffer
 			color := GetBufferColor(goal.Safebuf)
 			var style lipgloss.Style
@@ -223,11 +223,11 @@ func (m model) viewApp() string {
 			}
 
 			// Format goal display
-			display := fmt.Sprintf("%s\n$%.0f | %s", 
+			display := fmt.Sprintf("%s\n$%.0f | %s",
 				truncateString(goal.Title, 16),
 				goal.Pledge,
 				FormatDueDate(goal.Losedate))
-			
+
 			cell := style.Render(display)
 			rowCells = append(rowCells, cell)
 		}

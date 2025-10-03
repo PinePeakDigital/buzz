@@ -82,11 +82,11 @@ func GetBufferColor(safebuf int) string {
 func FormatDueDate(losedate int64) string {
 	t := time.Unix(losedate, 0)
 	now := time.Now()
-	
+
 	// Calculate days until due
 	duration := t.Sub(now)
 	days := int(duration.Hours() / 24)
-	
+
 	if days < 0 {
 		return "OVERDUE"
 	}
