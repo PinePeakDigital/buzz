@@ -243,9 +243,15 @@ func (m model) viewApp() string {
 				FormatDueDate(goal.Losedate))
 
 			cell := style.Render(display)
+			
+			// Add horizontal gutter (space) between cells, except after the last cell
+			if col < cols-1 && idx < len(m.appModel.goals)-1 {
+				cell += " "
+			}
+			
 			rowCells = append(rowCells, cell)
 		}
-		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...) + "\n\n"
+		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...) + "\n"
 	}
 
 	// The footer
