@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -44,15 +45,16 @@ func calculateColumns(width int) int {
 
 // appModel is the main application model (previously just "model")
 type appModel struct {
-	goals      []Goal           // Beeminder goals
-	cursor     int              // which goal our cursor is pointing at
-	selected   map[int]struct{} // which goals are selected
-	config     *Config          // Beeminder credentials
-	loading    bool             // whether we're loading goals
-	err        error            // error from loading goals
-	width      int              // terminal width
-	height     int              // terminal height
-	scrollRow  int              // current scroll position (in rows)
+	goals         []Goal           // Beeminder goals
+	cursor        int              // which goal our cursor is pointing at
+	selected      map[int]struct{} // which goals are selected
+	config        *Config          // Beeminder credentials
+	loading       bool             // whether we're loading goals
+	err           error            // error from loading goals
+	width         int              // terminal width
+	height        int              // terminal height
+	scrollRow     int              // current scroll position (in rows)
+	refreshActive bool             // whether auto-refresh is active
 }
 
 // model is the top-level model that switches between auth and app
@@ -70,6 +72,9 @@ type goalsLoadedMsg struct {
 	err   error
 }
 
+// refreshTickMsg is sent when it's time to refresh data
+type refreshTickMsg struct{}
+
 // loadGoalsCmd fetches goals from Beeminder API
 func loadGoalsCmd(config *Config) tea.Cmd {
 	return func() tea.Msg {
@@ -82,12 +87,20 @@ func loadGoalsCmd(config *Config) tea.Cmd {
 	}
 }
 
+// refreshTickCmd creates a command that sends refresh tick messages at intervals
+func refreshTickCmd() tea.Cmd {
+	return tea.Tick(time.Minute*5, func(time.Time) tea.Msg {
+		return refreshTickMsg{}
+	})
+}
+
 func initialAppModel(config *Config) appModel {
 	return appModel{
-		goals:    []Goal{},
-		selected: make(map[int]struct{}),
-		config:   config,
-		loading:  true,
+		goals:         []Goal{},
+		selected:      make(map[int]struct{}),
+		config:        config,
+		loading:       true,
+		refreshActive: true,
 	}
 }
 
@@ -115,8 +128,11 @@ func (m model) Init() tea.Cmd {
 	if m.state == "auth" {
 		return m.authModel.Init()
 	}
-	// In app state, load goals
-	return loadGoalsCmd(m.appModel.config)
+	// In app state, load goals and start refresh timer
+	return tea.Batch(
+		loadGoalsCmd(m.appModel.config),
+		refreshTickCmd(),
+	)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -170,6 +186,16 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case refreshTickMsg:
+		// Time to refresh data
+		if m.appModel.refreshActive {
+			return m, tea.Batch(
+				loadGoalsCmd(m.appModel.config),
+				refreshTickCmd(), // Schedule the next refresh
+			)
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 
@@ -215,6 +241,19 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
 			if m.appModel.scrollRow < totalRows-maxVisibleRows {
 				m.appModel.scrollRow++
+			}
+
+		// Manual refresh with 'r'
+		case "r":
+			m.appModel.loading = true
+			return m, loadGoalsCmd(m.appModel.config)
+
+		// Toggle auto-refresh with 't'
+		case "t":
+			m.appModel.refreshActive = !m.appModel.refreshActive
+			if m.appModel.refreshActive {
+				// If we just enabled auto-refresh, start the timer
+				return m, refreshTickCmd()
 			}
 		}
 	}
@@ -323,7 +362,14 @@ func (m model) viewApp() string {
 			m.appModel.scrollRow+1, max(1, footerTotalRows-footerMaxVisibleRows+1))
 	}
 	
-	s += fmt.Sprintf("\nPress q to quit%s\n", scrollInfo)
+	// Refresh status
+	refreshStatus := "OFF"
+	if m.appModel.refreshActive {
+		refreshStatus = "ON"
+	}
+	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
+	
+	s += fmt.Sprintf("\nPress q to quit%s%s\n", scrollInfo, refreshInfo)
 
 	// Send the UI for rendering
 	return s
