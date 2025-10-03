@@ -3,16 +3,20 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // appModel is the main application model (previously just "model")
 type appModel struct {
-	choices  []string           // items on the to-do list
-	cursor   int                // which to-do list item our cursor is pointing at
-	selected map[int]struct{}   // which to-do items are selected
+	goals    []Goal             // Beeminder goals
+	cursor   int                // which goal our cursor is pointing at
+	selected map[int]struct{}   // which goals are selected
 	config   *Config            // Beeminder credentials
+	loading  bool               // whether we're loading goals
+	err      error              // error from loading goals
 }
 
 // model is the top-level model that switches between auth and app
@@ -22,16 +26,30 @@ type model struct {
 	appModel  appModel
 }
 
+// goalsLoadedMsg is sent when goals are loaded from the API
+type goalsLoadedMsg struct {
+	goals []Goal
+	err   error
+}
+
+// loadGoalsCmd fetches goals from Beeminder API
+func loadGoalsCmd(config *Config) tea.Cmd {
+	return func() tea.Msg {
+		goals, err := FetchGoals(config)
+		if err != nil {
+			return goalsLoadedMsg{err: err}
+		}
+		SortGoals(goals)
+		return goalsLoadedMsg{goals: goals}
+	}
+}
+
 func initialAppModel(config *Config) appModel {
 	return appModel{
-		// A to-do list can have any number of items
-		choices: []string{"Buy carrots", "Buy celery", "Buy kohlrabi"},
-
-		// A map which indicates which choices are selected. We're using
-		// the map like a mathematical set. The keys refer to the indexes
-		// of the `choices` slice, above.
+		goals:    []Goal{},
 		selected: make(map[int]struct{}),
 		config:   config,
+		loading:  true,
 	}
 }
 
@@ -59,7 +77,8 @@ func (m model) Init() tea.Cmd {
 	if m.state == "auth" {
 		return m.authModel.Init()
 	}
-	return nil
+	// In app state, load goals
+	return loadGoalsCmd(m.appModel.config)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -70,7 +89,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Authentication succeeded, switch to app
 			m.state = "app"
 			m.appModel = initialAppModel(msg.config)
-			return m, nil
+			return m, loadGoalsCmd(msg.config)
 		default:
 			var cmd tea.Cmd
 			updatedModel, cmd := m.authModel.Update(msg)
@@ -92,6 +111,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
+	case goalsLoadedMsg:
+		// Goals have been loaded from the API
+		m.appModel.loading = false
+		if msg.err != nil {
+			m.appModel.err = msg.err
+		} else {
+			m.appModel.goals = msg.goals
+			m.appModel.err = nil
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 
@@ -110,7 +140,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// The "down" and "j" keys move the cursor down
 		case "down", "j":
-			if m.appModel.cursor < len(m.appModel.choices)-1 {
+			if m.appModel.cursor < len(m.appModel.goals)-1 {
 				m.appModel.cursor++
 			}
 
@@ -139,26 +169,69 @@ func (m model) View() string {
 }
 
 func (m model) viewApp() string {
+	if m.appModel.loading {
+		return "Loading goals...\n\nPress q to quit.\n"
+	}
+
+	if m.appModel.err != nil {
+		return fmt.Sprintf("Error loading goals: %v\n\nPress q to quit.\n", m.appModel.err)
+	}
+
+	if len(m.appModel.goals) == 0 {
+		return "No goals found.\n\nPress q to quit.\n"
+	}
+
 	// The header
-	s := "What should we buy at the market?\n\n"
+	s := "Beeminder Goals\n\n"
 
-	// Iterate over our choices
-	for i, choice := range m.appModel.choices {
+	// Define color styles
+	redStyle := lipgloss.NewStyle().Background(lipgloss.Color("1")).Foreground(lipgloss.Color("15")).Padding(0, 1)
+	orangeStyle := lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Padding(0, 1)
+	blueStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("15")).Padding(0, 1)
+	greenStyle := lipgloss.NewStyle().Background(lipgloss.Color("2")).Foreground(lipgloss.Color("0")).Padding(0, 1)
+	grayStyle := lipgloss.NewStyle().Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")).Padding(0, 1)
 
-		// Is the cursor pointing at this choice?
-		cursor := " " // no cursor
-		if m.appModel.cursor == i {
-			cursor = ">" // cursor!
+	// Calculate grid dimensions (4 columns)
+	const cols = 4
+	rows := (len(m.appModel.goals) + cols - 1) / cols
+
+	// Build grid
+	for row := 0; row < rows; row++ {
+		var rowCells []string
+		for col := 0; col < cols; col++ {
+			idx := row*cols + col
+			if idx >= len(m.appModel.goals) {
+				break
+			}
+
+			goal := m.appModel.goals[idx]
+			
+			// Get color based on buffer
+			color := GetBufferColor(goal.Safebuf)
+			var style lipgloss.Style
+			switch color {
+			case "red":
+				style = redStyle
+			case "orange":
+				style = orangeStyle
+			case "blue":
+				style = blueStyle
+			case "green":
+				style = greenStyle
+			default:
+				style = grayStyle
+			}
+
+			// Format goal display
+			display := fmt.Sprintf("%s\n$%.0f | %s", 
+				truncateString(goal.Title, 16),
+				goal.Pledge,
+				FormatDueDate(goal.Losedate))
+			
+			cell := style.Render(display)
+			rowCells = append(rowCells, cell)
 		}
-
-		// Is this choice selected?
-		checked := " " // not selected
-		if _, ok := m.appModel.selected[i]; ok {
-			checked = "x" // selected!
-		}
-
-		// Render the row
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...) + "\n\n"
 	}
 
 	// The footer
@@ -166,6 +239,15 @@ func (m model) viewApp() string {
 
 	// Send the UI for rendering
 	return s
+}
+
+// truncateString truncates a string to maxLen characters
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		// Pad with spaces to ensure consistent width
+		return s + strings.Repeat(" ", maxLen-len(s))
+	}
+	return s[:maxLen-3] + "..."
 }
 
 func main() {
