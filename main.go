@@ -198,12 +198,12 @@ func (m model) viewApp() string {
 	// The header
 	s := "Beeminder Goals\n\n"
 
-	// Define color styles
-	redStyle := lipgloss.NewStyle().Background(lipgloss.Color("1")).Foreground(lipgloss.Color("15")).Padding(0, 1)
-	orangeStyle := lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Padding(0, 1)
-	blueStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("15")).Padding(0, 1)
-	greenStyle := lipgloss.NewStyle().Background(lipgloss.Color("2")).Foreground(lipgloss.Color("0")).Padding(0, 1)
-	grayStyle := lipgloss.NewStyle().Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")).Padding(0, 1)
+	// Define color styles with margins for grid gutters
+	redStyle := lipgloss.NewStyle().Background(lipgloss.Color("1")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1)
+	orangeStyle := lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1)
+	blueStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1)
+	greenStyle := lipgloss.NewStyle().Background(lipgloss.Color("2")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1)
+	grayStyle := lipgloss.NewStyle().Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1)
 
 	// Calculate grid dimensions (4 columns)
 	const cols = 4
@@ -243,15 +243,12 @@ func (m model) viewApp() string {
 				FormatDueDate(goal.Losedate))
 
 			cell := style.Render(display)
-			
-			// Add horizontal gutter (space) between cells, except after the last cell
-			if col < cols-1 && idx < len(m.appModel.goals)-1 {
-				cell += " "
-			}
-			
 			rowCells = append(rowCells, cell)
 		}
-		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...) + "\n"
+		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...)
+		if row < rows-1 {
+			s += "\n"
+		}
 	}
 
 	// The footer
