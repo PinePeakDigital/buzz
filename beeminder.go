@@ -93,20 +93,33 @@ func FormatDueDate(losedate int64) string {
 	t := time.Unix(losedate, 0)
 	now := time.Now()
 
-	// Calculate days until due
+	// Calculate duration until due
 	duration := t.Sub(now)
-	days := int(duration.Hours() / 24)
+	totalHours := duration.Hours()
 
-	if days < 0 {
+	if totalHours < 0 {
 		return "OVERDUE"
 	}
-	if days == 0 {
-		return "TODAY"
+
+	// If less than 1 day, show in hours or minutes
+	if totalHours < 24 {
+		if totalHours >= 1 {
+			// Show in hours (rounded down)
+			hours := int(totalHours)
+			return fmt.Sprintf("%dh", hours)
+		} else {
+			// Show in minutes (rounded down)
+			minutes := int(duration.Minutes())
+			if minutes < 1 {
+				return "0m"
+			}
+			return fmt.Sprintf("%dm", minutes)
+		}
 	}
-	if days == 1 {
-		return "1 day"
-	}
-	return fmt.Sprintf("%d days", days)
+
+	// Show in days with "d" suffix
+	days := int(totalHours / 24)
+	return fmt.Sprintf("%dd", days)
 }
 
 // GetLastDatapointValue fetches the last datapoint value for a goal
