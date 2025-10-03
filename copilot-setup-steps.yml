@@ -1,0 +1,19 @@
+name: Buzz Project Setup
+description: Setup development environment for the Buzz Go project
+
+steps:
+  - name: Install Git Hooks
+    description: Setup conventional commit enforcement hooks
+    run: ./scripts/setup-hooks.sh
+    
+  - name: Verify Go Installation
+    description: Check that Go is properly installed
+    run: go version
+    
+  - name: Install Dependencies
+    description: Download Go module dependencies
+    run: go mod download
+    
+  - name: Run Tests
+    description: Verify the project builds and tests pass
+    run: go test ./...
