@@ -33,6 +33,7 @@ type appModel struct {
 	inputFocus    int              // which input field is focused (0=date, 1=value, 2=comment)
 	inputMode     bool             // whether we're in input mode vs viewing mode
 	inputError    string           // error message for input validation
+	submitting    bool             // whether we're currently submitting a datapoint
 }
 
 // model is the top-level model that switches between auth and app
@@ -146,6 +147,21 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case datapointSubmittedMsg:
+		// Datapoint submission completed
+		m.appModel.submitting = false
+		if msg.err != nil {
+			m.appModel.inputError = fmt.Sprintf("Failed to submit: %v", msg.err)
+		} else {
+			// Success - exit input mode and refresh goals
+			m.appModel.inputMode = false
+			m.appModel.inputFocus = 0
+			m.appModel.inputError = ""
+			m.appModel.loading = true
+			return m, loadGoalsCmd(m.appModel.config)
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 
@@ -173,9 +189,9 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-		// Enter input mode with 'a' (only when modal is open but not in input mode)
+		// Enter input mode with 'a' (only when modal is open but not in input mode and not submitting)
 		case "a":
-			if m.appModel.showModal && !m.appModel.inputMode {
+			if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputMode = true
 				m.appModel.inputFocus = 0
 				m.appModel.inputError = "" // Clear any previous errors
@@ -191,21 +207,19 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		// Tab navigation in input mode
+		// Tab navigation between input fields (only in input mode and not submitting)
 		case "tab":
-			if m.appModel.showModal && m.appModel.inputMode {
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 1) % 3
-			}
-
-		// Shift+Tab navigation in input mode (reverse)
+			}		// Shift+Tab navigation in input mode (reverse)
 		case "shift+tab":
-			if m.appModel.showModal && m.appModel.inputMode {
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
 			}
 
 		// Backspace handling in input mode
 		case "backspace":
-			if m.appModel.showModal && m.appModel.inputMode {
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				switch m.appModel.inputFocus {
 				case 0: // Date field
 					if len(m.appModel.inputDate) > 0 {
@@ -224,7 +238,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle text input in input mode
 		default:
-			if m.appModel.showModal && m.appModel.inputMode {
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				char := msg.String()
 				if len(char) == 1 {
 					switch m.appModel.inputFocus {
@@ -246,7 +260,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Submit form with Enter in input mode
 		case "enter":
-			if m.appModel.showModal && m.appModel.inputMode {
+			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				// Clear previous error
 				m.appModel.inputError = ""
 				
@@ -282,21 +296,10 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				
 				timestamp := fmt.Sprintf("%d", date.Unix())
 				
-				// Submit datapoint to Beeminder API
-				err = CreateDatapoint(m.appModel.config, m.appModel.modalGoal.Slug, 
+				// Set submitting state and submit datapoint asynchronously
+				m.appModel.submitting = true
+				return m, submitDatapointCmd(m.appModel.config, m.appModel.modalGoal.Slug, 
 					timestamp, m.appModel.inputValue, m.appModel.inputComment)
-				
-				if err != nil {
-					m.appModel.inputError = fmt.Sprintf("Failed to submit: %v", err)
-					return m, nil
-				}
-				
-				// Success - exit input mode and refresh goals
-				m.appModel.inputMode = false
-				m.appModel.inputFocus = 0
-				m.appModel.inputError = ""
-				m.appModel.loading = true
-				return m, loadGoalsCmd(m.appModel.config)
 			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 && m.appModel.cursor < len(m.appModel.goals) {
 				// Show goal details modal (existing functionality)
 				m.appModel.showModal = true
@@ -420,7 +423,7 @@ func (m model) viewApp() string {
 	
 	// Show modal overlay if modal is active
 	if m.appModel.showModal && m.appModel.modalGoal != nil {
-		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, m.appModel.inputDate, m.appModel.inputValue, m.appModel.inputComment, m.appModel.inputFocus, m.appModel.inputMode, m.appModel.inputError)
+		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, m.appModel.inputDate, m.appModel.inputValue, m.appModel.inputComment, m.appModel.inputFocus, m.appModel.inputMode, m.appModel.inputError, m.appModel.submitting)
 		return modal
 	}
 	
