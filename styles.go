@@ -54,3 +54,21 @@ func CreateGridStyles() map[string]lipgloss.Style {
 			MarginBottom(GridMarginBottom),
 	}
 }
+
+// CreateModalStyle returns the style for the goal details modal
+func CreateModalStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("4")).
+		Background(lipgloss.Color("0")).
+		Foreground(lipgloss.Color("15")).
+		Padding(1, 2).
+		Margin(1, 2)
+}
+
+// CreateOverlayStyle returns the semi-transparent overlay style
+func CreateOverlayStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color("8")).
+		Foreground(lipgloss.Color("0"))
+}

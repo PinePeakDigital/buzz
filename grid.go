@@ -84,5 +84,72 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	}
 	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
 	
-	return fmt.Sprintf("\nPress q to quit%s%s\n", scrollInfo, refreshInfo)
+	return fmt.Sprintf("\nPress q to quit%s%s | Enter for details, Space to select\n", scrollInfo, refreshInfo)
+}
+
+// RenderModal renders a modal with detailed goal information
+func RenderModal(goal *Goal, width, height int) string {
+	if goal == nil {
+		return ""
+	}
+
+	modalStyle := CreateModalStyle()
+	
+	// Calculate modal dimensions (80% of screen width, auto height)
+	modalWidth := width * 8 / 10
+	if modalWidth > 80 {
+		modalWidth = 80
+	}
+	if modalWidth < 40 {
+		modalWidth = 40
+	}
+
+	// Goal details content
+	content := fmt.Sprintf("Goal Details\n\n"+
+		"Slug: %s\n"+
+		"Title: %s\n"+
+		"Pledge: $%.2f\n"+
+		"Safe Buffer: %d days\n"+
+		"Due Date: %s\n"+
+		"Buffer Color: %s\n\n"+
+		"Press ESC to close",
+		goal.Slug,
+		goal.Title,
+		goal.Pledge,
+		goal.Safebuf,
+		FormatDueDate(goal.Losedate),
+		GetBufferColor(goal.Safebuf))
+
+	// Apply width constraint to content
+	styledContent := modalStyle.Width(modalWidth).Render(content)
+	
+	// Center the modal horizontally
+	leftPadding := (width - modalWidth) / 2
+	if leftPadding < 0 {
+		leftPadding = 0
+	}
+	
+	// Center the modal vertically (approximately)
+	topPadding := height / 4
+	if topPadding < 1 {
+		topPadding = 1
+	}
+	
+	// Add vertical spacing
+	verticalPadding := ""
+	for i := 0; i < topPadding; i++ {
+		verticalPadding += "\n"
+	}
+	
+	// Add horizontal centering
+	centeredModal := ""
+	for _, line := range []string{styledContent} {
+		padding := ""
+		for i := 0; i < leftPadding; i++ {
+			padding += " "
+		}
+		centeredModal += padding + line
+	}
+	
+	return verticalPadding + centeredModal
 }
