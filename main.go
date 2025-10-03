@@ -198,12 +198,18 @@ func (m model) viewApp() string {
 	// The header
 	s := "Beeminder Goals\n\n"
 
+	// Define grid margins and padding
+	const gridMarginRight = 1
+	const gridMarginBottom = 1
+	const paddingVertical = 0
+	const paddingHorizontal = 1
+
 	// Define color styles with margins for grid gutters
-	redStyle := lipgloss.NewStyle().Background(lipgloss.Color("1")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1)
-	orangeStyle := lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1)
-	blueStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1)
-	greenStyle := lipgloss.NewStyle().Background(lipgloss.Color("2")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1)
-	grayStyle := lipgloss.NewStyle().Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1)
+	redStyle := lipgloss.NewStyle().Background(lipgloss.Color("1")).Foreground(lipgloss.Color("15")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	orangeStyle := lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("0")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	blueStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("15")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	greenStyle := lipgloss.NewStyle().Background(lipgloss.Color("2")).Foreground(lipgloss.Color("0")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
+	grayStyle := lipgloss.NewStyle().Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
 
 	// Calculate grid dimensions (4 columns)
 	const cols = 4
@@ -246,9 +252,7 @@ func (m model) viewApp() string {
 			rowCells = append(rowCells, cell)
 		}
 		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...)
-		if row < rows-1 {
-			s += "\n"
-		}
+		s += "\n"
 	}
 
 	// The footer
