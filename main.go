@@ -3,45 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
-// Helper functions for min/max
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// calculateColumns determines the optimal number of columns based on terminal width
-func calculateColumns(width int) int {
-	// Each cell needs approximately:
-	// - 16 chars for content (truncateString maxLen)
-	// - 2 chars for left/right borders
-	// - 2 chars for horizontal padding
-	// Total: ~20 chars per cell
-	const minCellWidth = 20
-	const minCols = 1
-	
-	if width < minCellWidth {
-		return minCols
-	}
-	
-	cols := width / minCellWidth
-	return max(minCols, cols)
-}
 
 // appModel is the main application model (previously just "model")
 type appModel struct {
@@ -64,34 +29,6 @@ type model struct {
 	appModel  appModel
 	width     int // terminal width
 	height    int // terminal height
-}
-
-// goalsLoadedMsg is sent when goals are loaded from the API
-type goalsLoadedMsg struct {
-	goals []Goal
-	err   error
-}
-
-// refreshTickMsg is sent when it's time to refresh data
-type refreshTickMsg struct{}
-
-// loadGoalsCmd fetches goals from Beeminder API
-func loadGoalsCmd(config *Config) tea.Cmd {
-	return func() tea.Msg {
-		goals, err := FetchGoals(config)
-		if err != nil {
-			return goalsLoadedMsg{err: err}
-		}
-		SortGoals(goals)
-		return goalsLoadedMsg{goals: goals}
-	}
-}
-
-// refreshTickCmd creates a command that sends refresh tick messages at intervals
-func refreshTickCmd() tea.Cmd {
-	return tea.Tick(time.Minute*5, func(time.Time) tea.Msg {
-		return refreshTickMsg{}
-	})
 }
 
 func initialAppModel(config *Config) appModel {
@@ -279,109 +216,11 @@ func (m model) viewApp() string {
 		return fmt.Sprintf("Error loading goals: %v\n\nPress q to quit.\n", m.appModel.err)
 	}
 
-	if len(m.appModel.goals) == 0 {
-		return "No goals found.\n\nPress q to quit.\n"
-	}
-
-	// The header
-	s := "Beeminder Goals\n\n"
-
-	// Define grid margins and padding
-	const gridMarginRight = 0  // No horizontal margin - borders will touch
-	const gridMarginBottom = 0 // No vertical margin - borders will touch
-	const paddingVertical = 0
-	const paddingHorizontal = 1
-
-	// Define color styles with collapsed borders
-	redStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("1")).Foreground(lipgloss.Color("1")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	orangeStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("208")).Foreground(lipgloss.Color("208")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	blueStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("4")).Foreground(lipgloss.Color("4")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	greenStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("2")).Foreground(lipgloss.Color("2")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-	grayStyle := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("8")).Foreground(lipgloss.Color("8")).Padding(paddingVertical, paddingHorizontal).MarginRight(gridMarginRight).MarginBottom(gridMarginBottom)
-
-	// Calculate grid dimensions based on terminal width
-	cols := calculateColumns(m.appModel.width)
-	totalRows := (len(m.appModel.goals) + cols - 1) / cols
+	// Render the grid and footer
+	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow)
+	footer := RenderFooter(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 	
-	// Calculate visible rows based on terminal height
-	// Each cell is roughly 4 lines high (3 lines content + 1 line spacing)
-	maxVisibleRows := max(1, (m.appModel.height-4)/4) // -4 for header and footer
-	
-	// Calculate which rows to display
-	startRow := m.appModel.scrollRow
-	endRow := min(totalRows, startRow+maxVisibleRows)
-
-	// Build grid - only render visible rows
-	for row := startRow; row < endRow; row++ {
-		var rowCells []string
-		for col := 0; col < cols; col++ {
-			idx := row*cols + col
-			if idx >= len(m.appModel.goals) {
-				break
-			}
-
-			goal := m.appModel.goals[idx]
-
-			// Get color based on buffer
-			color := GetBufferColor(goal.Safebuf)
-			var style lipgloss.Style
-			switch color {
-			case "red":
-				style = redStyle
-			case "orange":
-				style = orangeStyle
-			case "blue":
-				style = blueStyle
-			case "green":
-				style = greenStyle
-			default:
-				style = grayStyle
-			}
-
-			// Format goal display
-			display := fmt.Sprintf("%s\n$%.0f | %s",
-				truncateString(goal.Slug, 16),
-				goal.Pledge,
-				FormatDueDate(goal.Losedate))
-
-			cell := style.Render(display)
-			rowCells = append(rowCells, cell)
-		}
-		s += lipgloss.JoinHorizontal(lipgloss.Top, rowCells...)
-		s += "\n"
-	}
-
-	// The footer with scroll information
-	footerCols := calculateColumns(m.appModel.width)
-	footerTotalRows := (len(m.appModel.goals) + footerCols - 1) / footerCols
-	footerMaxVisibleRows := max(1, (m.appModel.height-4)/4)
-	
-	scrollInfo := ""
-	if footerTotalRows > footerMaxVisibleRows {
-		scrollInfo = fmt.Sprintf(" | Scroll: %d/%d (u/d or pgup/pgdown)", 
-			m.appModel.scrollRow+1, max(1, footerTotalRows-footerMaxVisibleRows+1))
-	}
-	
-	// Refresh status
-	refreshStatus := "OFF"
-	if m.appModel.refreshActive {
-		refreshStatus = "ON"
-	}
-	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
-	
-	s += fmt.Sprintf("\nPress q to quit%s%s\n", scrollInfo, refreshInfo)
-
-	// Send the UI for rendering
-	return s
-}
-
-// truncateString truncates a string to maxLen characters
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		// Pad with spaces to ensure consistent width
-		return s + strings.Repeat(" ", maxLen-len(s))
-	}
-	return s[:maxLen-3] + "..."
+	return grid + footer
 }
 
 func main() {
