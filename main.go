@@ -9,16 +9,32 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Helper functions for min/max
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // appModel is the main application model (previously just "model")
 type appModel struct {
-	goals    []Goal           // Beeminder goals
-	cursor   int              // which goal our cursor is pointing at
-	selected map[int]struct{} // which goals are selected
-	config   *Config          // Beeminder credentials
-	loading  bool             // whether we're loading goals
-	err      error            // error from loading goals
-	width    int              // terminal width
-	height   int              // terminal height
+	goals      []Goal           // Beeminder goals
+	cursor     int              // which goal our cursor is pointing at
+	selected   map[int]struct{} // which goals are selected
+	config     *Config          // Beeminder credentials
+	loading    bool             // whether we're loading goals
+	err        error            // error from loading goals
+	width      int              // terminal width
+	height     int              // terminal height
+	scrollRow  int              // current scroll position (in rows)
 }
 
 // model is the top-level model that switches between auth and app
@@ -167,6 +183,21 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.appModel.selected[m.appModel.cursor] = struct{}{}
 			}
+
+		// Scroll up with Page Up or 'u'
+		case "pgup", "u":
+			if m.appModel.scrollRow > 0 {
+				m.appModel.scrollRow--
+			}
+
+		// Scroll down with Page Down or 'd'
+		case "pgdown", "d":
+			const cols = 4
+			totalRows := (len(m.appModel.goals) + cols - 1) / cols
+			maxVisibleRows := m.appModel.height / 4 // Rough estimate of rows that fit
+			if m.appModel.scrollRow < totalRows-maxVisibleRows {
+				m.appModel.scrollRow++
+			}
 		}
 	}
 
@@ -213,10 +244,18 @@ func (m model) viewApp() string {
 
 	// Calculate grid dimensions (4 columns)
 	const cols = 4
-	rows := (len(m.appModel.goals) + cols - 1) / cols
+	totalRows := (len(m.appModel.goals) + cols - 1) / cols
+	
+	// Calculate visible rows based on terminal height
+	// Each cell is roughly 4 lines high (3 lines content + 1 line spacing)
+	maxVisibleRows := max(1, (m.appModel.height-4)/4) // -4 for header and footer
+	
+	// Calculate which rows to display
+	startRow := m.appModel.scrollRow
+	endRow := min(totalRows, startRow+maxVisibleRows)
 
-	// Build grid
-	for row := 0; row < rows; row++ {
+	// Build grid - only render visible rows
+	for row := startRow; row < endRow; row++ {
 		var rowCells []string
 		for col := 0; col < cols; col++ {
 			idx := row*cols + col
@@ -255,8 +294,18 @@ func (m model) viewApp() string {
 		s += "\n"
 	}
 
-	// The footer
-	s += "\nPress q to quit.\n"
+	// The footer with scroll information
+var colsVal = 4
+totalRows = (len(m.appModel.goals) + colsVal - 1) / colsVal
+maxVisibleRows = max(1, (m.appModel.height-4)/4)
+	
+	scrollInfo := ""
+	if totalRows > maxVisibleRows {
+		scrollInfo = fmt.Sprintf(" | Scroll: %d/%d (u/d or pgup/pgdown)", 
+			m.appModel.scrollRow+1, max(1, totalRows-maxVisibleRows+1))
+	}
+	
+	s += fmt.Sprintf("\nPress q to quit%s\n", scrollInfo)
 
 	// Send the UI for rendering
 	return s
