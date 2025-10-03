@@ -43,3 +43,44 @@ func truncateString(s string, maxLen int) string {
 	}
 	return s[:maxLen-3] + "..."
 }
+
+// wrapText wraps text to fit within the specified width
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		return []string{text}
+	}
+	
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{text}
+	}
+	
+	var lines []string
+	var currentLine strings.Builder
+	
+	for i, word := range words {
+		// If this is the first word, add it directly
+		if i == 0 {
+			currentLine.WriteString(word)
+			continue
+		}
+		
+		// Check if adding the next word would exceed the width
+		if currentLine.Len()+1+len(word) > width {
+			// Start a new line
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
+		} else {
+			// Add word to current line
+			currentLine.WriteString(" " + word)
+		}
+	}
+	
+	// Add the last line if it has content
+	if currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
+	}
+	
+	return lines
+}
