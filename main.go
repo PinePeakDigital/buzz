@@ -162,6 +162,31 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyMsg:
+		// Handle text input in input mode FIRST, before command keys
+		// This ensures that single-character command keys (like 't', 'r', 'd', etc.) 
+		// can still be typed in comment fields
+		if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+			char := msg.String()
+			if len(char) == 1 {
+				switch m.appModel.inputFocus {
+				case 0: // Date field - allow digits and dashes
+					if (char >= "0" && char <= "9") || char == "-" {
+						m.appModel.inputDate += char
+						return m, nil
+					}
+				case 1: // Value field - allow digits, decimal point, and negative sign
+					if (char >= "0" && char <= "9") || char == "." || char == "-" {
+						m.appModel.inputValue += char
+						return m, nil
+					}
+				case 2: // Comment field - allow all printable characters
+					if char >= " " && char <= "~" {
+						m.appModel.inputComment += char
+						return m, nil
+					}
+				}
+			}
+		}
 
 		// Cool, what was the actual key pressed?
 		switch msg.String() {
@@ -230,28 +255,6 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case 2: // Comment field
 					if len(m.appModel.inputComment) > 0 {
 						m.appModel.inputComment = m.appModel.inputComment[:len(m.appModel.inputComment)-1]
-					}
-				}
-			}
-
-		// Handle text input in input mode
-		default:
-			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
-				char := msg.String()
-				if len(char) == 1 {
-					switch m.appModel.inputFocus {
-					case 0: // Date field - allow digits and dashes
-						if (char >= "0" && char <= "9") || char == "-" {
-							m.appModel.inputDate += char
-						}
-					case 1: // Value field - allow digits, decimal point, and negative sign
-						if (char >= "0" && char <= "9") || char == "." || char == "-" {
-							m.appModel.inputValue += char
-						}
-					case 2: // Comment field - allow all printable characters
-						if char >= " " && char <= "~" {
-							m.appModel.inputComment += char
-						}
 					}
 				}
 			}
