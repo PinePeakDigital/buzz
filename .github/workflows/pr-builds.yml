@@ -97,8 +97,8 @@ jobs:
             > 
             > 🗑️ Artifacts will be automatically deleted after 90 days.`;
             
-            // Check if we already posted a comment
-            const { data: comments } = await github.rest.issues.listComments({
+            // Check if we already posted a comment (with pagination)
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: repo.owner,
               repo: repo.repo,
               issue_number: prNumber,
