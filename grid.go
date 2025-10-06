@@ -23,11 +23,11 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 	// Calculate grid dimensions based on terminal width
 	cols := calculateColumns(width)
 	totalRows := (len(goals) + cols - 1) / cols
-	
+
 	// Calculate visible rows based on terminal height
 	// Each cell is roughly 4 lines high (3 lines content + 1 line spacing)
 	maxVisibleRows := max(1, (height-4)/4) // -4 for header and footer
-	
+
 	// Calculate which rows to display
 	startRow := scrollRow
 	endRow := min(totalRows, startRow+maxVisibleRows)
@@ -45,7 +45,7 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 
 			// Get color based on buffer
 			color := GetBufferColor(goal.Safebuf)
-			
+
 			// Choose style based on whether this goal is selected and user has navigated
 			var style lipgloss.Style
 			var exists bool
@@ -85,30 +85,30 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	footerCols := calculateColumns(width)
 	footerTotalRows := (len(goals) + footerCols - 1) / footerCols
 	footerMaxVisibleRows := max(1, (height-4)/4)
-	
+
 	scrollInfo := ""
 	if footerTotalRows > footerMaxVisibleRows {
-		scrollInfo = fmt.Sprintf(" | Scroll: %d/%d (u/d or pgup/pgdown)", 
+		scrollInfo = fmt.Sprintf(" | Scroll: %d/%d (u/d or pgup/pgdown)",
 			scrollRow+1, max(1, footerTotalRows-footerMaxVisibleRows+1))
 	}
-	
+
 	// Refresh status
 	refreshStatus := "OFF"
 	if refreshActive {
 		refreshStatus = "ON"
 	}
 	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
-	
+
 	// Build the full footer text
 	footerText := fmt.Sprintf("Press q to quit%s%s | Arrow keys to navigate, Enter for details", scrollInfo, refreshInfo)
-	
+
 	// If the footer is too wide, wrap it
 	if len(footerText) > width {
 		// Split into multiple lines based on available width
 		lines := wrapText(footerText, width)
 		return "\n" + strings.Join(lines, "\n") + "\n"
 	}
-	
+
 	return fmt.Sprintf("\n%s\n", footerText)
 }
 
@@ -119,7 +119,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 	}
 
 	modalStyle := CreateModalStyle()
-	
+
 	// Calculate modal dimensions (80% of screen width, auto height)
 	modalWidth := width * 8 / 10
 	if modalWidth > 80 {
@@ -149,7 +149,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 	if inputMode {
 		if submitting {
 			// Show submitting state
-			formContent = fmt.Sprintf("\n\n--- Add Datapoint ---\nDate: %s\nValue: %s\nComment: %s\n\n%s", 
+			formContent = fmt.Sprintf("\n\n--- Add Datapoint ---\nDate: %s\nValue: %s\nComment: %s\n\n%s",
 				inputDate, inputValue, inputComment,
 				lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("Submitting datapoint..."))
 		} else {
@@ -157,7 +157,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 			dateField := inputDate
 			valueField := inputValue
 			commentField := inputComment
-			
+
 			if inputFocus == 0 {
 				dateField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(dateField)
 			}
@@ -167,42 +167,42 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 			if inputFocus == 2 {
 				commentField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(commentField)
 			}
-			
+
 			errorMsg := ""
 			if inputError != "" {
 				errorMsg = fmt.Sprintf("\n%s", lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("Error: "+inputError))
 			}
-			
-			formContent = fmt.Sprintf("\n\n--- Add Datapoint ---\nDate: %s\nValue: %s\nComment: %s%s\n\nTab/Shift+Tab: Navigate • Enter: Submit • Esc: Cancel", 
+
+			formContent = fmt.Sprintf("\n\n--- Add Datapoint ---\nDate: %s\nValue: %s\nComment: %s%s\n\nTab/Shift+Tab: Navigate • Enter: Submit • Esc: Cancel",
 				dateField, valueField, commentField, errorMsg)
 		}
 	} else {
-		formContent = "\n\nPress 'a' to add datapoint • Press ESC to close"
+		formContent = "\n\nLeft/Right or h/l: Previous/Next goal • 'a': Add datapoint • ESC: Close"
 	}
-	
+
 	content += formContent
 
 	// Apply width constraint to content
 	styledContent := modalStyle.Width(modalWidth).Render(content)
-	
+
 	// Center the modal horizontally
 	leftPadding := (width - modalWidth) / 2
 	if leftPadding < 0 {
 		leftPadding = 0
 	}
-	
+
 	// Center the modal vertically (approximately)
 	topPadding := height / 4
 	if topPadding < 1 {
 		topPadding = 1
 	}
-	
+
 	// Add vertical spacing
 	verticalPadding := ""
 	for i := 0; i < topPadding; i++ {
 		verticalPadding += "\n"
 	}
-	
+
 	// Add horizontal centering
 	centeredModal := ""
 	for _, line := range []string{styledContent} {
@@ -212,6 +212,6 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 		}
 		centeredModal += padding + line
 	}
-	
+
 	return verticalPadding + centeredModal
 }

@@ -9,30 +9,29 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-
 // appModel is the main application model (previously just "model")
 type appModel struct {
-	goals         []Goal           // Beeminder goals
-	cursor        int              // which goal our cursor is pointing at
-	config        *Config          // Beeminder credentials
-	loading       bool             // whether we're loading goals
-	err           error            // error from loading goals
-	width         int              // terminal width
-	height        int              // terminal height
-	scrollRow     int              // current scroll position (in rows)
-	refreshActive bool             // whether auto-refresh is active
-	showModal     bool             // whether to show goal details modal
-	modalGoal     *Goal            // the goal to show in modal
-	hasNavigated  bool             // whether user has used arrow keys
-	
+	goals         []Goal  // Beeminder goals
+	cursor        int     // which goal our cursor is pointing at
+	config        *Config // Beeminder credentials
+	loading       bool    // whether we're loading goals
+	err           error   // error from loading goals
+	width         int     // terminal width
+	height        int     // terminal height
+	scrollRow     int     // current scroll position (in rows)
+	refreshActive bool    // whether auto-refresh is active
+	showModal     bool    // whether to show goal details modal
+	modalGoal     *Goal   // the goal to show in modal
+	hasNavigated  bool    // whether user has used arrow keys
+
 	// Modal input fields
-	inputDate     string           // date input (YYYY-MM-DD format)
-	inputValue    string           // value input 
-	inputComment  string           // comment input
-	inputFocus    int              // which input field is focused (0=date, 1=value, 2=comment)
-	inputMode     bool             // whether we're in input mode vs viewing mode
-	inputError    string           // error message for input validation
-	submitting    bool             // whether we're currently submitting a datapoint
+	inputDate    string // date input (YYYY-MM-DD format)
+	inputValue   string // value input
+	inputComment string // comment input
+	inputFocus   int    // which input field is focused (0=date, 1=value, 2=comment)
+	inputMode    bool   // whether we're in input mode vs viewing mode
+	inputError   string // error message for input validation
+	submitting   bool   // whether we're currently submitting a datapoint
 }
 
 // model is the top-level model that switches between auth and app
@@ -163,7 +162,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Is it a key press?
 	case tea.KeyMsg:
 		// Handle text input in input mode FIRST, before command keys
-		// This ensures that single-character command keys (like 't', 'r', 'd', etc.) 
+		// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 		// can still be typed in comment fields
 		if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 			char := msg.String()
@@ -221,7 +220,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Set default values
 				m.appModel.inputDate = time.Now().Format("2006-01-02")
 				m.appModel.inputComment = "Added via buzz"
-				
+
 				// Try to get the last datapoint value, default to "1" if it fails
 				if lastValue, err := GetLastDatapointValue(m.appModel.config, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
 					m.appModel.inputValue = fmt.Sprintf("%.1f", lastValue)
@@ -234,7 +233,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 1) % 3
-			}		// Shift+Tab navigation in input mode (reverse)
+			} // Shift+Tab navigation in input mode (reverse)
 		case "shift+tab":
 			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
@@ -264,42 +263,42 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				// Clear previous error
 				m.appModel.inputError = ""
-				
+
 				// Validate input fields
 				if m.appModel.inputDate == "" {
 					m.appModel.inputError = "Date cannot be empty"
 					return m, nil
 				}
-				
+
 				if m.appModel.inputValue == "" {
 					m.appModel.inputError = "Value cannot be empty"
 					return m, nil
 				}
-				
+
 				// Parse and validate date
 				date, err := time.Parse("2006-01-02", m.appModel.inputDate)
 				if err != nil {
 					m.appModel.inputError = "Invalid date format (use YYYY-MM-DD)"
 					return m, nil
 				}
-				
+
 				// Validate that date is not in the future beyond today
 				if date.After(time.Now().AddDate(0, 0, 1)) {
 					m.appModel.inputError = "Date cannot be more than 1 day in the future"
 					return m, nil
 				}
-				
+
 				// Parse and validate value (must be a valid number)
 				if _, err := strconv.ParseFloat(m.appModel.inputValue, 64); err != nil {
 					m.appModel.inputError = "Value must be a valid number"
 					return m, nil
 				}
-				
+
 				timestamp := fmt.Sprintf("%d", date.Unix())
-				
+
 				// Set submitting state and submit datapoint asynchronously
 				m.appModel.submitting = true
-				return m, submitDatapointCmd(m.appModel.config, m.appModel.modalGoal.Slug, 
+				return m, submitDatapointCmd(m.appModel.config, m.appModel.modalGoal.Slug,
 					timestamp, m.appModel.inputValue, m.appModel.inputComment)
 			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 && m.appModel.cursor < len(m.appModel.goals) {
 				// Show goal details modal (existing functionality)
@@ -329,7 +328,13 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "left", "h":
-			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+			if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting && len(m.appModel.goals) > 0 {
+				// Navigate to previous goal in modal view
+				if m.appModel.cursor > 0 {
+					m.appModel.cursor--
+					m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+				}
+			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 {
 				m.appModel.hasNavigated = true
 				cols := calculateColumns(m.appModel.width)
 				currentCol := m.appModel.cursor % cols
@@ -339,7 +344,13 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "right", "l":
-			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
+			if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting && len(m.appModel.goals) > 0 {
+				// Navigate to next goal in modal view
+				if m.appModel.cursor < len(m.appModel.goals)-1 {
+					m.appModel.cursor++
+					m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+				}
+			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 {
 				m.appModel.hasNavigated = true
 				cols := calculateColumns(m.appModel.width)
 				currentCol := m.appModel.cursor % cols
@@ -408,15 +419,15 @@ func (m model) viewApp() string {
 	// Render the grid and footer
 	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username)
 	footer := RenderFooter(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
-	
+
 	baseView := grid + footer
-	
+
 	// Show modal overlay if modal is active
 	if m.appModel.showModal && m.appModel.modalGoal != nil {
 		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, m.appModel.inputDate, m.appModel.inputValue, m.appModel.inputComment, m.appModel.inputFocus, m.appModel.inputMode, m.appModel.inputError, m.appModel.submitting)
 		return modal
 	}
-	
+
 	return baseView
 }
 
