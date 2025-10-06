@@ -31,6 +31,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
+          fallbackTag: '0.0.0'
+          noVersionBumpBehavior: silent
 
       - name: Check if release is needed
         id: check
