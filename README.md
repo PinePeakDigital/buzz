@@ -20,6 +20,18 @@ This will download the latest release and make it available in your PATH.
 
 You can also download pre-built binaries directly from the [releases page](https://github.com/narthur/buzz/releases). Choose the appropriate binary for your operating system and architecture.
 
+#### macOS Users
+
+If you download the binary directly from GitHub releases, macOS may show an "unidentified developer" warning. To resolve this, remove the quarantine attribute:
+
+```bash
+xattr -d com.apple.quarantine /path/to/buzz
+```
+
+Replace `/path/to/buzz` with the actual path to the downloaded binary.
+
+**Note:** This workaround is only needed for direct downloads. If you install via `bin` (recommended) or build from source, you won't encounter this issue.
+
 ### From Source
 
 If you have Go installed:
