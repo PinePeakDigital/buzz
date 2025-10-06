@@ -11,11 +11,12 @@ import (
 
 // Goal represents a Beeminder goal with relevant fields
 type Goal struct {
-	Slug     string  `json:"slug"`
-	Title    string  `json:"title"`
-	Losedate int64   `json:"losedate"`
-	Pledge   float64 `json:"pledge"`
-	Safebuf  int     `json:"safebuf"`
+	Slug       string       `json:"slug"`
+	Title      string       `json:"title"`
+	Losedate   int64        `json:"losedate"`
+	Pledge     float64      `json:"pledge"`
+	Safebuf    int          `json:"safebuf"`
+	Datapoints []Datapoint  `json:"datapoints,omitempty"`
 }
 
 // Datapoint represents a Beeminder datapoint
@@ -172,4 +173,27 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	}
 
 	return nil
+}
+
+// FetchGoalWithDatapoints fetches goal details including recent datapoints
+func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
+	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		config.Username, goalSlug, config.AuthToken)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var goal Goal
+	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
+		return nil, fmt.Errorf("failed to decode goal details: %w", err)
+	}
+
+	return &goal, nil
 }

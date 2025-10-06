@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -150,6 +151,26 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 		goal.Safebuf,
 		FormatDueDate(goal.Losedate),
 		GetBufferColor(goal.Safebuf))
+
+	// Add recent datapoints if available
+	if len(goal.Datapoints) > 0 {
+		content += "\n\n--- Recent Datapoints ---\n"
+		// Show last 5 datapoints
+		numToShow := min(5, len(goal.Datapoints))
+		for i := len(goal.Datapoints) - 1; i >= len(goal.Datapoints)-numToShow; i-- {
+			dp := goal.Datapoints[i]
+			timestamp := time.Unix(dp.Timestamp, 0)
+			dateStr := timestamp.Format("2006-01-02")
+			comment := dp.Comment
+			if len(comment) > 30 {
+				comment = comment[:27] + "..."
+			}
+			if comment == "" {
+				comment = "(no comment)"
+			}
+			content += fmt.Sprintf("%s: %.2f - %s\n", dateStr, dp.Value, comment)
+		}
+	}
 
 	// Data input form
 	var formContent string

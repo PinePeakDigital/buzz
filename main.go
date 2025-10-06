@@ -191,6 +191,20 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case goalDetailsLoadedMsg:
+		// Goal details with datapoints have been loaded
+		if msg.err != nil {
+			// Error loading goal details - continue with basic goal info
+			return m, nil
+		}
+		if m.appModel.showModal && m.appModel.modalGoal != nil && msg.goal != nil {
+			// Update the modal goal with the detailed information
+			if m.appModel.modalGoal.Slug == msg.goal.Slug {
+				m.appModel.modalGoal = msg.goal
+			}
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 		// Handle text input in search mode FIRST
@@ -380,6 +394,9 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 							break
 						}
 					}
+
+					// Load detailed goal information including datapoints
+					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
 			}
 
@@ -416,6 +433,8 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.appModel.cursor > 0 {
 					m.appModel.cursor--
 					m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+					// Load detailed goal information including datapoints
+					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
 			} else if !m.appModel.showModal {
 				displayGoals := m.appModel.getDisplayGoals()
@@ -435,6 +454,8 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.appModel.cursor < len(m.appModel.goals)-1 {
 					m.appModel.cursor++
 					m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+					// Load detailed goal information including datapoints
+					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
 			} else if !m.appModel.showModal {
 				displayGoals := m.appModel.getDisplayGoals()
