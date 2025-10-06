@@ -27,26 +27,19 @@ jobs:
 
       - name: Calculate semantic version
         id: semver
-        uses: mathieudutour/github-tag-action@v6.2
+        uses: ietf-tools/semver-action@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          dry_run: true
-          default_bump: patch
-          default_prerelease_bump: prerelease
-          release_branches: main
-          pre_release_branches: ""
-          append_to_pre_release_tag: ""
-          fetch_all_tags: true
-          tag_prefix: v
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
 
       - name: Check if release is needed
         id: check
         run: |
-          if [ -z "${{ steps.semver.outputs.new_tag }}" ]; then
+          if [ -z "${{ steps.semver.outputs.next }}" ]; then
             echo "No conventional commits found - skipping release"
             echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "Version to release: ${{ steps.semver.outputs.new_tag }}"
+            echo "Version to release: v${{ steps.semver.outputs.next }}"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
@@ -65,8 +58,8 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.semver.outputs.new_tag }}
-          name: Release ${{ steps.semver.outputs.new_tag }}
+          tag_name: v${{ steps.semver.outputs.next }}
+          name: Release v${{ steps.semver.outputs.next }}
           draft: false
           prerelease: false
           generate_release_notes: true
