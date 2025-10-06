@@ -27,28 +27,21 @@ jobs:
 
       - name: Calculate semantic version
         id: semver
-        uses: paulhatch/semantic-version@v5.4.0
+        uses: ietf-tools/semver-action@v1
         with:
-          tag_prefix: "v"
-          major_pattern: "(BREAKING CHANGE|!:)"
-          minor_pattern: "(feat|feature)"
-          version_format: "${major}.${minor}.${patch}"
-          change_path: "."
-          search_commit_body: true
-          user_format_type: "csv"
-          enable_prerelease_mode: false
-          debug: false
-          bump_each_commit: true
-          bump_each_commit_patch_pattern: "(fix|bug|hotfix|chore|docs|style|refactor|test|perf|ci|build|revert)"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+          fallbackTag: '0.0.0'
+          noVersionBumpBehavior: silent
 
       - name: Check if release is needed
         id: check
         run: |
-          if [ -z "${{ steps.semver.outputs.version_tag }}" ]; then
+          if [ -z "${{ steps.semver.outputs.next }}" ]; then
             echo "No conventional commits found - skipping release"
             echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "Version to release: ${{ steps.semver.outputs.version_tag }}"
+            echo "Version to release: v${{ steps.semver.outputs.next }}"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
@@ -67,8 +60,8 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.semver.outputs.version_tag }}
-          name: Release ${{ steps.semver.outputs.version_tag }}
+          tag_name: v${{ steps.semver.outputs.next }}
+          name: Release v${{ steps.semver.outputs.next }}
           draft: false
           prerelease: false
           generate_release_notes: true
