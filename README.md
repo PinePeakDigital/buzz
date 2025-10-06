@@ -56,6 +56,8 @@ Your credentials will be stored securely in `~/.buzzrc` with read/write permissi
 ### Navigation
 - **Arrow keys** or **hjkl** (vim-style) - Navigate the goal grid spatially
 - **Page Up/Down** or **u/d** - Scroll when there are many goals
+- **/** - Enter search/filter mode
+- **Escape** - Exit search mode or close modals
 - **Enter** - View goal details and add datapoints
 - **q** or **Ctrl+C** - Quit
 
@@ -72,6 +74,13 @@ Goals are displayed in a colorful grid based on their deadline urgency:
 2. Press **a** to enter datapoint input mode
 3. Use **Tab/Shift+Tab** to navigate between fields
 4. **Enter** to submit, **Escape** to cancel
+
+### Filter/Search
+- Press **/** to enter filter mode
+- Type to fuzzy search goals by slug or title
+- Characters must appear in order but don't need to be consecutive
+- Example: "wk" matches "workout", "wor**k**", or "**w**al**k**"
+- Press **Escape** to clear the filter and show all goals
 
 ### Auto-refresh
 - Press **t** to toggle auto-refresh (refreshes every 5 minutes)
