@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // Helper functions for min/max
 func min(a, b int) int {
@@ -83,4 +86,28 @@ func wrapText(text string, width int) []string {
 	}
 
 	return lines
+}
+
+// fuzzyMatch returns true if the pattern matches the text using fuzzy search
+// Pattern characters must appear in order in the text (case-insensitive)
+func fuzzyMatch(pattern, text string) bool {
+	if pattern == "" {
+		return true
+	}
+	
+	// Convert to lowercase for case-insensitive matching
+	pattern = strings.ToLower(pattern)
+	text = strings.ToLower(text)
+	
+	patternIdx := 0
+	for _, char := range text {
+		if patternIdx < len(pattern) && unicode.ToLower(char) == unicode.ToLower(rune(pattern[patternIdx])) {
+			patternIdx++
+		}
+		if patternIdx == len(pattern) {
+			return true
+		}
+	}
+	
+	return patternIdx == len(pattern)
 }

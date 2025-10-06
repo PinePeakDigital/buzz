@@ -32,6 +32,11 @@ type appModel struct {
 	inputMode    bool   // whether we're in input mode vs viewing mode
 	inputError   string // error message for input validation
 	submitting   bool   // whether we're currently submitting a datapoint
+
+	// Filter/search fields
+	searchMode   bool   // whether we're in search/filter mode
+	searchQuery  string // current search query
+	filteredGoals []Goal // goals filtered by search query
 }
 
 // model is the top-level model that switches between auth and app
@@ -49,7 +54,34 @@ func initialAppModel(config *Config) appModel {
 		config:        config,
 		loading:       true,
 		refreshActive: true,
+		searchMode:    false,
+		searchQuery:   "",
+		filteredGoals: []Goal{},
 	}
+}
+
+// filterGoals returns the goals to display based on search query
+func (m *appModel) filterGoals() []Goal {
+	if m.searchQuery == "" {
+		return m.goals
+	}
+	
+	var filtered []Goal
+	for _, goal := range m.goals {
+		// Match against slug or title
+		if fuzzyMatch(m.searchQuery, goal.Slug) || fuzzyMatch(m.searchQuery, goal.Title) {
+			filtered = append(filtered, goal)
+		}
+	}
+	return filtered
+}
+
+// getDisplayGoals returns the goals to display (either filtered or all)
+func (m *appModel) getDisplayGoals() []Goal {
+	if m.searchQuery != "" {
+		return m.filteredGoals
+	}
+	return m.goals
 }
 
 func initialModel() model {
@@ -161,7 +193,22 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyMsg:
-		// Handle text input in input mode FIRST, before command keys
+		// Handle text input in search mode FIRST
+		if m.appModel.searchMode && !m.appModel.showModal {
+			char := msg.String()
+			// Allow printable characters in search
+			if len(char) == 1 && char >= " " && char <= "~" {
+				m.appModel.searchQuery += char
+				m.appModel.filteredGoals = m.appModel.filterGoals()
+				// Reset cursor and scroll when search query changes
+				m.appModel.cursor = 0
+				m.appModel.scrollRow = 0
+				m.appModel.hasNavigated = false
+				return m, nil
+			}
+		}
+		
+		// Handle text input in input mode SECOND, before command keys
 		// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 		// can still be typed in comment fields
 		if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
@@ -194,9 +241,17 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 
-		// Escape key closes the modal or quits if no modal
+		// Escape key closes search mode, modal, or quits
 		case "esc":
-			if m.appModel.showModal {
+			if m.appModel.searchMode {
+				// Exit search mode
+				m.appModel.searchMode = false
+				m.appModel.searchQuery = ""
+				m.appModel.filteredGoals = []Goal{}
+				m.appModel.cursor = 0
+				m.appModel.scrollRow = 0
+				m.appModel.hasNavigated = false
+			} else if m.appModel.showModal {
 				if m.appModel.inputMode {
 					// Exit input mode
 					m.appModel.inputMode = false
@@ -239,9 +294,19 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
 			}
 
-		// Backspace handling in input mode
+		// Backspace handling in search mode or input mode
 		case "backspace":
-			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+			if m.appModel.searchMode && !m.appModel.showModal {
+				// Remove last character from search query
+				if len(m.appModel.searchQuery) > 0 {
+					m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
+					m.appModel.filteredGoals = m.appModel.filterGoals()
+					// Reset cursor and scroll when search query changes
+					m.appModel.cursor = 0
+					m.appModel.scrollRow = 0
+					m.appModel.hasNavigated = false
+				}
+			} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				switch m.appModel.inputFocus {
 				case 0: // Date field
 					if len(m.appModel.inputDate) > 0 {
@@ -300,30 +365,48 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.appModel.submitting = true
 				return m, submitDatapointCmd(m.appModel.config, m.appModel.modalGoal.Slug,
 					timestamp, m.appModel.inputValue, m.appModel.inputComment)
-			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 && m.appModel.cursor < len(m.appModel.goals) {
+			} else if !m.appModel.showModal {
 				// Show goal details modal (existing functionality)
-				m.appModel.showModal = true
-				m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+				displayGoals := m.appModel.getDisplayGoals()
+				if len(displayGoals) > 0 && m.appModel.cursor < len(displayGoals) {
+					m.appModel.showModal = true
+					m.appModel.modalGoal = &displayGoals[m.appModel.cursor]
+					
+					// Update cursor to point to the goal in the original goals list
+					// This is necessary for left/right navigation in modal
+					for i, goal := range m.appModel.goals {
+						if goal.Slug == displayGoals[m.appModel.cursor].Slug {
+							m.appModel.cursor = i
+							break
+						}
+					}
+				}
 			}
 
 		// Navigation keys - spatial movement through grid (only when modal is closed)
 		case "up", "k":
-			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
-				m.appModel.hasNavigated = true
-				cols := calculateColumns(m.appModel.width)
-				newCursor := m.appModel.cursor - cols
-				if newCursor >= 0 {
-					m.appModel.cursor = newCursor
+			if !m.appModel.showModal {
+				displayGoals := m.appModel.getDisplayGoals()
+				if len(displayGoals) > 0 {
+					m.appModel.hasNavigated = true
+					cols := calculateColumns(m.appModel.width)
+					newCursor := m.appModel.cursor - cols
+					if newCursor >= 0 {
+						m.appModel.cursor = newCursor
+					}
 				}
 			}
 
 		case "down", "j":
-			if !m.appModel.showModal && len(m.appModel.goals) > 0 {
-				m.appModel.hasNavigated = true
-				cols := calculateColumns(m.appModel.width)
-				newCursor := m.appModel.cursor + cols
-				if newCursor < len(m.appModel.goals) {
-					m.appModel.cursor = newCursor
+			if !m.appModel.showModal {
+				displayGoals := m.appModel.getDisplayGoals()
+				if len(displayGoals) > 0 {
+					m.appModel.hasNavigated = true
+					cols := calculateColumns(m.appModel.width)
+					newCursor := m.appModel.cursor + cols
+					if newCursor < len(displayGoals) {
+						m.appModel.cursor = newCursor
+					}
 				}
 			}
 
@@ -334,12 +417,15 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.appModel.cursor--
 					m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
 				}
-			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 {
-				m.appModel.hasNavigated = true
-				cols := calculateColumns(m.appModel.width)
-				currentCol := m.appModel.cursor % cols
-				if currentCol > 0 {
-					m.appModel.cursor--
+			} else if !m.appModel.showModal {
+				displayGoals := m.appModel.getDisplayGoals()
+				if len(displayGoals) > 0 {
+					m.appModel.hasNavigated = true
+					cols := calculateColumns(m.appModel.width)
+					currentCol := m.appModel.cursor % cols
+					if currentCol > 0 {
+						m.appModel.cursor--
+					}
 				}
 			}
 
@@ -350,12 +436,15 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.appModel.cursor++
 					m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
 				}
-			} else if !m.appModel.showModal && len(m.appModel.goals) > 0 {
-				m.appModel.hasNavigated = true
-				cols := calculateColumns(m.appModel.width)
-				currentCol := m.appModel.cursor % cols
-				if currentCol < cols-1 && m.appModel.cursor+1 < len(m.appModel.goals) {
-					m.appModel.cursor++
+			} else if !m.appModel.showModal {
+				displayGoals := m.appModel.getDisplayGoals()
+				if len(displayGoals) > 0 {
+					m.appModel.hasNavigated = true
+					cols := calculateColumns(m.appModel.width)
+					currentCol := m.appModel.cursor % cols
+					if currentCol < cols-1 && m.appModel.cursor+1 < len(displayGoals) {
+						m.appModel.cursor++
+					}
 				}
 			}
 
@@ -368,8 +457,9 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Scroll down with Page Down or 'd' (only when modal is closed)
 		case "pgdown", "d":
 			if !m.appModel.showModal {
+				displayGoals := m.appModel.getDisplayGoals()
 				cols := calculateColumns(m.appModel.width)
-				totalRows := (len(m.appModel.goals) + cols - 1) / cols
+				totalRows := (len(displayGoals) + cols - 1) / cols
 				maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
 				if m.appModel.scrollRow < totalRows-maxVisibleRows {
 					m.appModel.scrollRow++
@@ -391,6 +481,14 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// If we just enabled auto-refresh, start the timer
 					return m, refreshTickCmd()
 				}
+			}
+
+		// Enter search mode with '/' (only when modal is closed and not already in search mode)
+		case "/":
+			if !m.appModel.showModal && !m.appModel.searchMode {
+				m.appModel.searchMode = true
+				m.appModel.searchQuery = ""
+				m.appModel.filteredGoals = []Goal{}
 			}
 		}
 	}
@@ -416,9 +514,12 @@ func (m model) viewApp() string {
 		return fmt.Sprintf("Error loading goals: %v\n\nPress q to quit.\n", m.appModel.err)
 	}
 
+	// Get the goals to display (filtered or all)
+	displayGoals := m.appModel.getDisplayGoals()
+
 	// Render the grid and footer
-	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username)
-	footer := RenderFooter(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
+	grid := RenderGrid(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username, m.appModel.searchMode, m.appModel.searchQuery)
+	footer := RenderFooter(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive, m.appModel.searchMode, m.appModel.searchQuery)
 
 	baseView := grid + footer
 
