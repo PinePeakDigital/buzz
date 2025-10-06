@@ -87,7 +87,7 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 }
 
 // RenderFooter renders the footer with scroll and refresh information
-func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool, searchMode bool, searchQuery string) string {
+func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool) string {
 	// The footer with scroll information
 	footerCols := calculateColumns(width)
 	footerTotalRows := (len(goals) + footerCols - 1) / footerCols
@@ -106,16 +106,8 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	}
 	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
 
-	// Search info
-	searchInfo := ""
-	if searchMode {
-		searchInfo = " | / to filter"
-	} else {
-		searchInfo = " | / to filter"
-	}
-
 	// Build the full footer text
-	footerText := fmt.Sprintf("Press q to quit%s%s%s | Arrow keys to navigate, Enter for details", scrollInfo, refreshInfo, searchInfo)
+	footerText := fmt.Sprintf("Press q to quit%s%s | / to filter | Arrow keys to navigate, Enter for details", scrollInfo, refreshInfo)
 
 	// If the footer is too wide, wrap it
 	if len(footerText) > width {

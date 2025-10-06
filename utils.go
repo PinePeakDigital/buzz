@@ -2,7 +2,6 @@ package main
 
 import (
 	"strings"
-	"unicode"
 )
 
 // Helper functions for min/max
@@ -101,7 +100,7 @@ func fuzzyMatch(pattern, text string) bool {
 
 	patternIdx := 0
 	for _, char := range text {
-		if patternIdx < len(pattern) && unicode.ToLower(char) == unicode.ToLower(rune(pattern[patternIdx])) {
+		if patternIdx < len(pattern) && char == rune(pattern[patternIdx]) {
 			patternIdx++
 		}
 		if patternIdx == len(pattern) {
