@@ -32,13 +32,14 @@ jobs:
           tag_prefix: "v"
           major_pattern: "(BREAKING CHANGE|!:)"
           minor_pattern: "(feat|feature)"
-          patch_pattern: "(fix|bug|hotfix)"
           version_format: "${major}.${minor}.${patch}"
           change_path: "."
           search_commit_body: true
           user_format_type: "csv"
           enable_prerelease_mode: false
           debug: false
+          bump_each_commit: true
+          bump_each_commit_patch_pattern: "(fix|bug|hotfix|chore|docs|style|refactor|test|perf|ci|build|revert)"
 
       - name: Check if release is needed
         id: check
