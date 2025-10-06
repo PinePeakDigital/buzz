@@ -406,7 +406,7 @@ func (m model) viewApp() string {
 	}
 
 	// Render the grid and footer
-	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated)
+	grid := RenderGrid(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username)
 	footer := RenderFooter(m.appModel.goals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 	
 	baseView := grid + footer
