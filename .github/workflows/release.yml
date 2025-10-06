@@ -27,28 +27,26 @@ jobs:
 
       - name: Calculate semantic version
         id: semver
-        uses: paulhatch/semantic-version@v5.4.0
+        uses: mathieudutour/github-tag-action@v6.2
         with:
-          tag_prefix: "v"
-          major_pattern: "(BREAKING CHANGE|!:)"
-          minor_pattern: "(feat|feature)"
-          version_format: "${major}.${minor}.${patch}"
-          change_path: "."
-          search_commit_body: true
-          user_format_type: "csv"
-          enable_prerelease_mode: false
-          debug: false
-          bump_each_commit: true
-          bump_each_commit_patch_pattern: "(fix|bug|hotfix|chore|docs|style|refactor|test|perf|ci|build|revert)"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          dry_run: true
+          default_bump: patch
+          default_prerelease_bump: prerelease
+          release_branches: main
+          pre_release_branches: ""
+          append_to_pre_release_tag: ""
+          fetch_all_tags: true
+          tag_prefix: v
 
       - name: Check if release is needed
         id: check
         run: |
-          if [ -z "${{ steps.semver.outputs.version_tag }}" ]; then
+          if [ -z "${{ steps.semver.outputs.new_tag }}" ]; then
             echo "No conventional commits found - skipping release"
             echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "Version to release: ${{ steps.semver.outputs.version_tag }}"
+            echo "Version to release: ${{ steps.semver.outputs.new_tag }}"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
@@ -67,8 +65,8 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.semver.outputs.version_tag }}
-          name: Release ${{ steps.semver.outputs.version_tag }}
+          tag_name: ${{ steps.semver.outputs.new_tag }}
+          name: Release ${{ steps.semver.outputs.new_tag }}
           draft: false
           prerelease: false
           generate_release_notes: true
