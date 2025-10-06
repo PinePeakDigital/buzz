@@ -160,7 +160,7 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
 		config.AuthToken, timestamp, value, comment)
 
-	resp, err := http.Post(url, "application/x-www-form-urlencoded", 
+	resp, err := http.Post(url, "application/x-www-form-urlencoded",
 		strings.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create datapoint: %w", err)

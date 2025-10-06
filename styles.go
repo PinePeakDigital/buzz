@@ -4,10 +4,10 @@ import "github.com/charmbracelet/lipgloss"
 
 // Grid layout constants
 const (
-	GridMarginRight    = 0  // No horizontal margin - borders will touch
-	GridMarginBottom   = 0  // No vertical margin - borders will touch
-	PaddingVertical    = 0
-	PaddingHorizontal  = 1
+	GridMarginRight   = 0 // No horizontal margin - borders will touch
+	GridMarginBottom  = 0 // No vertical margin - borders will touch
+	PaddingVertical   = 0
+	PaddingHorizontal = 1
 )
 
 // CreateGridStyles returns the styled grid cell styles
@@ -20,7 +20,7 @@ func CreateGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"orange": lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("208")).
@@ -28,7 +28,7 @@ func CreateGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"blue": lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("4")).
@@ -36,7 +36,7 @@ func CreateGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"green": lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("2")).
@@ -44,7 +44,7 @@ func CreateGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"gray": lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("8")).
@@ -66,7 +66,7 @@ func CreateHighlightedGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"orange": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
@@ -74,7 +74,7 @@ func CreateHighlightedGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"blue": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
@@ -82,7 +82,7 @@ func CreateHighlightedGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"green": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast
@@ -90,7 +90,7 @@ func CreateHighlightedGridStyles() map[string]lipgloss.Style {
 			Padding(PaddingVertical, PaddingHorizontal).
 			MarginRight(GridMarginRight).
 			MarginBottom(GridMarginBottom),
-		
+
 		"gray": lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(lipgloss.Color("15")). // Bright white border for contrast

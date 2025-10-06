@@ -26,11 +26,11 @@ func calculateColumns(width int) int {
 	// Total: ~20 chars per cell
 	const minCellWidth = 20
 	const minCols = 1
-	
+
 	if width < minCellWidth {
 		return minCols
 	}
-	
+
 	cols := width / minCellWidth
 	return max(minCols, cols)
 }
@@ -49,22 +49,22 @@ func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
-	
+
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return []string{text}
 	}
-	
+
 	var lines []string
 	var currentLine strings.Builder
-	
+
 	for i, word := range words {
 		// If this is the first word, add it directly
 		if i == 0 {
 			currentLine.WriteString(word)
 			continue
 		}
-		
+
 		// Check if adding the next word would exceed the width
 		if currentLine.Len()+1+len(word) > width {
 			// Start a new line
@@ -76,11 +76,11 @@ func wrapText(text string, width int) []string {
 			currentLine.WriteString(" " + word)
 		}
 	}
-	
+
 	// Add the last line if it has content
 	if currentLine.Len() > 0 {
 		lines = append(lines, currentLine.String())
 	}
-	
+
 	return lines
 }
