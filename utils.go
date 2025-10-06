@@ -94,11 +94,11 @@ func fuzzyMatch(pattern, text string) bool {
 	if pattern == "" {
 		return true
 	}
-	
+
 	// Convert to lowercase for case-insensitive matching
 	pattern = strings.ToLower(pattern)
 	text = strings.ToLower(text)
-	
+
 	patternIdx := 0
 	for _, char := range text {
 		if patternIdx < len(pattern) && unicode.ToLower(char) == unicode.ToLower(rune(pattern[patternIdx])) {
@@ -108,6 +108,6 @@ func fuzzyMatch(pattern, text string) bool {
 			return true
 		}
 	}
-	
+
 	return patternIdx == len(pattern)
 }

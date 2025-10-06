@@ -34,8 +34,8 @@ type appModel struct {
 	submitting   bool   // whether we're currently submitting a datapoint
 
 	// Filter/search fields
-	searchMode   bool   // whether we're in search/filter mode
-	searchQuery  string // current search query
+	searchMode    bool   // whether we're in search/filter mode
+	searchQuery   string // current search query
 	filteredGoals []Goal // goals filtered by search query
 }
 
@@ -65,7 +65,7 @@ func (m *appModel) filterGoals() []Goal {
 	if m.searchQuery == "" {
 		return m.goals
 	}
-	
+
 	var filtered []Goal
 	for _, goal := range m.goals {
 		// Match against slug or title
@@ -207,7 +207,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		
+
 		// Handle text input in input mode SECOND, before command keys
 		// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 		// can still be typed in comment fields
@@ -371,7 +371,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(displayGoals) > 0 && m.appModel.cursor < len(displayGoals) {
 					m.appModel.showModal = true
 					m.appModel.modalGoal = &displayGoals[m.appModel.cursor]
-					
+
 					// Update cursor to point to the goal in the original goals list
 					// This is necessary for left/right navigation in modal
 					for i, goal := range m.appModel.goals {
