@@ -8,13 +8,13 @@ import (
 )
 
 // RenderGrid renders the goals grid based on the app model
-func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated bool) string {
+func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated bool, username string) string {
 	if len(goals) == 0 {
 		return "No goals found.\n\nPress q to quit.\n"
 	}
 
 	// The header
-	s := "Beeminder Goals\n\n"
+	s := fmt.Sprintf("Beeminder Goals - %s\n\n", username)
 
 	// Get grid styles
 	styles := CreateGridStyles()
