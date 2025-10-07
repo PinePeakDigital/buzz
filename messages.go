@@ -20,6 +20,12 @@ type datapointSubmittedMsg struct {
 	err error
 }
 
+// goalDetailsLoadedMsg is sent when goal details with datapoints are loaded
+type goalDetailsLoadedMsg struct {
+	goal *Goal
+	err  error
+}
+
 // loadGoalsCmd fetches goals from Beeminder API
 func loadGoalsCmd(config *Config) tea.Cmd {
 	return func() tea.Msg {
@@ -44,5 +50,13 @@ func submitDatapointCmd(config *Config, goalSlug, timestamp, value, comment stri
 	return func() tea.Msg {
 		err := CreateDatapoint(config, goalSlug, timestamp, value, comment)
 		return datapointSubmittedMsg{err: err}
+	}
+}
+
+// loadGoalDetailsCmd fetches detailed goal information including datapoints
+func loadGoalDetailsCmd(config *Config, goalSlug string) tea.Cmd {
+	return func() tea.Msg {
+		goal, err := FetchGoalWithDatapoints(config, goalSlug)
+		return goalDetailsLoadedMsg{goal: goal, err: err}
 	}
 }
