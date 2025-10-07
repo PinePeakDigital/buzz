@@ -40,6 +40,7 @@ jobs:
             This is a pre-release build for testing purposes. Install using the `bin` command - see PR comment for instructions.
           draft: false
           prerelease: true
+          make_latest: false
           files: |
             buzz-linux-amd64
             buzz-linux-arm64
