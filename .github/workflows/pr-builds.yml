@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -25,77 +25,111 @@ jobs:
       - name: Build cross-platform binaries
         run: ./scripts/build.sh
 
-      - name: Upload Linux AMD64
-        uses: actions/upload-artifact@v4
-        with:
-          name: buzz-linux-amd64
-          path: buzz-linux-amd64
-          retention-days: 90
-
-      - name: Upload Linux ARM64
-        uses: actions/upload-artifact@v4
-        with:
-          name: buzz-linux-arm64
-          path: buzz-linux-arm64
-          retention-days: 90
-
-      - name: Upload macOS Intel
-        uses: actions/upload-artifact@v4
-        with:
-          name: buzz-darwin-amd64
-          path: buzz-darwin-amd64
-          retention-days: 90
-
-      - name: Upload macOS Apple Silicon
-        uses: actions/upload-artifact@v4
-        with:
-          name: buzz-darwin-arm64
-          path: buzz-darwin-arm64
-          retention-days: 90
-
-      - name: Upload Windows AMD64
-        uses: actions/upload-artifact@v4
-        with:
-          name: buzz-windows-amd64
-          path: buzz-windows-amd64.exe
-          retention-days: 90
-
-      - name: Upload Windows ARM64
-        uses: actions/upload-artifact@v4
-        with:
-          name: buzz-windows-arm64
-          path: buzz-windows-arm64.exe
-          retention-days: 90
-
-      - name: Post PR comment with artifact links
+      - name: Delete existing pre-release if it exists
         uses: actions/github-script@v7
         with:
           script: |
-            const runId = context.runId;
+            const tagName = `pr-${{ github.event.pull_request.number }}-latest`;
+            try {
+              // Get the release by tag
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tagName
+              });
+              
+              console.log(`Found existing release ${release.data.id} for tag ${tagName}, deleting...`);
+              
+              // Delete the release
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id
+              });
+              
+              console.log(`Deleted release ${release.data.id}`);
+              
+              // Delete the tag
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tagName}`
+              });
+              
+              console.log(`Deleted tag ${tagName}`);
+            } catch (error) {
+              if (error.status === 404) {
+                console.log(`No existing release found for tag ${tagName}, will create new one`);
+              } else {
+                console.error('Error checking/deleting existing release:', error);
+                throw error;
+              }
+            }
+
+      - name: Create or update pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pr-${{ github.event.pull_request.number }}-latest
+          name: "PR #${{ github.event.pull_request.number }} - Latest Build"
+          body: |
+            **Automated PR Build**
+            
+            - PR: #${{ github.event.pull_request.number }}
+            - Commit: ${{ github.sha }}
+            - Built: ${{ github.event.repository.updated_at }}
+            
+            This is a pre-release build for testing purposes. Install using the `bin` command - see PR comment for instructions.
+          draft: false
+          prerelease: true
+          make_latest: false
+          files: |
+            buzz-linux-amd64
+            buzz-linux-arm64
+            buzz-darwin-amd64
+            buzz-darwin-arm64
+            buzz-windows-amd64.exe
+            buzz-windows-arm64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post PR comment with pre-release links
+        uses: actions/github-script@v7
+        with:
+          script: |
             const repo = context.repo;
             const prNumber = context.issue.number;
+            const tagName = `pr-${prNumber}-latest`;
+            const releaseUrl = `https://github.com/${repo.owner}/${repo.repo}/releases/tag/${tagName}`;
             
-            // Build the artifact URLs
-            const artifactsUrl = `https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId}`;
+            const comment = `## 🚀 Pre-release Build Ready
             
-            const comment = `## 🔨 Build Artifacts
+            Test builds are ready! Install directly using the \`bin\` command:
             
-            Test builds are ready! Download the binaries for your platform:
+            \`\`\`bash
+            # Install the pre-release
+            bin install ${releaseUrl} buzz-pr-${prNumber}
             
-            **All artifacts:** [View all builds](${artifactsUrl})
+            # Run the pre-release
+            buzz-pr-${prNumber}
             
-            ### Available Platforms
+            # Uninstall the pre-release
+            bin remove buzz-pr-${prNumber}
+            \`\`\`
             
-            - **Linux AMD64**: \`buzz-linux-amd64\`
-            - **Linux ARM64**: \`buzz-linux-arm64\`
-            - **macOS Intel**: \`buzz-darwin-amd64\`
-            - **macOS Apple Silicon**: \`buzz-darwin-arm64\`
-            - **Windows AMD64**: \`buzz-windows-amd64\`
-            - **Windows ARM64**: \`buzz-windows-arm64\`
+            ### Direct Download Links
             
-            > 💡 Click the "All artifacts" link above to download the binaries from the Actions run.
+            Or download binaries directly from the [pre-release page](${releaseUrl}):
+            
+            - [Linux AMD64](https://github.com/${repo.owner}/${repo.repo}/releases/download/${tagName}/buzz-linux-amd64)
+            - [Linux ARM64](https://github.com/${repo.owner}/${repo.repo}/releases/download/${tagName}/buzz-linux-arm64)
+            - [macOS Intel](https://github.com/${repo.owner}/${repo.repo}/releases/download/${tagName}/buzz-darwin-amd64)
+            - [macOS Apple Silicon](https://github.com/${repo.owner}/${repo.repo}/releases/download/${tagName}/buzz-darwin-arm64)
+            - [Windows AMD64](https://github.com/${repo.owner}/${repo.repo}/releases/download/${tagName}/buzz-windows-amd64.exe)
+            - [Windows ARM64](https://github.com/${repo.owner}/${repo.repo}/releases/download/${tagName}/buzz-windows-arm64.exe)
+            
+            > 💡 No GitHub login required for downloads!
             > 
-            > 🗑️ Artifacts will be automatically deleted after 90 days.`;
+            > 🗑️ This pre-release will be automatically deleted when the PR is closed.`;
             
             // Check if we already posted a comment (with pagination)
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -106,7 +140,7 @@ jobs:
             
             const botComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
-              comment.body.includes('🔨 Build Artifacts')
+              comment.body.includes('🚀 Pre-release Build Ready')
             );
             
             if (botComment) {
