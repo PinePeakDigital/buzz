@@ -1,0 +1,58 @@
+name: Cleanup PR Pre-releases
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete pre-release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            const prNumber = context.issue.number;
+            const tagName = `pr-${prNumber}-latest`;
+            
+            try {
+              // Get the release by tag
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: repo.owner,
+                repo: repo.repo,
+                tag: tagName
+              });
+              
+              console.log(`Found release ${release.data.id} for tag ${tagName}`);
+              
+              // Delete the release
+              await github.rest.repos.deleteRelease({
+                owner: repo.owner,
+                repo: repo.repo,
+                release_id: release.data.id
+              });
+              
+              console.log(`Deleted release ${release.data.id}`);
+              
+              // Delete the tag
+              await github.rest.git.deleteRef({
+                owner: repo.owner,
+                repo: repo.repo,
+                ref: `tags/${tagName}`
+              });
+              
+              console.log(`Deleted tag ${tagName}`);
+              console.log('✅ Pre-release cleanup completed successfully');
+            } catch (error) {
+              if (error.status === 404) {
+                console.log(`⚠️ Pre-release ${tagName} not found - may have been manually deleted`);
+              } else {
+                console.error('❌ Error during cleanup:', error);
+                throw error;
+              }
+            }
