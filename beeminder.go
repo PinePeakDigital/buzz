@@ -197,3 +197,31 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 
 	return &goal, nil
 }
+
+// CreateGoal creates a new goal for the user
+// Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate
+func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json",
+		config.Username)
+
+	data := fmt.Sprintf("auth_token=%s&slug=%s&title=%s&goal_type=%s&gunits=%s&goaldate=%s&goalval=%s&rate=%s",
+		config.AuthToken, slug, title, goalType, gunits, goaldate, goalval, rate)
+
+	resp, err := http.Post(url, "application/x-www-form-urlencoded",
+		strings.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create goal: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var goal Goal
+	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
+		return nil, fmt.Errorf("failed to decode created goal: %w", err)
+	}
+
+	return &goal, nil
+}
