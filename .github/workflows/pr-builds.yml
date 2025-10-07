@@ -25,6 +25,47 @@ jobs:
       - name: Build cross-platform binaries
         run: ./scripts/build.sh
 
+      - name: Delete existing pre-release if it exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tagName = `pr-${{ github.event.pull_request.number }}-latest`;
+            try {
+              // Get the release by tag
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tagName
+              });
+              
+              console.log(`Found existing release ${release.data.id} for tag ${tagName}, deleting...`);
+              
+              // Delete the release
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id
+              });
+              
+              console.log(`Deleted release ${release.data.id}`);
+              
+              // Delete the tag
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tagName}`
+              });
+              
+              console.log(`Deleted tag ${tagName}`);
+            } catch (error) {
+              if (error.status === 404) {
+                console.log(`No existing release found for tag ${tagName}, will create new one`);
+              } else {
+                console.error('Error checking/deleting existing release:', error);
+                throw error;
+              }
+            }
+
       - name: Create or update pre-release
         uses: softprops/action-gh-release@v2
         with:
