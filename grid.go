@@ -266,25 +266,47 @@ func RenderCreateGoalModal(width, height int, slug, title, goalType, gunits, goa
 	goalvalField := goalval
 	rateField := rate
 
+	// Add placeholder for empty fields to make focus visible
 	if focus == 0 {
+		if slugField == "" {
+			slugField = "_"
+		}
 		slugField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(slugField)
 	}
 	if focus == 1 {
+		if titleField == "" {
+			titleField = "_"
+		}
 		titleField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(titleField)
 	}
 	if focus == 2 {
+		if goalTypeField == "" {
+			goalTypeField = "_"
+		}
 		goalTypeField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(goalTypeField)
 	}
 	if focus == 3 {
+		if gunitsField == "" {
+			gunitsField = "_"
+		}
 		gunitsField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(gunitsField)
 	}
 	if focus == 4 {
+		if goaldateField == "" {
+			goaldateField = "_"
+		}
 		goaldateField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(goaldateField)
 	}
 	if focus == 5 {
+		if goalvalField == "" {
+			goalvalField = "_"
+		}
 		goalvalField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(goalvalField)
 	}
 	if focus == 6 {
+		if rateField == "" {
+			rateField = "_"
+		}
 		rateField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(rateField)
 	}
 
