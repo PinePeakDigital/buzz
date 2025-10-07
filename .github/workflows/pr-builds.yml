@@ -26,7 +26,7 @@ jobs:
         run: ./scripts/build.sh
 
       - name: Create or update pre-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: pr-${{ github.event.pull_request.number }}-latest
           name: "PR #${{ github.event.pull_request.number }} - Latest Build"
