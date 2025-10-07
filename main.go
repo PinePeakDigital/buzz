@@ -39,17 +39,17 @@ type appModel struct {
 	filteredGoals []Goal // goals filtered by search query
 
 	// Goal creation fields
-	showCreateModal    bool   // whether to show goal creation modal
-	createSlug         string // goal slug
-	createTitle        string // goal title
-	createGoalType     string // goal type (hustler, biker, etc.)
-	createGunits       string // goal units
-	createGoaldate     string // goal date (unix timestamp or "null")
-	createGoalval      string // goal value (number or "null")
-	createRate         string // rate (number or "null")
-	createFocus        int    // which input field is focused
-	createError        string // error message for creation validation
-	creatingGoal       bool   // whether we're currently creating a goal
+	showCreateModal bool   // whether to show goal creation modal
+	createSlug      string // goal slug
+	createTitle     string // goal title
+	createGoalType  string // goal type (hustler, biker, etc.)
+	createGunits    string // goal units
+	createGoaldate  string // goal date (unix timestamp or "null")
+	createGoalval   string // goal value (number or "null")
+	createRate      string // rate (number or "null")
+	createFocus     int    // which input field is focused
+	createError     string // error message for creation validation
+	creatingGoal    bool   // whether we're currently creating a goal
 }
 
 // model is the top-level model that switches between auth and app
