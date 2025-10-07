@@ -33,6 +33,7 @@ jobs:
           branch: main
           fallbackTag: '0.0.0'
           noVersionBumpBehavior: silent
+          skipInvalidTags: true
 
       - name: Check if release is needed
         id: check
@@ -41,7 +42,7 @@ jobs:
             echo "No conventional commits found - skipping release"
             echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "Version to release: v${{ steps.semver.outputs.next }}"
+            echo "Version to release: ${{ steps.semver.outputs.next }}"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
@@ -60,8 +61,8 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.semver.outputs.next }}
-          name: Release v${{ steps.semver.outputs.next }}
+          tag_name: ${{ steps.semver.outputs.next }}
+          name: Release ${{ steps.semver.outputs.next }}
           draft: false
           prerelease: false
           generate_release_notes: true
