@@ -554,9 +554,65 @@ func (m model) viewApp() string {
 }
 
 func main() {
+	// Check for CLI arguments
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "next":
+			handleNextCommand()
+			return
+		default:
+			fmt.Printf("Unknown command: %s\n", os.Args[1])
+			fmt.Println("Available commands: next")
+			os.Exit(1)
+		}
+	}
+
+	// No arguments, run the interactive TUI
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
+}
+
+// handleNextCommand outputs a terse summary of the next due goal
+func handleNextCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Sort goals (by due date ascending, then by stakes descending, then by name)
+	SortGoals(goals)
+
+	// If no goals, exit
+	if len(goals) == 0 {
+		fmt.Println("No goals found.")
+		return
+	}
+
+	// Get the first goal (most urgent)
+	nextGoal := goals[0]
+
+	// Format the output: "goalslug limsum timeframe"
+	// limsum is like "+2 within 1 day" or "+1 in 3 hours"
+	// We'll output: "goalslug limsum timeframe"
+	timeframe := FormatDueDate(nextGoal.Losedate)
+	
+	// Output the terse summary
+	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Limsum, timeframe)
 }
