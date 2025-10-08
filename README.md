@@ -67,6 +67,7 @@ The output format is: `goalslug limsum timeframe`
 - `timeframe`: Time until the goal is due (e.g., "2h" for 2 hours, "3d" for 3 days)
 
 **buzz add** - Add a datapoint to a goal without opening the TUI:
+
 ```bash
 buzz add <goalslug> <value> [comment]
 

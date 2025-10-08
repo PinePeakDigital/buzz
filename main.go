@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -635,7 +636,7 @@ func handleAddCommand() {
 	// Optional comment - default to "Added via buzz" if not provided
 	comment := "Added via buzz"
 	if len(os.Args) >= 5 {
-		comment = os.Args[4]
+		comment = strings.Join(os.Args[4:], " ")
 	}
 
 	// Load config
@@ -652,6 +653,12 @@ func handleAddCommand() {
 
 	// Use current time as timestamp
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+	// Validate value is a number
+	if _, err := strconv.ParseFloat(value, 64); err != nil {
+		fmt.Printf("Error: Value must be a valid number, got: %s\n", value)
+		os.Exit(1)
+	}
 
 	// Create the datapoint
 	err = CreateDatapoint(config, goalSlug, timestamp, value, comment)
