@@ -94,7 +94,7 @@ func GetBufferColor(safebuf int) string {
 // e.g., "+2 within 1 day" -> "2", "+1 in 3 hours" -> "1", "0 today" -> "0"
 func ParseLimsumValue(limsum string) string {
 	if limsum == "" {
-		return ""
+		return "0"
 	}
 	var value string
 	// Split on " within "
@@ -112,13 +112,18 @@ func ParseLimsumValue(limsum string) string {
 			if len(fields) > 0 {
 				value = fields[0]
 			} else {
-				// If format doesn't match, return the whole string
-				return limsum
+				// If format doesn't match, return "0" as fallback
+				return "0"
 			}
 		}
 	}
 	// Strip leading plus sign
-	return strings.TrimPrefix(value, "+")
+	cleaned := strings.TrimPrefix(value, "+")
+	// Return "0" if the cleaned value is empty
+	if cleaned == "" {
+		return "0"
+	}
+	return cleaned
 }
 
 // FormatDueDate formats the losedate timestamp into a readable string
