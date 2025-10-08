@@ -33,8 +33,8 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 	totalRows := (len(goals) + cols - 1) / cols
 
 	// Calculate visible rows based on terminal height
-	// Each cell is roughly 5 lines high (4 lines content + 1 line spacing)
-	maxVisibleRows := max(1, (height-4)/5) // -4 for header and footer
+	// Each cell is roughly 4 lines high (3 lines content + 1 line spacing)
+	maxVisibleRows := max(1, (height-4)/4) // -4 for header and footer
 
 	// Calculate which rows to display
 	startRow := scrollRow
@@ -72,11 +72,12 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 			}
 
 			// Format goal display
-			display := fmt.Sprintf("%s\n$%.0f | %s\n%s",
+			deltaValue := ParseLimsumValue(goal.Limsum)
+			display := fmt.Sprintf("%s\n$%.0f | %s in %s",
 				truncateString(goal.Slug, 16),
 				goal.Pledge,
-				FormatDueDate(goal.Losedate),
-				goal.Limsum)
+				deltaValue,
+				FormatDueDate(goal.Losedate))
 
 			cell := style.Render(display)
 			rowCells = append(rowCells, cell)
@@ -93,7 +94,7 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	// The footer with scroll information
 	footerCols := calculateColumns(width)
 	footerTotalRows := (len(goals) + footerCols - 1) / footerCols
-	footerMaxVisibleRows := max(1, (height-4)/5)
+	footerMaxVisibleRows := max(1, (height-4)/4)
 
 	scrollInfo := ""
 	if footerTotalRows > footerMaxVisibleRows {
