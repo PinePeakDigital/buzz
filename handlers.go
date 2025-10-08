@@ -358,6 +358,72 @@ func handleBackspace(m model) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// validateDatapointInput validates datapoint input fields and returns error message if invalid
+func validateDatapointInput(inputDate, inputValue string) string {
+	if inputDate == "" {
+		return "Date cannot be empty"
+	}
+
+	if inputValue == "" {
+		return "Value cannot be empty"
+	}
+
+	// Parse and validate date
+	date, err := time.Parse("2006-01-02", inputDate)
+	if err != nil {
+		return "Invalid date format (use YYYY-MM-DD)"
+	}
+
+	// Validate that date is not in the future beyond today
+	if date.After(time.Now().AddDate(0, 0, 1)) {
+		return "Date cannot be more than 1 day in the future"
+	}
+
+	// Parse and validate value (must be a valid number)
+	if _, err := strconv.ParseFloat(inputValue, 64); err != nil {
+		return "Value must be a valid number"
+	}
+
+	return ""
+}
+
+// validateCreateGoalInput validates create goal input fields and returns error message if invalid
+func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, rate string) string {
+	if slug == "" {
+		return "Slug cannot be empty"
+	}
+
+	if title == "" {
+		return "Title cannot be empty"
+	}
+
+	if goalType == "" {
+		return "Goal type cannot be empty"
+	}
+
+	if gunits == "" {
+		return "Goal units cannot be empty"
+	}
+
+	// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
+	countProvided := 0
+	if goaldate != "" && goaldate != "null" {
+		countProvided++
+	}
+	if goalval != "" && goalval != "null" {
+		countProvided++
+	}
+	if rate != "" && rate != "null" {
+		countProvided++
+	}
+
+	if countProvided != 2 {
+		return "Exactly 2 out of 3 (goaldate, goalval, rate) must be provided"
+	}
+
+	return ""
+}
+
 // handleEnterKey handles Enter key press
 func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
@@ -365,40 +431,10 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 		m.appModel.createError = ""
 
 		// Validate input fields
-		if m.appModel.createSlug == "" {
-			m.appModel.createError = "Slug cannot be empty"
-			return m, nil
-		}
-
-		if m.appModel.createTitle == "" {
-			m.appModel.createError = "Title cannot be empty"
-			return m, nil
-		}
-
-		if m.appModel.createGoalType == "" {
-			m.appModel.createError = "Goal type cannot be empty"
-			return m, nil
-		}
-
-		if m.appModel.createGunits == "" {
-			m.appModel.createError = "Goal units cannot be empty"
-			return m, nil
-		}
-
-		// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
-		countProvided := 0
-		if m.appModel.createGoaldate != "" && m.appModel.createGoaldate != "null" {
-			countProvided++
-		}
-		if m.appModel.createGoalval != "" && m.appModel.createGoalval != "null" {
-			countProvided++
-		}
-		if m.appModel.createRate != "" && m.appModel.createRate != "null" {
-			countProvided++
-		}
-
-		if countProvided != 2 {
-			m.appModel.createError = "Exactly 2 out of 3 (goaldate, goalval, rate) must be provided"
+		if errMsg := validateCreateGoalInput(m.appModel.createSlug, m.appModel.createTitle,
+			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
+			m.appModel.createGoalval, m.appModel.createRate); errMsg != "" {
+			m.appModel.createError = errMsg
 			return m, nil
 		}
 
@@ -412,35 +448,13 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 		m.appModel.inputError = ""
 
 		// Validate input fields
-		if m.appModel.inputDate == "" {
-			m.appModel.inputError = "Date cannot be empty"
+		if errMsg := validateDatapointInput(m.appModel.inputDate, m.appModel.inputValue); errMsg != "" {
+			m.appModel.inputError = errMsg
 			return m, nil
 		}
 
-		if m.appModel.inputValue == "" {
-			m.appModel.inputError = "Value cannot be empty"
-			return m, nil
-		}
-
-		// Parse and validate date
-		date, err := time.Parse("2006-01-02", m.appModel.inputDate)
-		if err != nil {
-			m.appModel.inputError = "Invalid date format (use YYYY-MM-DD)"
-			return m, nil
-		}
-
-		// Validate that date is not in the future beyond today
-		if date.After(time.Now().AddDate(0, 0, 1)) {
-			m.appModel.inputError = "Date cannot be more than 1 day in the future"
-			return m, nil
-		}
-
-		// Parse and validate value (must be a valid number)
-		if _, err := strconv.ParseFloat(m.appModel.inputValue, 64); err != nil {
-			m.appModel.inputError = "Value must be a valid number"
-			return m, nil
-		}
-
+		// Parse date to get timestamp
+		date, _ := time.Parse("2006-01-02", m.appModel.inputDate)
 		timestamp := fmt.Sprintf("%d", date.Unix())
 
 		// Set submitting state and submit datapoint asynchronously
