@@ -46,3 +46,35 @@ ci: add linting to workflow
 - Keep the description concise but descriptive
 - A commit-msg hook enforces this format, so all commits must comply
 - See `DEVELOPMENT.md` for more details on our git workflow
+
+## Accessing CodeRabbit PR Feedback
+
+When working on a PR branch, you can access all CodeRabbit feedback using the provided shell script:
+
+```bash
+./scripts/get-coderabbit-feedback.sh
+```
+
+### What the Script Retrieves
+
+The script fetches comprehensive CodeRabbit feedback from three sources:
+
+1. **General PR Comments** - Timeline comments posted by CodeRabbit on the PR conversation
+2. **Inline Review Comments** - Code-specific comments attached to particular lines in the diff
+3. **Review Summaries** - Overall review summaries submitted by CodeRabbit
+
+### Usage
+
+Make sure you're on a PR branch before running the script:
+
+```bash
+git checkout <pr-branch>
+./scripts/get-coderabbit-feedback.sh
+```
+
+The script will automatically detect the current PR and display all CodeRabbit feedback in a structured, readable format.
+
+### Requirements
+
+- GitHub CLI (`gh`) must be installed and authenticated
+- Must be run from within a PR branch context
