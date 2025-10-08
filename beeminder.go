@@ -91,28 +91,34 @@ func GetBufferColor(safebuf int) string {
 }
 
 // ParseLimsumValue extracts the delta value from limsum string
-// e.g., "+2 within 1 day" -> "+2", "+1 in 3 hours" -> "+1", "0 today" -> "0"
+// e.g., "+2 within 1 day" -> "2", "+1 in 3 hours" -> "1", "0 today" -> "0"
 func ParseLimsumValue(limsum string) string {
 	if limsum == "" {
 		return ""
 	}
+	var value string
 	// Split on " within "
 	parts := strings.Split(limsum, " within ")
 	if len(parts) == 2 {
-		return parts[0]
+		value = parts[0]
+	} else {
+		// Split on " in "
+		parts = strings.Split(limsum, " in ")
+		if len(parts) == 2 {
+			value = parts[0]
+		} else {
+			// Handle "0 today" or similar cases - extract just the number/value at the start
+			fields := strings.Fields(limsum)
+			if len(fields) > 0 {
+				value = fields[0]
+			} else {
+				// If format doesn't match, return the whole string
+				return limsum
+			}
+		}
 	}
-	// Split on " in "
-	parts = strings.Split(limsum, " in ")
-	if len(parts) == 2 {
-		return parts[0]
-	}
-	// Handle "0 today" or similar cases - extract just the number/value at the start
-	fields := strings.Fields(limsum)
-	if len(fields) > 0 {
-		return fields[0]
-	}
-	// If format doesn't match, return the whole string
-	return limsum
+	// Strip leading plus sign
+	return strings.TrimPrefix(value, "+")
 }
 
 // FormatDueDate formats the losedate timestamp into a readable string
