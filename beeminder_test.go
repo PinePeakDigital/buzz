@@ -63,3 +63,91 @@ func TestGoalCreatedMsgStructure(t *testing.T) {
 		t.Errorf("Expected goal slug to be 'test', got %s", msg.goal.Slug)
 	}
 }
+
+// TestParseLimsumValue tests the ParseLimsumValue function with various inputs
+func TestParseLimsumValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		// Standard numeric formats
+		{
+			name:     "plus sign with within",
+			input:    "+2 within 1 day",
+			expected: "2",
+		},
+		{
+			name:     "plus sign with in",
+			input:    "+1 in 3 hours",
+			expected: "1",
+		},
+		{
+			name:     "zero today",
+			input:    "0 today",
+			expected: "0",
+		},
+		// Time formats (HH:MM) - these should be preserved
+		{
+			name:     "time format with within",
+			input:    "+00:05 within 1 day",
+			expected: "00:05",
+		},
+		{
+			name:     "time format with in",
+			input:    "+00:30 in 2 hours",
+			expected: "00:30",
+		},
+		{
+			name:     "time format without plus",
+			input:    "00:15 today",
+			expected: "00:15",
+		},
+		{
+			name:     "time format with hour and half",
+			input:    "+1:30 within 1 day",
+			expected: "1:30",
+		},
+		{
+			name:     "time format single digit hour",
+			input:    "+2:45 in 3 hours",
+			expected: "2:45",
+		},
+		// Edge cases
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "0",
+		},
+		{
+			name:     "just plus sign",
+			input:    "+ within 1 day",
+			expected: "0",
+		},
+		{
+			name:     "negative value",
+			input:    "-1 within 1 day",
+			expected: "-1",
+		},
+		{
+			name:     "decimal value",
+			input:    "+1.5 within 1 day",
+			expected: "1.5",
+		},
+		// Time format with multiple colons
+		{
+			name:     "time format HH:MM:SS",
+			input:    "+01:30:45 within 1 day",
+			expected: "01:30:45",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseLimsumValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("ParseLimsumValue(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
