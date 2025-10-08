@@ -21,6 +21,13 @@ if ! command -v gh &> /dev/null; then
     exit 1
 fi
 
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    echo -e "${RED}❌ Error: jq is not installed${NC}"
+    echo "Please install it from: https://stedolan.github.io/jq/download/"
+    exit 1
+fi
+
 # Get current PR number
 echo -e "${YELLOW}📍 Detecting current PR...${NC}"
 PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
@@ -68,8 +75,8 @@ echo -e "${YELLOW}────────────────────�
 # Get repository owner and name
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 
-# Fetch review comments using GitHub API
-REVIEW_COMMENTS=$(gh api "/repos/$REPO/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user.login == "coderabbitai") | {path: .path, line: .line, body: .body, createdAt: .created_at, position: .position}')
+# Fetch review comments using GitHub API (with pagination)
+REVIEW_COMMENTS=$(gh api --paginate "/repos/$REPO/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user.login == "coderabbitai") | {path: .path, line: .line, body: .body, createdAt: .created_at, position: .position}')
 
 if [ -z "$REVIEW_COMMENTS" ]; then
     echo "No inline review comments from CodeRabbit found."
@@ -89,7 +96,7 @@ echo ""
 echo -e "${YELLOW}📋 REVIEW SUMMARIES${NC}"
 echo -e "${YELLOW}─────────────────────────────────────────────────────────────${NC}"
 
-REVIEWS=$(gh api "/repos/$REPO/pulls/$PR_NUMBER/reviews" --jq '.[] | select(.user.login == "coderabbitai") | {state: .state, body: .body, submittedAt: .submitted_at}')
+REVIEWS=$(gh api --paginate "/repos/$REPO/pulls/$PR_NUMBER/reviews" --jq '.[] | select(.user.login == "coderabbitai") | {state: .state, body: .body, submittedAt: .submitted_at}')
 
 if [ -z "$REVIEWS" ]; then
     echo "No review summaries from CodeRabbit found."

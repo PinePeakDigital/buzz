@@ -77,4 +77,5 @@ The script will automatically detect the current PR and display all CodeRabbit f
 ### Requirements
 
 - GitHub CLI (`gh`) must be installed and authenticated
+- `jq` (JSON processor) must be installed for parsing API responses
 - Must be run from within a PR branch context
