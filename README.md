@@ -84,6 +84,7 @@ Running `buzz` without arguments launches the interactive TUI.
 - **Arrow keys** or **hjkl** (vim-style) - Navigate the goal grid spatially
 - **Page Up/Down** or **u/d** - Scroll when there are many goals
 - **/** - Enter search/filter mode
+- **n** - Create a new goal
 - **Escape** - Exit search mode or close modals
 - **Enter** - View goal details and add datapoints
 - **q** or **Ctrl+C** - Quit
@@ -95,6 +96,17 @@ Goals are displayed in a colorful grid based on their deadline urgency:
 - **Blue** - Due within 3-6 days
 - **Green** - Due within 7+ days
 - **Gray** - Far future deadlines
+
+### Creating Goals
+1. Press **n** to open the goal creation modal
+2. Fill in the required fields:
+   - **Slug** - Unique identifier for the goal (alphanumeric, dashes, underscores)
+   - **Title** - Display name for the goal
+   - **Goal Type** - Type of goal (e.g., hustler, biker, fatloser, gainer)
+   - **Goal Units** - Units for the goal (e.g., workouts, pages, pounds)
+   - **Exactly 2 of 3** parameters: goaldate, goalval, rate (use "null" to skip one)
+3. Use **Tab/Shift+Tab** to navigate between fields
+4. **Enter** to submit, **Escape** to cancel
 
 ### Adding Datapoints
 1. Navigate to a goal and press **Enter** to open details

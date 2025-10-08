@@ -38,6 +38,19 @@ type appModel struct {
 	searchMode    bool   // whether we're in search/filter mode
 	searchQuery   string // current search query
 	filteredGoals []Goal // goals filtered by search query
+
+	// Goal creation fields
+	showCreateModal bool   // whether to show goal creation modal
+	createSlug      string // goal slug
+	createTitle     string // goal title
+	createGoalType  string // goal type (hustler, biker, etc.)
+	createGunits    string // goal units
+	createGoaldate  string // goal date (unix timestamp or "null")
+	createGoalval   string // goal value (number or "null")
+	createRate      string // rate (number or "null")
+	createFocus     int    // which input field is focused
+	createError     string // error message for creation validation
+	creatingGoal    bool   // whether we're currently creating a goal
 }
 
 // model is the top-level model that switches between auth and app
@@ -206,6 +219,19 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case goalCreatedMsg:
+		// Goal creation completed
+		m.appModel.creatingGoal = false
+		if msg.err != nil {
+			m.appModel.createError = fmt.Sprintf("Failed to create goal: %v", msg.err)
+		} else {
+			// Success - close modal and refresh goals
+			m.appModel.showCreateModal = false
+			m.appModel.createError = ""
+			return m, loadGoalsCmd(m.appModel.config)
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 		// Handle text input in search mode FIRST
@@ -220,6 +246,47 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.appModel.scrollRow = 0
 				m.appModel.hasNavigated = false
 				return m, nil
+			}
+		}
+
+		// Handle text input in create goal modal
+		if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+			char := msg.String()
+			if len(char) == 1 && char >= " " && char <= "~" {
+				switch m.appModel.createFocus {
+				case 0: // Slug - allow alphanumeric and dashes/underscores
+					if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
+						(char >= "0" && char <= "9") || char == "-" || char == "_" {
+						m.appModel.createSlug += char
+						return m, nil
+					}
+				case 1: // Title - allow all printable characters
+					m.appModel.createTitle += char
+					return m, nil
+				case 2: // Goal type - allow letters
+					if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") {
+						m.appModel.createGoalType += char
+						return m, nil
+					}
+				case 3: // Gunits - allow all printable characters
+					m.appModel.createGunits += char
+					return m, nil
+				case 4: // Goaldate - allow digits
+					if (char >= "0" && char <= "9") || char == "n" || char == "u" || char == "l" {
+						m.appModel.createGoaldate += char
+						return m, nil
+					}
+				case 5: // Goalval - allow digits, decimal point, and negative sign
+					if (char >= "0" && char <= "9") || char == "." || char == "-" || char == "n" || char == "u" || char == "l" {
+						m.appModel.createGoalval += char
+						return m, nil
+					}
+				case 6: // Rate - allow digits, decimal point, and negative sign
+					if (char >= "0" && char <= "9") || char == "." || char == "-" || char == "n" || char == "u" || char == "l" {
+						m.appModel.createRate += char
+						return m, nil
+					}
+				}
 			}
 		}
 
@@ -266,6 +333,10 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.appModel.cursor = 0
 				m.appModel.scrollRow = 0
 				m.appModel.hasNavigated = false
+			} else if m.appModel.showCreateModal {
+				// Close create goal modal
+				m.appModel.showCreateModal = false
+				m.appModel.createError = ""
 			} else if m.appModel.showModal {
 				if m.appModel.inputMode {
 					// Exit input mode
@@ -301,17 +372,52 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Tab navigation between input fields (only in input mode and not submitting)
 		case "tab":
-			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+			if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+				m.appModel.createFocus = (m.appModel.createFocus + 1) % 7
+			} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 1) % 3
 			} // Shift+Tab navigation in input mode (reverse)
 		case "shift+tab":
-			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+			if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+				m.appModel.createFocus = (m.appModel.createFocus + 6) % 7 // +6 is same as -1 in mod 7
+			} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
 			}
 
 		// Backspace handling in search mode or input mode
 		case "backspace":
-			if m.appModel.searchMode && !m.appModel.showModal {
+			if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+				switch m.appModel.createFocus {
+				case 0: // Slug
+					if len(m.appModel.createSlug) > 0 {
+						m.appModel.createSlug = m.appModel.createSlug[:len(m.appModel.createSlug)-1]
+					}
+				case 1: // Title
+					if len(m.appModel.createTitle) > 0 {
+						m.appModel.createTitle = m.appModel.createTitle[:len(m.appModel.createTitle)-1]
+					}
+				case 2: // Goal type
+					if len(m.appModel.createGoalType) > 0 {
+						m.appModel.createGoalType = m.appModel.createGoalType[:len(m.appModel.createGoalType)-1]
+					}
+				case 3: // Gunits
+					if len(m.appModel.createGunits) > 0 {
+						m.appModel.createGunits = m.appModel.createGunits[:len(m.appModel.createGunits)-1]
+					}
+				case 4: // Goaldate
+					if len(m.appModel.createGoaldate) > 0 {
+						m.appModel.createGoaldate = m.appModel.createGoaldate[:len(m.appModel.createGoaldate)-1]
+					}
+				case 5: // Goalval
+					if len(m.appModel.createGoalval) > 0 {
+						m.appModel.createGoalval = m.appModel.createGoalval[:len(m.appModel.createGoalval)-1]
+					}
+				case 6: // Rate
+					if len(m.appModel.createRate) > 0 {
+						m.appModel.createRate = m.appModel.createRate[:len(m.appModel.createRate)-1]
+					}
+				}
+			} else if m.appModel.searchMode && !m.appModel.showModal {
 				// Remove last character from search query
 				if len(m.appModel.searchQuery) > 0 {
 					m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
@@ -338,9 +444,56 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		// Submit form with Enter in input mode
+		// Submit form with Enter in input mode or create modal
 		case "enter":
-			if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+			if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+				// Clear previous error
+				m.appModel.createError = ""
+
+				// Validate input fields
+				if m.appModel.createSlug == "" {
+					m.appModel.createError = "Slug cannot be empty"
+					return m, nil
+				}
+
+				if m.appModel.createTitle == "" {
+					m.appModel.createError = "Title cannot be empty"
+					return m, nil
+				}
+
+				if m.appModel.createGoalType == "" {
+					m.appModel.createError = "Goal type cannot be empty"
+					return m, nil
+				}
+
+				if m.appModel.createGunits == "" {
+					m.appModel.createError = "Goal units cannot be empty"
+					return m, nil
+				}
+
+				// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
+				countProvided := 0
+				if m.appModel.createGoaldate != "" && m.appModel.createGoaldate != "null" {
+					countProvided++
+				}
+				if m.appModel.createGoalval != "" && m.appModel.createGoalval != "null" {
+					countProvided++
+				}
+				if m.appModel.createRate != "" && m.appModel.createRate != "null" {
+					countProvided++
+				}
+
+				if countProvided != 2 {
+					m.appModel.createError = "Exactly 2 out of 3 (goaldate, goalval, rate) must be provided"
+					return m, nil
+				}
+
+				// Set creating state and submit goal creation asynchronously
+				m.appModel.creatingGoal = true
+				return m, createGoalCmd(m.appModel.config, m.appModel.createSlug, m.appModel.createTitle,
+					m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
+					m.appModel.createGoalval, m.appModel.createRate)
+			} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 				// Clear previous error
 				m.appModel.inputError = ""
 
@@ -403,7 +556,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Navigation keys - spatial movement through grid (only when modal is closed)
 		case "up", "k":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -416,7 +569,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -437,7 +590,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Load detailed goal information including datapoints
 					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
-			} else if !m.appModel.showModal {
+			} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -458,7 +611,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Load detailed goal information including datapoints
 					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
-			} else if !m.appModel.showModal {
+			} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -472,13 +625,13 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Scroll up with Page Up or 'u' (only when modal is closed)
 		case "pgup", "u":
-			if !m.appModel.showModal && m.appModel.scrollRow > 0 {
+			if !m.appModel.showModal && !m.appModel.showCreateModal && m.appModel.scrollRow > 0 {
 				m.appModel.scrollRow--
 			}
 
 		// Scroll down with Page Down or 'd' (only when modal is closed)
 		case "pgdown", "d":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				cols := calculateColumns(m.appModel.width)
 				totalRows := (len(displayGoals) + cols - 1) / cols
@@ -490,14 +643,14 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Manual refresh with 'r' (only when modal is closed)
 		case "r":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				m.appModel.loading = true
 				return m, loadGoalsCmd(m.appModel.config)
 			}
 
 		// Toggle auto-refresh with 't' (only when modal is closed)
 		case "t":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				m.appModel.refreshActive = !m.appModel.refreshActive
 				if m.appModel.refreshActive {
 					// If we just enabled auto-refresh, start the timer
@@ -507,10 +660,26 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Enter search mode with '/' (only when modal is closed and not already in search mode)
 		case "/":
-			if !m.appModel.showModal && !m.appModel.searchMode {
+			if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
 				m.appModel.searchMode = true
 				m.appModel.searchQuery = ""
 				m.appModel.filteredGoals = []Goal{}
+			}
+
+		// Open create goal modal with 'n' for new (only when no modal is open)
+		case "n":
+			if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
+				m.appModel.showCreateModal = true
+				m.appModel.createFocus = 0
+				m.appModel.createError = ""
+				// Set default values
+				m.appModel.createSlug = ""
+				m.appModel.createTitle = ""
+				m.appModel.createGoalType = "hustler"
+				m.appModel.createGunits = "units"
+				m.appModel.createGoaldate = ""
+				m.appModel.createGoalval = "0"
+				m.appModel.createRate = "1"
 			}
 		}
 	}
@@ -544,6 +713,14 @@ func (m model) viewApp() string {
 	footer := RenderFooter(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 
 	baseView := grid + footer
+
+	// Show create goal modal if active
+	if m.appModel.showCreateModal {
+		modal := RenderCreateGoalModal(m.appModel.width, m.appModel.height, m.appModel.createSlug, m.appModel.createTitle,
+			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate, m.appModel.createGoalval,
+			m.appModel.createRate, m.appModel.createFocus, m.appModel.createError, m.appModel.creatingGoal)
+		return modal
+	}
 
 	// Show modal overlay if modal is active
 	if m.appModel.showModal && m.appModel.modalGoal != nil {
