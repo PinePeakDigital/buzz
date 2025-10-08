@@ -26,6 +26,12 @@ type goalDetailsLoadedMsg struct {
 	err  error
 }
 
+// goalCreatedMsg is sent when a goal creation completes
+type goalCreatedMsg struct {
+	goal *Goal
+	err  error
+}
+
 // loadGoalsCmd fetches goals from Beeminder API
 func loadGoalsCmd(config *Config) tea.Cmd {
 	return func() tea.Msg {
@@ -59,12 +65,6 @@ func loadGoalDetailsCmd(config *Config, goalSlug string) tea.Cmd {
 		goal, err := FetchGoalWithDatapoints(config, goalSlug)
 		return goalDetailsLoadedMsg{goal: goal, err: err}
 	}
-}
-
-// goalCreatedMsg is sent when a goal creation completes
-type goalCreatedMsg struct {
-	goal *Goal
-	err  error
 }
 
 // createGoalCmd submits a new goal to Beeminder API

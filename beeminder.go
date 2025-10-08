@@ -199,7 +199,8 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	return &goal, nil
 }
 
-// CreateGoal creates a new goal via the Beeminder API
+// CreateGoal creates a new goal for the user
+// Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate
 func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
 	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json",
 		config.Username)
