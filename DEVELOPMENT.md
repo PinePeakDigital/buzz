@@ -32,7 +32,9 @@ go mod tidy
 
 ## Testing
 
-### Running Tests
+The project has comprehensive test coverage for business logic and utility functions. See [docs/TESTING.md](docs/TESTING.md) for complete testing documentation.
+
+### Quick Start
 
 Run all tests:
 
@@ -52,9 +54,7 @@ Run tests with coverage:
 go test -cover
 ```
 
-### Test Organization
-
-Tests are organized alongside their source files:
+### Test Files
 
 - `beeminder_test.go` - Tests for Beeminder API functions
 - `handlers_test.go` - Tests for input validation and handlers
@@ -62,44 +62,9 @@ Tests are organized alongside their source files:
 - `config_test.go` - Tests for configuration management
 - `model_test.go` - Tests for application state and models
 
-### Writing Tests
+**Coverage:** 18.5% of statements (178 test cases)
 
-When adding new functionality:
-
-1. Write tests for pure functions first (functions with no side effects)
-2. Use table-driven tests for comprehensive coverage
-3. Test edge cases and error conditions
-4. Follow Go testing conventions and naming patterns
-
-Example test structure:
-
-```go
-func TestMyFunction(t *testing.T) {
-    tests := []struct {
-        name     string
-        input    string
-        expected string
-    }{
-        {"basic case", "input", "expected"},
-        {"edge case", "", ""},
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := MyFunction(tt.input)
-            if result != tt.expected {
-                t.Errorf("got %q, want %q", result, tt.expected)
-            }
-        })
-    }
-}
-```
-
-### CI/CD
-
-Tests are automatically run in CI/CD pipelines:
-- On every pull request
-- Before building cross-platform binaries
+For detailed information about testing strategy, coverage, and best practices, see [docs/TESTING.md](docs/TESTING.md).
 
 ## Project Structure
 
