@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -560,9 +561,12 @@ func main() {
 		case "next":
 			handleNextCommand()
 			return
+		case "add":
+			handleAddCommand()
+			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next")
+			fmt.Println("Available commands: next, add")
 			os.Exit(1)
 		}
 	}
@@ -612,7 +616,56 @@ func handleNextCommand() {
 	// limsum is like "+2 within 1 day" or "+1 in 3 hours"
 	// We'll output: "goalslug limsum timeframe"
 	timeframe := FormatDueDate(nextGoal.Losedate)
-	
+
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Limsum, timeframe)
+}
+
+// handleAddCommand adds a datapoint to a goal without opening the TUI
+func handleAddCommand() {
+	// Check arguments: buzz add <goalslug> <value> [comment]
+	if len(os.Args) < 4 {
+		fmt.Println("Error: Missing required arguments")
+		fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
+		os.Exit(1)
+	}
+
+	goalSlug := os.Args[2]
+	value := os.Args[3]
+
+	// Optional comment - default to "Added via buzz" if not provided
+	comment := "Added via buzz"
+	if len(os.Args) >= 5 {
+		comment = strings.Join(os.Args[4:], " ")
+	}
+
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Use current time as timestamp
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+	// Validate value is a number
+	if _, err := strconv.ParseFloat(value, 64); err != nil {
+		fmt.Printf("Error: Value must be a valid number, got: %s\n", value)
+		os.Exit(1)
+	}
+
+	// Create the datapoint
+	err = CreateDatapoint(config, goalSlug, timestamp, value, comment)
+	if err != nil {
+		fmt.Printf("Error: Failed to add datapoint: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
 }
