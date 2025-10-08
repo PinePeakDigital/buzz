@@ -1,0 +1,622 @@
+package main
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// handleSearchInput handles text input in search mode
+func handleSearchInput(m model, char string) (model, bool) {
+	if m.appModel.searchMode && !m.appModel.showModal {
+		// Allow printable characters in search
+		if len(char) == 1 && char >= " " && char <= "~" {
+			m.appModel.searchQuery += char
+			m.appModel.filteredGoals = m.appModel.filterGoals()
+			// Reset cursor and scroll when search query changes
+			m.appModel.cursor = 0
+			m.appModel.scrollRow = 0
+			m.appModel.hasNavigated = false
+			return m, true
+		}
+	}
+	return m, false
+}
+
+// isAlphanumericOrDash checks if character is alphanumeric, dash, or underscore
+func isAlphanumericOrDash(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') || c == '-' || c == '_'
+}
+
+// isLetter checks if character is a letter
+func isLetter(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// isNumericOrNull checks if character is numeric or part of "null"
+func isNumericOrNull(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= '0' && c <= '9') || c == 'n' || c == 'u' || c == 'l'
+}
+
+// isNumericWithDecimal checks if character is numeric, decimal, negative, or part of "null"
+func isNumericWithDecimal(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == 'n' || c == 'u' || c == 'l'
+}
+
+// handleCreateModalInput handles text input in create goal modal
+func handleCreateModalInput(m model, char string) (model, bool) {
+	if !m.appModel.showCreateModal || m.appModel.creatingGoal {
+		return m, false
+	}
+	if len(char) != 1 || char < " " || char > "~" {
+		return m, false
+	}
+
+	switch m.appModel.createFocus {
+	case 0: // Slug - allow alphanumeric and dashes/underscores
+		if isAlphanumericOrDash(char) {
+			m.appModel.createSlug += char
+			return m, true
+		}
+	case 1: // Title - allow all printable characters
+		m.appModel.createTitle += char
+		return m, true
+	case 2: // Goal type - allow letters
+		if isLetter(char) {
+			m.appModel.createGoalType += char
+			return m, true
+		}
+	case 3: // Gunits - allow all printable characters
+		m.appModel.createGunits += char
+		return m, true
+	case 4: // Goaldate - allow digits or "null"
+		if isNumericOrNull(char) {
+			m.appModel.createGoaldate += char
+			return m, true
+		}
+	case 5: // Goalval - allow digits, decimal point, negative sign, or "null"
+		if isNumericWithDecimal(char) {
+			m.appModel.createGoalval += char
+			return m, true
+		}
+	case 6: // Rate - allow digits, decimal point, negative sign, or "null"
+		if isNumericWithDecimal(char) {
+			m.appModel.createRate += char
+			return m, true
+		}
+	}
+	return m, false
+}
+
+// handleDatapointInput handles text input in datapoint input mode
+func handleDatapointInput(m model, char string) (model, bool) {
+	// Handle text input in input mode
+	// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
+	// can still be typed in comment fields
+	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+		if len(char) == 1 {
+			switch m.appModel.inputFocus {
+			case 0: // Date field - allow digits and dashes
+				if (char >= "0" && char <= "9") || char == "-" {
+					m.appModel.inputDate += char
+					return m, true
+				}
+			case 1: // Value field - allow digits, decimal point, and negative sign
+				if (char >= "0" && char <= "9") || char == "." || char == "-" {
+					m.appModel.inputValue += char
+					return m, true
+				}
+			case 2: // Comment field - allow all printable characters
+				if char >= " " && char <= "~" {
+					m.appModel.inputComment += char
+					return m, true
+				}
+			}
+		}
+	}
+	return m, false
+}
+
+// handleKeyPress processes keyboard input and returns updated model and command
+func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	char := msg.String()
+
+	// Handle text input in search mode FIRST
+	if updatedModel, handled := handleSearchInput(m, char); handled {
+		return updatedModel, nil
+	}
+
+	// Handle text input in create goal modal
+	if updatedModel, handled := handleCreateModalInput(m, char); handled {
+		return updatedModel, nil
+	}
+
+	// Handle text input in datapoint input mode
+	if updatedModel, handled := handleDatapointInput(m, char); handled {
+		return updatedModel, nil
+	}
+
+	// Cool, what was the actual key pressed?
+	switch msg.String() {
+
+	// These keys should exit the program.
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	// Escape key closes search mode, modal, or quits
+	case "esc":
+		return handleEscapeKey(m)
+
+	// Enter input mode with 'a' (only when modal is open but not in input mode and not submitting)
+	case "a":
+		return handleAddDatapoint(m)
+
+	// Tab navigation between input fields (only in input mode and not submitting)
+	case "tab":
+		return handleTabKey(m, false)
+
+	// Shift+Tab navigation in input mode (reverse)
+	case "shift+tab":
+		return handleTabKey(m, true)
+
+	// Backspace handling in search mode or input mode
+	case "backspace":
+		return handleBackspace(m)
+
+	// Submit form with Enter in input mode
+	case "enter":
+		return handleEnterKey(m)
+
+	// Navigation keys - spatial movement through grid (only when modal is closed)
+	case "up", "k":
+		return handleNavigationUp(m)
+
+	case "down", "j":
+		return handleNavigationDown(m)
+
+	case "left", "h":
+		return handleNavigationLeft(m)
+
+	case "right", "l":
+		return handleNavigationRight(m)
+
+	// Scroll up with Page Up or 'u' (only when modal is closed)
+	case "pgup", "u":
+		return handleScrollUp(m)
+
+	// Scroll down with Page Down or 'd' (only when modal is closed)
+	case "pgdown", "d":
+		return handleScrollDown(m)
+
+	// Manual refresh with 'r' (only when modal is closed)
+	case "r":
+		return handleRefresh(m)
+
+	// Toggle auto-refresh with 't' (only when modal is closed)
+	case "t":
+		return handleToggleRefresh(m)
+
+	// Enter search mode with '/' (only when modal is closed and not already in search mode)
+	case "/":
+		return handleEnterSearch(m)
+
+	// Open create goal modal with 'n' for new (only when no modal is open)
+	case "n":
+		return handleCreateGoal(m)
+	}
+
+	return m, nil
+}
+
+// handleEscapeKey handles the Escape key press
+func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
+	if m.appModel.searchMode {
+		// Exit search mode
+		m.appModel.searchMode = false
+		m.appModel.searchQuery = ""
+		m.appModel.filteredGoals = []Goal{}
+		m.appModel.cursor = 0
+		m.appModel.scrollRow = 0
+		m.appModel.hasNavigated = false
+	} else if m.appModel.showCreateModal {
+		// Close create goal modal
+		m.appModel.showCreateModal = false
+		m.appModel.createError = ""
+	} else if m.appModel.showModal {
+		if m.appModel.inputMode {
+			// Exit input mode
+			m.appModel.inputMode = false
+			m.appModel.inputFocus = 0
+			m.appModel.inputError = ""
+		} else {
+			// Close modal
+			m.appModel.showModal = false
+			m.appModel.modalGoal = nil
+		}
+	} else {
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// handleAddDatapoint enters input mode for adding a datapoint
+func handleAddDatapoint(m model) (tea.Model, tea.Cmd) {
+	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting {
+		m.appModel.inputMode = true
+		m.appModel.inputFocus = 0
+		m.appModel.inputError = "" // Clear any previous errors
+		// Set default values
+		m.appModel.inputDate = time.Now().Format("2006-01-02")
+		m.appModel.inputComment = "Added via buzz"
+
+		// Try to get the last datapoint value, default to "1" if it fails
+		if lastValue, err := GetLastDatapointValue(m.appModel.config, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
+			m.appModel.inputValue = fmt.Sprintf("%.1f", lastValue)
+		} else {
+			m.appModel.inputValue = "1"
+		}
+	}
+	return m, nil
+}
+
+// handleTabKey handles Tab and Shift+Tab navigation
+func handleTabKey(m model, reverse bool) (tea.Model, tea.Cmd) {
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		if reverse {
+			m.appModel.createFocus = (m.appModel.createFocus + 6) % 7 // +6 is same as -1 in mod 7
+		} else {
+			m.appModel.createFocus = (m.appModel.createFocus + 1) % 7
+		}
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+		if reverse {
+			m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
+		} else {
+			m.appModel.inputFocus = (m.appModel.inputFocus + 1) % 3
+		}
+	}
+	return m, nil
+}
+
+// handleBackspace handles Backspace key
+func handleBackspace(m model) (tea.Model, tea.Cmd) {
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		switch m.appModel.createFocus {
+		case 0: // Slug
+			if len(m.appModel.createSlug) > 0 {
+				m.appModel.createSlug = m.appModel.createSlug[:len(m.appModel.createSlug)-1]
+			}
+		case 1: // Title
+			if len(m.appModel.createTitle) > 0 {
+				m.appModel.createTitle = m.appModel.createTitle[:len(m.appModel.createTitle)-1]
+			}
+		case 2: // Goal type
+			if len(m.appModel.createGoalType) > 0 {
+				m.appModel.createGoalType = m.appModel.createGoalType[:len(m.appModel.createGoalType)-1]
+			}
+		case 3: // Gunits
+			if len(m.appModel.createGunits) > 0 {
+				m.appModel.createGunits = m.appModel.createGunits[:len(m.appModel.createGunits)-1]
+			}
+		case 4: // Goaldate
+			if len(m.appModel.createGoaldate) > 0 {
+				m.appModel.createGoaldate = m.appModel.createGoaldate[:len(m.appModel.createGoaldate)-1]
+			}
+		case 5: // Goalval
+			if len(m.appModel.createGoalval) > 0 {
+				m.appModel.createGoalval = m.appModel.createGoalval[:len(m.appModel.createGoalval)-1]
+			}
+		case 6: // Rate
+			if len(m.appModel.createRate) > 0 {
+				m.appModel.createRate = m.appModel.createRate[:len(m.appModel.createRate)-1]
+			}
+		}
+	} else if m.appModel.searchMode && !m.appModel.showModal {
+		// Remove last character from search query
+		if len(m.appModel.searchQuery) > 0 {
+			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
+			m.appModel.filteredGoals = m.appModel.filterGoals()
+			// Reset cursor and scroll when search query changes
+			m.appModel.cursor = 0
+			m.appModel.scrollRow = 0
+			m.appModel.hasNavigated = false
+		}
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+		switch m.appModel.inputFocus {
+		case 0: // Date field
+			if len(m.appModel.inputDate) > 0 {
+				m.appModel.inputDate = m.appModel.inputDate[:len(m.appModel.inputDate)-1]
+			}
+		case 1: // Value field
+			if len(m.appModel.inputValue) > 0 {
+				m.appModel.inputValue = m.appModel.inputValue[:len(m.appModel.inputValue)-1]
+			}
+		case 2: // Comment field
+			if len(m.appModel.inputComment) > 0 {
+				m.appModel.inputComment = m.appModel.inputComment[:len(m.appModel.inputComment)-1]
+			}
+		}
+	}
+	return m, nil
+}
+
+// handleEnterKey handles Enter key press
+func handleEnterKey(m model) (tea.Model, tea.Cmd) {
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		// Clear previous error
+		m.appModel.createError = ""
+
+		// Validate input fields
+		if m.appModel.createSlug == "" {
+			m.appModel.createError = "Slug cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.createTitle == "" {
+			m.appModel.createError = "Title cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.createGoalType == "" {
+			m.appModel.createError = "Goal type cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.createGunits == "" {
+			m.appModel.createError = "Goal units cannot be empty"
+			return m, nil
+		}
+
+		// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
+		countProvided := 0
+		if m.appModel.createGoaldate != "" && m.appModel.createGoaldate != "null" {
+			countProvided++
+		}
+		if m.appModel.createGoalval != "" && m.appModel.createGoalval != "null" {
+			countProvided++
+		}
+		if m.appModel.createRate != "" && m.appModel.createRate != "null" {
+			countProvided++
+		}
+
+		if countProvided != 2 {
+			m.appModel.createError = "Exactly 2 out of 3 (goaldate, goalval, rate) must be provided"
+			return m, nil
+		}
+
+		// Set creating state and submit goal creation asynchronously
+		m.appModel.creatingGoal = true
+		return m, createGoalCmd(m.appModel.config, m.appModel.createSlug, m.appModel.createTitle,
+			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
+			m.appModel.createGoalval, m.appModel.createRate)
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+		// Clear previous error
+		m.appModel.inputError = ""
+
+		// Validate input fields
+		if m.appModel.inputDate == "" {
+			m.appModel.inputError = "Date cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.inputValue == "" {
+			m.appModel.inputError = "Value cannot be empty"
+			return m, nil
+		}
+
+		// Parse and validate date
+		date, err := time.Parse("2006-01-02", m.appModel.inputDate)
+		if err != nil {
+			m.appModel.inputError = "Invalid date format (use YYYY-MM-DD)"
+			return m, nil
+		}
+
+		// Validate that date is not in the future beyond today
+		if date.After(time.Now().AddDate(0, 0, 1)) {
+			m.appModel.inputError = "Date cannot be more than 1 day in the future"
+			return m, nil
+		}
+
+		// Parse and validate value (must be a valid number)
+		if _, err := strconv.ParseFloat(m.appModel.inputValue, 64); err != nil {
+			m.appModel.inputError = "Value must be a valid number"
+			return m, nil
+		}
+
+		timestamp := fmt.Sprintf("%d", date.Unix())
+
+		// Set submitting state and submit datapoint asynchronously
+		m.appModel.submitting = true
+		return m, submitDatapointCmd(m.appModel.config, m.appModel.modalGoal.Slug,
+			timestamp, m.appModel.inputValue, m.appModel.inputComment)
+	} else if !m.appModel.showModal {
+		// Show goal details modal (existing functionality)
+		displayGoals := m.appModel.getDisplayGoals()
+		if len(displayGoals) > 0 && m.appModel.cursor < len(displayGoals) {
+			m.appModel.showModal = true
+			m.appModel.modalGoal = &displayGoals[m.appModel.cursor]
+
+			// Update cursor to point to the goal in the original goals list
+			// This is necessary for left/right navigation in modal
+			for i, goal := range m.appModel.goals {
+				if goal.Slug == displayGoals[m.appModel.cursor].Slug {
+					m.appModel.cursor = i
+					break
+				}
+			}
+
+			// Load detailed goal information including datapoints
+			return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
+		}
+	}
+	return m, nil
+}
+
+// handleNavigationUp handles up arrow/k key
+func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
+		displayGoals := m.appModel.getDisplayGoals()
+		if len(displayGoals) > 0 {
+			m.appModel.hasNavigated = true
+			cols := calculateColumns(m.appModel.width)
+			newCursor := m.appModel.cursor - cols
+			if newCursor >= 0 {
+				m.appModel.cursor = newCursor
+			}
+		}
+	}
+	return m, nil
+}
+
+// handleNavigationDown handles down arrow/j key
+func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
+		displayGoals := m.appModel.getDisplayGoals()
+		if len(displayGoals) > 0 {
+			m.appModel.hasNavigated = true
+			cols := calculateColumns(m.appModel.width)
+			newCursor := m.appModel.cursor + cols
+			if newCursor < len(displayGoals) {
+				m.appModel.cursor = newCursor
+			}
+		}
+	}
+	return m, nil
+}
+
+// handleNavigationLeft handles left arrow/h key
+func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
+	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting && len(m.appModel.goals) > 0 {
+		// Navigate to previous goal in modal view
+		if m.appModel.cursor > 0 {
+			m.appModel.cursor--
+			m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+			// Load detailed goal information including datapoints
+			return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
+		}
+	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
+		displayGoals := m.appModel.getDisplayGoals()
+		if len(displayGoals) > 0 {
+			m.appModel.hasNavigated = true
+			cols := calculateColumns(m.appModel.width)
+			currentCol := m.appModel.cursor % cols
+			if currentCol > 0 {
+				m.appModel.cursor--
+			}
+		}
+	}
+	return m, nil
+}
+
+// handleNavigationRight handles right arrow/l key
+func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
+	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting && len(m.appModel.goals) > 0 {
+		// Navigate to next goal in modal view
+		if m.appModel.cursor < len(m.appModel.goals)-1 {
+			m.appModel.cursor++
+			m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+			// Load detailed goal information including datapoints
+			return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
+		}
+	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
+		displayGoals := m.appModel.getDisplayGoals()
+		if len(displayGoals) > 0 {
+			m.appModel.hasNavigated = true
+			cols := calculateColumns(m.appModel.width)
+			currentCol := m.appModel.cursor % cols
+			if currentCol < cols-1 && m.appModel.cursor+1 < len(displayGoals) {
+				m.appModel.cursor++
+			}
+		}
+	}
+	return m, nil
+}
+
+// handleScrollUp handles page up/u key
+func handleScrollUp(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal && m.appModel.scrollRow > 0 {
+		m.appModel.scrollRow--
+	}
+	return m, nil
+}
+
+// handleScrollDown handles page down/d key
+func handleScrollDown(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
+		displayGoals := m.appModel.getDisplayGoals()
+		cols := calculateColumns(m.appModel.width)
+		totalRows := (len(displayGoals) + cols - 1) / cols
+		maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
+		if m.appModel.scrollRow < totalRows-maxVisibleRows {
+			m.appModel.scrollRow++
+		}
+	}
+	return m, nil
+}
+
+// handleRefresh handles the 'r' key for manual refresh
+func handleRefresh(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
+		m.appModel.loading = true
+		return m, loadGoalsCmd(m.appModel.config)
+	}
+	return m, nil
+}
+
+// handleToggleRefresh handles the 't' key for toggling auto-refresh
+func handleToggleRefresh(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
+		m.appModel.refreshActive = !m.appModel.refreshActive
+		if m.appModel.refreshActive {
+			// If we just enabled auto-refresh, start the timer
+			return m, refreshTickCmd()
+		}
+	}
+	return m, nil
+}
+
+// handleEnterSearch handles the '/' key for entering search mode
+func handleEnterSearch(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
+		m.appModel.searchMode = true
+		m.appModel.searchQuery = ""
+		m.appModel.filteredGoals = []Goal{}
+	}
+	return m, nil
+}
+
+// handleCreateGoal handles the 'n' key for creating a new goal
+func handleCreateGoal(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
+		m.appModel.showCreateModal = true
+		m.appModel.createFocus = 0
+		m.appModel.createError = ""
+		// Set default values
+		m.appModel.createSlug = ""
+		m.appModel.createTitle = ""
+		m.appModel.createGoalType = "hustler"
+		m.appModel.createGunits = "units"
+		m.appModel.createGoaldate = ""
+		m.appModel.createGoalval = "0"
+		m.appModel.createRate = "1"
+	}
+	return m, nil
+}
