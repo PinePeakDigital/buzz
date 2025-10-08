@@ -108,10 +108,14 @@ jobs:
             \`\`\`bash
             # Install the pre-release
             bin install ${releaseUrl} buzz-pr-${prNumber}
+            \`\`\`
             
+            \`\`\`bash
             # Run the pre-release
             buzz-pr-${prNumber}
+            \`\`\`
             
+            \`\`\`bash
             # Uninstall the pre-release
             bin remove buzz-pr-${prNumber}
             \`\`\`
