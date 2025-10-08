@@ -108,7 +108,7 @@ func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool
 	refreshInfo := fmt.Sprintf(" | Auto-refresh: %s (t to toggle, r to refresh now)", refreshStatus)
 
 	// Build the full footer text
-	footerText := fmt.Sprintf("Press q to quit%s%s | / to filter | Arrow keys to navigate, Enter for details", scrollInfo, refreshInfo)
+	footerText := fmt.Sprintf("Press q to quit%s%s | / to filter | n to create goal | Arrow keys to navigate, Enter for details", scrollInfo, refreshInfo)
 
 	// If the footer is too wide, wrap it
 	if len(footerText) > width {
