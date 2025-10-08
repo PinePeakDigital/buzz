@@ -16,7 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Post initial building comment
+      - name: Post or update building comment
         uses: actions/github-script@v7
         with:
           script: |
@@ -32,16 +32,35 @@ jobs:
             
             > This comment will be updated when the build completes.`;
             
-            // Create the initial comment
-            const response = await github.rest.issues.createComment({
+            // Find existing building or ready comment to update
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: repo.owner,
               repo: repo.repo,
               issue_number: prNumber,
-              body: comment
             });
             
-            // Save the comment ID for later update
-            return response.data.id;
+            const existingComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              (comment.body.includes('🔨 Building...') || comment.body.includes('🚀 Pre-release Build Ready'))
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: repo.owner,
+                repo: repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: repo.owner,
+                repo: repo.repo,
+                issue_number: prNumber,
+                body: comment
+              });
+            }
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -119,7 +138,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update PR comment with pre-release links
+      - name: Post or update ready comment
         uses: actions/github-script@v7
         with:
           script: |
@@ -162,28 +181,28 @@ jobs:
             > 
             > 🗑️ This pre-release will be automatically deleted when the PR is closed.`;
             
-            // Find the building comment to update
+            // Find existing building or ready comment to update
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: repo.owner,
               repo: repo.repo,
               issue_number: prNumber,
             });
             
-            const buildingComment = comments.find(comment => 
+            const existingComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
-              comment.body.includes('🔨 Building...')
+              (comment.body.includes('🔨 Building...') || comment.body.includes('🚀 Pre-release Build Ready'))
             );
             
-            if (buildingComment) {
-              // Update the building comment with the final status
+            if (existingComment) {
+              // Update existing comment with the final status
               await github.rest.issues.updateComment({
                 owner: repo.owner,
                 repo: repo.repo,
-                comment_id: buildingComment.id,
+                comment_id: existingComment.id,
                 body: comment
               });
             } else {
-              // Fallback: create new comment if building comment not found
+              // Create new comment if no existing comment found
               await github.rest.issues.createComment({
                 owner: repo.owner,
                 repo: repo.repo,
