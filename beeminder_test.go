@@ -288,7 +288,8 @@ func TestGetBufferColor(t *testing.T) {
 
 // TestFormatDueDate tests the FormatDueDate function
 func TestFormatDueDate(t *testing.T) {
-	now := time.Now()
+	// Use a fixed time for deterministic tests
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -303,7 +304,7 @@ func TestFormatDueDate(t *testing.T) {
 		{
 			name:     "30 minutes",
 			losedate: now.Add(30 * time.Minute).Unix(),
-			expected: "29m", // rounds down
+			expected: "30m",
 		},
 		{
 			name:     "1 hour 30 minutes",
@@ -344,9 +345,9 @@ func TestFormatDueDate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatDueDate(tt.losedate)
+			result := FormatDueDateAt(tt.losedate, now)
 			if result != tt.expected {
-				t.Errorf("FormatDueDate(%d) = %q, want %q", tt.losedate, result, tt.expected)
+				t.Errorf("FormatDueDateAt(%d, %v) = %q, want %q", tt.losedate, now, result, tt.expected)
 			}
 		})
 	}

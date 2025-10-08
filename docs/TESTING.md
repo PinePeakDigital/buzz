@@ -174,17 +174,27 @@ func TestMyFunction(t *testing.T) {
 
 ## CI/CD Integration
 
-Tests are automatically run in the PR build workflow:
+Tests are automatically run in a separate job in the PR build workflow:
 
 ```yaml
-- name: Run tests
-  run: go test -v -cover
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run tests
+        run: go test -v -cover
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    # ... build steps
 ```
 
 This ensures:
 - All PRs are tested before merge
+- Tests run in parallel with build preparation
+- Build job only runs if tests pass
 - Regressions are caught early
-- Build failures include test failures
 
 ## Areas for Future Testing
 
@@ -202,24 +212,24 @@ This ensures:
 
 ### Medium Priority
 
-3. **State Management**
+1. **State Management**
    - Full coverage of model Update/Init methods
    - State transition testing
    - Error state handling
 
-4. **Input Handlers**
+2. **Input Handlers**
    - Complete keyboard input flow testing
    - Modal state transitions
    - Edge cases in input handling
 
 ### Low Priority
 
-5. **UI Components**
+1. **UI Components**
    - Grid rendering with various data
    - Modal display logic
    - Style application
 
-6. **End-to-End Tests**
+2. **End-to-End Tests**
    - Full user workflows
    - Authentication flow
    - Goal creation and datapoint submission

@@ -129,8 +129,12 @@ func ParseLimsumValue(limsum string) string {
 
 // FormatDueDate formats the losedate timestamp into a readable string
 func FormatDueDate(losedate int64) string {
+	return FormatDueDateAt(losedate, time.Now())
+}
+
+// FormatDueDateAt formats the losedate timestamp relative to a given time
+func FormatDueDateAt(losedate int64, now time.Time) string {
 	t := time.Unix(losedate, 0)
-	now := time.Now()
 
 	// Calculate duration until due
 	duration := t.Sub(now)
