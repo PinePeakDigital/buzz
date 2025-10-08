@@ -60,3 +60,17 @@ func loadGoalDetailsCmd(config *Config, goalSlug string) tea.Cmd {
 		return goalDetailsLoadedMsg{goal: goal, err: err}
 	}
 }
+
+// goalCreatedMsg is sent when a goal creation completes
+type goalCreatedMsg struct {
+	goal *Goal
+	err  error
+}
+
+// createGoalCmd submits a new goal to Beeminder API
+func createGoalCmd(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) tea.Cmd {
+	return func() tea.Msg {
+		goal, err := CreateGoal(config, slug, title, goalType, gunits, goaldate, goalval, rate)
+		return goalCreatedMsg{goal: goal, err: err}
+	}
+}

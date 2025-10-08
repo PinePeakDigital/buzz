@@ -25,6 +25,47 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle text input in create goal modal
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		char := msg.String()
+		if len(char) == 1 && char >= " " && char <= "~" {
+			switch m.appModel.createFocus {
+			case 0: // Slug - allow alphanumeric and dashes/underscores
+				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
+					(char >= "0" && char <= "9") || char == "-" || char == "_" {
+					m.appModel.createSlug += char
+					return m, nil
+				}
+			case 1: // Title - allow all printable characters
+				m.appModel.createTitle += char
+				return m, nil
+			case 2: // Goal type - allow letters
+				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") {
+					m.appModel.createGoalType += char
+					return m, nil
+				}
+			case 3: // Gunits - allow all printable characters
+				m.appModel.createGunits += char
+				return m, nil
+			case 4: // Goaldate - allow digits
+				if (char >= "0" && char <= "9") || char == "n" || char == "u" || char == "l" {
+					m.appModel.createGoaldate += char
+					return m, nil
+				}
+			case 5: // Goalval - allow digits, decimal point, and negative sign
+				if (char >= "0" && char <= "9") || char == "." || char == "-" || char == "n" || char == "u" || char == "l" {
+					m.appModel.createGoalval += char
+					return m, nil
+				}
+			case 6: // Rate - allow digits, decimal point, and negative sign
+				if (char >= "0" && char <= "9") || char == "." || char == "-" || char == "n" || char == "u" || char == "l" {
+					m.appModel.createRate += char
+					return m, nil
+				}
+			}
+		}
+	}
+
 	// Handle text input in input mode SECOND, before command keys
 	// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 	// can still be typed in comment fields
@@ -114,6 +155,10 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Enter search mode with '/' (only when modal is closed and not already in search mode)
 	case "/":
 		return handleEnterSearch(m)
+
+	// Open create goal modal with 'n' for new (only when no modal is open)
+	case "n":
+		return handleCreateGoal(m)
 	}
 
 	return m, nil
@@ -129,6 +174,10 @@ func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 		m.appModel.cursor = 0
 		m.appModel.scrollRow = 0
 		m.appModel.hasNavigated = false
+	} else if m.appModel.showCreateModal {
+		// Close create goal modal
+		m.appModel.showCreateModal = false
+		m.appModel.createError = ""
 	} else if m.appModel.showModal {
 		if m.appModel.inputMode {
 			// Exit input mode
@@ -168,7 +217,13 @@ func handleAddDatapoint(m model) (tea.Model, tea.Cmd) {
 
 // handleTabKey handles Tab and Shift+Tab navigation
 func handleTabKey(m model, reverse bool) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		if reverse {
+			m.appModel.createFocus = (m.appModel.createFocus + 6) % 7 // +6 is same as -1 in mod 7
+		} else {
+			m.appModel.createFocus = (m.appModel.createFocus + 1) % 7
+		}
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 		if reverse {
 			m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
 		} else {
@@ -180,7 +235,38 @@ func handleTabKey(m model, reverse bool) (tea.Model, tea.Cmd) {
 
 // handleBackspace handles Backspace key
 func handleBackspace(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.searchMode && !m.appModel.showModal {
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		switch m.appModel.createFocus {
+		case 0: // Slug
+			if len(m.appModel.createSlug) > 0 {
+				m.appModel.createSlug = m.appModel.createSlug[:len(m.appModel.createSlug)-1]
+			}
+		case 1: // Title
+			if len(m.appModel.createTitle) > 0 {
+				m.appModel.createTitle = m.appModel.createTitle[:len(m.appModel.createTitle)-1]
+			}
+		case 2: // Goal type
+			if len(m.appModel.createGoalType) > 0 {
+				m.appModel.createGoalType = m.appModel.createGoalType[:len(m.appModel.createGoalType)-1]
+			}
+		case 3: // Gunits
+			if len(m.appModel.createGunits) > 0 {
+				m.appModel.createGunits = m.appModel.createGunits[:len(m.appModel.createGunits)-1]
+			}
+		case 4: // Goaldate
+			if len(m.appModel.createGoaldate) > 0 {
+				m.appModel.createGoaldate = m.appModel.createGoaldate[:len(m.appModel.createGoaldate)-1]
+			}
+		case 5: // Goalval
+			if len(m.appModel.createGoalval) > 0 {
+				m.appModel.createGoalval = m.appModel.createGoalval[:len(m.appModel.createGoalval)-1]
+			}
+		case 6: // Rate
+			if len(m.appModel.createRate) > 0 {
+				m.appModel.createRate = m.appModel.createRate[:len(m.appModel.createRate)-1]
+			}
+		}
+	} else if m.appModel.searchMode && !m.appModel.showModal {
 		// Remove last character from search query
 		if len(m.appModel.searchQuery) > 0 {
 			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
@@ -211,7 +297,54 @@ func handleBackspace(m model) (tea.Model, tea.Cmd) {
 
 // handleEnterKey handles Enter key press
 func handleEnterKey(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+		// Clear previous error
+		m.appModel.createError = ""
+
+		// Validate input fields
+		if m.appModel.createSlug == "" {
+			m.appModel.createError = "Slug cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.createTitle == "" {
+			m.appModel.createError = "Title cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.createGoalType == "" {
+			m.appModel.createError = "Goal type cannot be empty"
+			return m, nil
+		}
+
+		if m.appModel.createGunits == "" {
+			m.appModel.createError = "Goal units cannot be empty"
+			return m, nil
+		}
+
+		// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
+		countProvided := 0
+		if m.appModel.createGoaldate != "" && m.appModel.createGoaldate != "null" {
+			countProvided++
+		}
+		if m.appModel.createGoalval != "" && m.appModel.createGoalval != "null" {
+			countProvided++
+		}
+		if m.appModel.createRate != "" && m.appModel.createRate != "null" {
+			countProvided++
+		}
+
+		if countProvided != 2 {
+			m.appModel.createError = "Exactly 2 out of 3 (goaldate, goalval, rate) must be provided"
+			return m, nil
+		}
+
+		// Set creating state and submit goal creation asynchronously
+		m.appModel.creatingGoal = true
+		return m, createGoalCmd(m.appModel.config, m.appModel.createSlug, m.appModel.createTitle,
+			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
+			m.appModel.createGoalval, m.appModel.createRate)
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
 		// Clear previous error
 		m.appModel.inputError = ""
 
@@ -276,7 +409,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationUp handles up arrow/k key
 func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -292,7 +425,7 @@ func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationDown handles down arrow/j key
 func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -316,7 +449,7 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 			// Load detailed goal information including datapoints
 			return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 		}
-	} else if !m.appModel.showModal {
+	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -340,7 +473,7 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 			// Load detailed goal information including datapoints
 			return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 		}
-	} else if !m.appModel.showModal {
+	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -356,7 +489,7 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 
 // handleScrollUp handles page up/u key
 func handleScrollUp(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && m.appModel.scrollRow > 0 {
+	if !m.appModel.showModal && !m.appModel.showCreateModal && m.appModel.scrollRow > 0 {
 		m.appModel.scrollRow--
 	}
 	return m, nil
@@ -364,7 +497,7 @@ func handleScrollUp(m model) (tea.Model, tea.Cmd) {
 
 // handleScrollDown handles page down/d key
 func handleScrollDown(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
 		cols := calculateColumns(m.appModel.width)
 		totalRows := (len(displayGoals) + cols - 1) / cols
@@ -378,7 +511,7 @@ func handleScrollDown(m model) (tea.Model, tea.Cmd) {
 
 // handleRefresh handles the 'r' key for manual refresh
 func handleRefresh(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
 		m.appModel.loading = true
 		return m, loadGoalsCmd(m.appModel.config)
 	}
@@ -387,7 +520,7 @@ func handleRefresh(m model) (tea.Model, tea.Cmd) {
 
 // handleToggleRefresh handles the 't' key for toggling auto-refresh
 func handleToggleRefresh(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal {
+	if !m.appModel.showModal && !m.appModel.showCreateModal {
 		m.appModel.refreshActive = !m.appModel.refreshActive
 		if m.appModel.refreshActive {
 			// If we just enabled auto-refresh, start the timer
@@ -399,10 +532,28 @@ func handleToggleRefresh(m model) (tea.Model, tea.Cmd) {
 
 // handleEnterSearch handles the '/' key for entering search mode
 func handleEnterSearch(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.searchMode {
+	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
 		m.appModel.searchMode = true
 		m.appModel.searchQuery = ""
 		m.appModel.filteredGoals = []Goal{}
+	}
+	return m, nil
+}
+
+// handleCreateGoal handles the 'n' key for creating a new goal
+func handleCreateGoal(m model) (tea.Model, tea.Cmd) {
+	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
+		m.appModel.showCreateModal = true
+		m.appModel.createFocus = 0
+		m.appModel.createError = ""
+		// Set default values
+		m.appModel.createSlug = ""
+		m.appModel.createTitle = ""
+		m.appModel.createGoalType = "hustler"
+		m.appModel.createGunits = "units"
+		m.appModel.createGoaldate = ""
+		m.appModel.createGoalval = "0"
+		m.appModel.createRate = "1"
 	}
 	return m, nil
 }

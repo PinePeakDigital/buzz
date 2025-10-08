@@ -243,3 +243,126 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 
 	return verticalPadding + centeredModal
 }
+
+// RenderCreateGoalModal renders a modal for creating a new goal
+func RenderCreateGoalModal(width, height int, slug, title, goalType, gunits, goaldate, goalval, rate string, focus int, createError string, creating bool) string {
+	modalStyle := CreateModalStyle()
+
+	// Calculate modal dimensions (80% of screen width, auto height)
+	modalWidth := width * 8 / 10
+	if modalWidth > 80 {
+		modalWidth = 80
+	}
+	if modalWidth < 40 {
+		modalWidth = 40
+	}
+
+	// Create input fields with focus highlighting
+	slugField := slug
+	titleField := title
+	goalTypeField := goalType
+	gunitsField := gunits
+	goaldateField := goaldate
+	goalvalField := goalval
+	rateField := rate
+
+	// Add placeholder for empty fields to make focus visible
+	if focus == 0 {
+		if slugField == "" {
+			slugField = "_"
+		}
+		slugField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(slugField)
+	}
+	if focus == 1 {
+		if titleField == "" {
+			titleField = "_"
+		}
+		titleField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(titleField)
+	}
+	if focus == 2 {
+		if goalTypeField == "" {
+			goalTypeField = "_"
+		}
+		goalTypeField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(goalTypeField)
+	}
+	if focus == 3 {
+		if gunitsField == "" {
+			gunitsField = "_"
+		}
+		gunitsField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(gunitsField)
+	}
+	if focus == 4 {
+		if goaldateField == "" {
+			goaldateField = "_"
+		}
+		goaldateField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(goaldateField)
+	}
+	if focus == 5 {
+		if goalvalField == "" {
+			goalvalField = "_"
+		}
+		goalvalField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(goalvalField)
+	}
+	if focus == 6 {
+		if rateField == "" {
+			rateField = "_"
+		}
+		rateField = lipgloss.NewStyle().Background(lipgloss.Color("4")).Render(rateField)
+	}
+
+	errorMsg := ""
+	if createError != "" {
+		errorMsg = fmt.Sprintf("\n\n%s", lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("Error: "+createError))
+	}
+
+	statusMsg := ""
+	if creating {
+		statusMsg = fmt.Sprintf("\n\n%s", lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("Creating goal..."))
+	}
+
+	content := fmt.Sprintf("Create New Goal\n\n"+
+		"Slug: %s\n"+
+		"Title: %s\n"+
+		"Goal Type: %s\n"+
+		"Goal Units: %s\n"+
+		"Goal Date: %s\n"+
+		"Goal Value: %s\n"+
+		"Rate: %s%s%s\n\n"+
+		"Note: Provide exactly 2 of 3: goaldate, goalval, rate (use 'null' to skip)\n"+
+		"Common goal types: hustler, biker, fatloser, gainer, inboxer, drinker\n\n"+
+		"Tab/Shift+Tab: Navigate • Enter: Submit • Esc: Cancel",
+		slugField, titleField, goalTypeField, gunitsField, goaldateField, goalvalField, rateField, errorMsg, statusMsg)
+
+	// Apply width constraint to content
+	styledContent := modalStyle.Width(modalWidth).Render(content)
+
+	// Center the modal horizontally
+	leftPadding := (width - modalWidth) / 2
+	if leftPadding < 0 {
+		leftPadding = 0
+	}
+
+	// Center the modal vertically (approximately)
+	topPadding := height / 6
+	if topPadding < 1 {
+		topPadding = 1
+	}
+
+	// Add vertical spacing
+	verticalPadding := ""
+	for i := 0; i < topPadding; i++ {
+		verticalPadding += "\n"
+	}
+
+	// Add horizontal centering
+	centeredModal := ""
+	for _, line := range []string{styledContent} {
+		padding := ""
+		for i := 0; i < leftPadding; i++ {
+			padding += " "
+		}
+		centeredModal += padding + line
+	}
+
+	return verticalPadding + centeredModal
+}
