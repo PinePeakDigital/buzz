@@ -58,13 +58,13 @@ Your credentials will be stored securely in `~/.buzzrc` with read/write permissi
 **buzz next** - Output a terse summary of the next due goal:
 ```bash
 buzz next
-# Example output: opsec +1 3h
+# Example output: p3 +1 in 0 days 2h
 ```
 
 The output format is: `goalslug limsum timeframe`
 - `goalslug`: The goal's slug/identifier
-- `limsum`: Summary of what you need to do (e.g., "+2 within 1 day")
-- `timeframe`: Time until the goal is due (e.g., "3h" for 3 hours, "2d" for 2 days)
+- `limsum`: Summary of what you need to do (e.g., "+1 in 0 days", "+2 within 1 day")
+- `timeframe`: Time until the goal is due (e.g., "2h" for 2 hours, "3d" for 3 days)
 
 Running `buzz` without arguments launches the interactive TUI.
 
