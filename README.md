@@ -53,6 +53,21 @@ Your credentials will be stored securely in `~/.buzzrc` with read/write permissi
 
 ## Usage
 
+### Command Line Interface
+
+**buzz next** - Output a terse summary of the next due goal:
+```bash
+buzz next
+# Example output: opsec +1 3h
+```
+
+The output format is: `goalslug limsum timeframe`
+- `goalslug`: The goal's slug/identifier
+- `limsum`: Summary of what you need to do (e.g., "+2 within 1 day")
+- `timeframe`: Time until the goal is due (e.g., "3h" for 3 hours, "2d" for 2 days)
+
+Running `buzz` without arguments launches the interactive TUI.
+
 ### Navigation
 - **Arrow keys** or **hjkl** (vim-style) - Navigate the goal grid spatially
 - **Page Up/Down** or **u/d** - Scroll when there are many goals
