@@ -16,6 +16,21 @@ bin install https://github.com/narthur/buzz
 
 This will download the latest release and make it available in your PATH.
 
+### Homebrew
+
+Install using [Homebrew](https://brew.sh):
+
+```bash
+brew tap narthur/tap
+brew install narthur/tap/buzz
+```
+
+To upgrade:
+
+```bash
+brew upgrade narthur/tap/buzz
+```
+
 ### Direct Download
 
 You can also download pre-built binaries directly from the [releases page](https://github.com/narthur/buzz/releases). Choose the appropriate binary for your operating system and architecture.
@@ -66,12 +81,25 @@ The output format is: `goalslug limsum timeframe`
 - `limsum`: Summary of what you need to do (e.g., "+1 in 0 days", "+2 within 1 day")
 - `timeframe`: Time until the goal is due (e.g., "2h" for 2 hours, "3d" for 3 days)
 
+**buzz add** - Add a datapoint to a goal without opening the TUI:
+
+```bash
+buzz add <goalslug> <value> [comment]
+
+# Examples:
+buzz add opsec 1                    # Adds value 1 with default comment "Added via buzz"
+buzz add workout 2.5 'morning run'  # Adds value 2.5 with custom comment
+```
+
+The comment parameter is optional and defaults to "Added via buzz" if not provided.
+
 Running `buzz` without arguments launches the interactive TUI.
 
 ### Navigation
 - **Arrow keys** or **hjkl** (vim-style) - Navigate the goal grid spatially
 - **Page Up/Down** or **u/d** - Scroll when there are many goals
 - **/** - Enter search/filter mode
+- **n** - Create a new goal
 - **Escape** - Exit search mode or close modals
 - **Enter** - View goal details and add datapoints
 - **q** or **Ctrl+C** - Quit
@@ -83,6 +111,17 @@ Goals are displayed in a colorful grid based on their deadline urgency:
 - **Blue** - Due within 3-6 days
 - **Green** - Due within 7+ days
 - **Gray** - Far future deadlines
+
+### Creating Goals
+1. Press **n** to open the goal creation modal
+2. Fill in the required fields:
+   - **Slug** - Unique identifier for the goal (alphanumeric, dashes, underscores)
+   - **Title** - Display name for the goal
+   - **Goal Type** - Type of goal (e.g., hustler, biker, fatloser, gainer)
+   - **Goal Units** - Units for the goal (e.g., workouts, pages, pounds)
+   - **Exactly 2 of 3** parameters: goaldate, goalval, rate (use "null" to skip one)
+3. Use **Tab/Shift+Tab** to navigate between fields
+4. **Enter** to submit, **Escape** to cancel
 
 ### Adding Datapoints
 1. Navigate to a goal and press **Enter** to open details
