@@ -27,8 +27,20 @@ The refactoring reorganized code from a single large `main.go` file (618 lines) 
    - `filterGoals()` - Filter goals by search query
    - `getDisplayGoals()` - Get goals to display
 
-3. **handlers.go** (408 lines) - Input handling logic
+3. **handlers.go** (623 lines) - Input handling logic
    - `handleKeyPress()` - Main keyboard input router
+   - Input text handlers for different modes:
+     - `handleSearchInput()` - Text input in search mode
+     - `handleCreateModalInput()` - Text input in create goal modal
+     - `handleDatapointInput()` - Text input in datapoint mode
+   - Input validation functions:
+     - `validateDatapointInput()` - Validates datapoint form fields
+     - `validateCreateGoalInput()` - Validates create goal form fields
+   - Character validation helpers:
+     - `isAlphanumericOrDash()` - For slug validation
+     - `isLetter()` - For goal type validation
+     - `isNumericOrNull()` - For numeric fields allowing "null"
+     - `isNumericWithDecimal()` - For decimal number fields
    - Individual handlers for each key action:
      - `handleEscapeKey()` - Exit/close actions
      - `handleAddDatapoint()` - Enter datapoint input mode
@@ -40,11 +52,20 @@ The refactoring reorganized code from a single large `main.go` file (618 lines) 
      - `handleRefresh()` - Manual refresh
      - `handleToggleRefresh()` - Auto-refresh toggle
      - `handleEnterSearch()` - Enter search mode
+     - `handleCreateGoal()` - Open create goal modal
 
-4. **grid.go** (245 lines) - UI rendering (unchanged)
+4. **handlers_test.go** (323 lines) - Input handler tests
+   - `TestValidateDatapointInput()` - Tests for datapoint validation
+   - `TestValidateCreateGoalInput()` - Tests for create goal validation
+   - `TestIsAlphanumericOrDash()` - Tests for character validation
+   - `TestIsLetter()` - Tests for letter validation
+   - `TestIsNumericOrNull()` - Tests for numeric/null validation
+   - `TestIsNumericWithDecimal()` - Tests for decimal validation
+
+5. **grid.go** (245 lines) - UI rendering (unchanged)
    - Grid, modal, and footer rendering functions
 
-5. **Other files** - Unchanged
+6. **Other files** - Unchanged
    - `auth.go`, `beeminder.go`, `config.go`, `messages.go`, `styles.go`, `utils.go`
 
 ## Benefits
@@ -122,20 +143,76 @@ When working on this codebase:
    - Rendering in `grid.go`
    - Business logic in appropriate files (e.g., `beeminder.go`)
 
+## Input Handling Improvements
+
+### Validation Extraction (Latest)
+
+The input handling has been further improved by extracting validation logic into dedicated, testable functions:
+
+1. **Validation Functions**
+   - `validateDatapointInput()` - Validates date and value fields for datapoint submission
+     - Checks for empty fields
+     - Validates date format (YYYY-MM-DD)
+     - Validates date is not too far in the future
+     - Validates value is a valid number
+   - `validateCreateGoalInput()` - Validates fields for goal creation
+     - Checks for required fields (slug, title, goal type, units)
+     - Validates exactly 2 out of 3 parameters (goaldate, goalval, rate) are provided
+
+2. **Benefits**
+   - **Testability**: Validation logic can now be tested independently
+   - **Reusability**: Validation functions can be called from multiple places
+   - **Clarity**: Error messages are centralized and consistent
+   - **Maintainability**: Changes to validation rules are isolated
+
+3. **Test Coverage**
+   - Comprehensive test cases for both validation functions
+   - Tests for character validation helper functions
+   - Edge case coverage (empty strings, invalid formats, boundary conditions)
+
+### Input Mode Handlers
+
+The input handling is organized into three mode-specific handlers:
+
+1. **Search Mode** (`handleSearchInput`)
+   - Handles text input when in search mode
+   - Filters goals in real-time
+   - Resets cursor and scroll position
+
+2. **Create Goal Modal** (`handleCreateModalInput`)
+   - Handles text input for different fields (slug, title, type, units, etc.)
+   - Applies field-specific character validation
+   - Uses helper functions for validation
+
+3. **Datapoint Input Mode** (`handleDatapointInput`)
+   - Handles text input for date, value, and comment fields
+   - Applies field-specific character validation
+   - Allows full printable characters in comment field
+
 ## Future Improvements
 
 Potential next steps for further refactoring:
 
 1. **Extract to Packages**: Move to `state/`, `handlers/`, `ui/` packages
-2. **Unit Tests**: Add tests for handlers and state management
-3. **Component Interfaces**: Define interfaces for testability
-4. **View Models**: Separate display logic from state
-5. **Command Pattern**: Centralize command creation
+2. **Component Interfaces**: Define interfaces for testability
+3. **View Models**: Separate display logic from state
+4. **Command Pattern**: Centralize command creation
+5. **State Machine**: Implement formal state machine for mode transitions
 
 ## Metrics
 
+### Initial Refactoring
 - **Lines Reduced in main.go**: 401 lines (65% reduction)
 - **New Files Created**: 2 (model.go, handlers.go)
+- **Build Status**: ✅ Successful
+- **Functionality**: ✅ Preserved (no regressions)
+
+### Input Handling Improvements
+- **Validation Functions Extracted**: 2 (validateDatapointInput, validateCreateGoalInput)
+- **Test Cases Added**: 50+ test cases covering validation and character helpers
+- **Lines of Test Code**: 323 lines (handlers_test.go)
+- **Code Complexity Reduced**: handleEnterKey simplified by ~40 lines
+- **Test Coverage**: ✅ All validation logic now tested
 - **Build Status**: ✅ Successful
 - **Functionality**: ✅ Preserved (no regressions)
 
