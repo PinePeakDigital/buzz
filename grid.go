@@ -72,9 +72,11 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 			}
 
 			// Format goal display
-			display := fmt.Sprintf("%s\n$%.0f | %s",
+			deltaValue := ParseLimsumValue(goal.Limsum)
+			display := fmt.Sprintf("%s\n$%.0f | %s in %s",
 				truncateString(goal.Slug, 16),
 				goal.Pledge,
+				deltaValue,
 				FormatDueDate(goal.Losedate))
 
 			cell := style.Render(display)

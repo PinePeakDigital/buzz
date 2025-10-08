@@ -90,6 +90,42 @@ func GetBufferColor(safebuf int) string {
 	return "gray"
 }
 
+// ParseLimsumValue extracts the delta value from limsum string
+// e.g., "+2 within 1 day" -> "2", "+1 in 3 hours" -> "1", "0 today" -> "0"
+func ParseLimsumValue(limsum string) string {
+	if limsum == "" {
+		return "0"
+	}
+	var value string
+	// Split on " within "
+	parts := strings.Split(limsum, " within ")
+	if len(parts) == 2 {
+		value = parts[0]
+	} else {
+		// Split on " in "
+		parts = strings.Split(limsum, " in ")
+		if len(parts) == 2 {
+			value = parts[0]
+		} else {
+			// Handle "0 today" or similar cases - extract just the number/value at the start
+			fields := strings.Fields(limsum)
+			if len(fields) > 0 {
+				value = fields[0]
+			} else {
+				// If format doesn't match, return "0" as fallback
+				return "0"
+			}
+		}
+	}
+	// Strip leading plus sign
+	cleaned := strings.TrimPrefix(value, "+")
+	// Return "0" if the cleaned value is empty
+	if cleaned == "" {
+		return "0"
+	}
+	return cleaned
+}
+
 // FormatDueDate formats the losedate timestamp into a readable string
 func FormatDueDate(losedate int64) string {
 	t := time.Unix(losedate, 0)
