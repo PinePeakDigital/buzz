@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestCreateGoalWithMockServer tests CreateGoal function with a mock HTTP server
@@ -147,6 +148,205 @@ func TestParseLimsumValue(t *testing.T) {
 			result := ParseLimsumValue(tt.input)
 			if result != tt.expected {
 				t.Errorf("ParseLimsumValue(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestSortGoals tests the SortGoals function
+func TestSortGoals(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []Goal
+		expected []Goal
+	}{
+		{
+			name: "sort by losedate ascending",
+			input: []Goal{
+				{Slug: "goal3", Losedate: 3000, Pledge: 5},
+				{Slug: "goal1", Losedate: 1000, Pledge: 5},
+				{Slug: "goal2", Losedate: 2000, Pledge: 5},
+			},
+			expected: []Goal{
+				{Slug: "goal1", Losedate: 1000, Pledge: 5},
+				{Slug: "goal2", Losedate: 2000, Pledge: 5},
+				{Slug: "goal3", Losedate: 3000, Pledge: 5},
+			},
+		},
+		{
+			name: "sort by pledge descending when losedate same",
+			input: []Goal{
+				{Slug: "goal1", Losedate: 1000, Pledge: 5},
+				{Slug: "goal2", Losedate: 1000, Pledge: 10},
+				{Slug: "goal3", Losedate: 1000, Pledge: 0},
+			},
+			expected: []Goal{
+				{Slug: "goal2", Losedate: 1000, Pledge: 10},
+				{Slug: "goal1", Losedate: 1000, Pledge: 5},
+				{Slug: "goal3", Losedate: 1000, Pledge: 0},
+			},
+		},
+		{
+			name: "sort by slug alphabetically when losedate and pledge same",
+			input: []Goal{
+				{Slug: "zzz", Losedate: 1000, Pledge: 5},
+				{Slug: "aaa", Losedate: 1000, Pledge: 5},
+				{Slug: "mmm", Losedate: 1000, Pledge: 5},
+			},
+			expected: []Goal{
+				{Slug: "aaa", Losedate: 1000, Pledge: 5},
+				{Slug: "mmm", Losedate: 1000, Pledge: 5},
+				{Slug: "zzz", Losedate: 1000, Pledge: 5},
+			},
+		},
+		{
+			name: "complex sorting with all criteria",
+			input: []Goal{
+				{Slug: "goal4", Losedate: 2000, Pledge: 5},
+				{Slug: "goal1", Losedate: 1000, Pledge: 10},
+				{Slug: "goal3", Losedate: 1000, Pledge: 10},
+				{Slug: "goal2", Losedate: 1000, Pledge: 5},
+			},
+			expected: []Goal{
+				{Slug: "goal1", Losedate: 1000, Pledge: 10},
+				{Slug: "goal3", Losedate: 1000, Pledge: 10},
+				{Slug: "goal2", Losedate: 1000, Pledge: 5},
+				{Slug: "goal4", Losedate: 2000, Pledge: 5},
+			},
+		},
+		{
+			name:     "empty slice",
+			input:    []Goal{},
+			expected: []Goal{},
+		},
+		{
+			name: "single goal",
+			input: []Goal{
+				{Slug: "goal1", Losedate: 1000, Pledge: 5},
+			},
+			expected: []Goal{
+				{Slug: "goal1", Losedate: 1000, Pledge: 5},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Make a copy to sort
+			goals := make([]Goal, len(tt.input))
+			copy(goals, tt.input)
+
+			SortGoals(goals)
+
+			// Check if sorted correctly
+			if len(goals) != len(tt.expected) {
+				t.Errorf("Length mismatch: got %d, want %d", len(goals), len(tt.expected))
+				return
+			}
+
+			for i := range goals {
+				if goals[i].Slug != tt.expected[i].Slug {
+					t.Errorf("Position %d: got slug %q, want %q", i, goals[i].Slug, tt.expected[i].Slug)
+				}
+			}
+		})
+	}
+}
+
+// TestGetBufferColor tests the GetBufferColor function
+func TestGetBufferColor(t *testing.T) {
+	tests := []struct {
+		name     string
+		safebuf  int
+		expected string
+	}{
+		{"zero buffer", 0, "red"},
+		{"less than 1 day", 0, "red"},
+		{"exactly 1 day", 1, "orange"},
+		{"less than 2 days", 1, "orange"},
+		{"exactly 2 days", 2, "blue"},
+		{"less than 3 days", 2, "blue"},
+		{"exactly 3 days", 3, "green"},
+		{"4 days", 4, "green"},
+		{"5 days", 5, "green"},
+		{"6 days", 6, "green"},
+		{"exactly 7 days", 7, "gray"},
+		{"more than 7 days", 10, "gray"},
+		{"large buffer", 100, "gray"},
+		{"negative buffer", -1, "red"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetBufferColor(tt.safebuf)
+			if result != tt.expected {
+				t.Errorf("GetBufferColor(%d) = %q, want %q", tt.safebuf, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatDueDate tests the FormatDueDate function
+func TestFormatDueDate(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name     string
+		losedate int64
+		expected string
+	}{
+		{
+			name:     "overdue",
+			losedate: now.Add(-1 * time.Hour).Unix(),
+			expected: "OVERDUE",
+		},
+		{
+			name:     "30 minutes",
+			losedate: now.Add(30 * time.Minute).Unix(),
+			expected: "29m", // rounds down
+		},
+		{
+			name:     "1 hour 30 minutes",
+			losedate: now.Add(90 * time.Minute).Unix(),
+			expected: "1h",
+		},
+		{
+			name:     "5 hours 30 minutes",
+			losedate: now.Add(330 * time.Minute).Unix(),
+			expected: "5h",
+		},
+		{
+			name:     "23 hours 30 minutes",
+			losedate: now.Add(1410 * time.Minute).Unix(),
+			expected: "23h",
+		},
+		{
+			name:     "25 hours",
+			losedate: now.Add(25 * time.Hour).Unix(),
+			expected: "1d",
+		},
+		{
+			name:     "49 hours",
+			losedate: now.Add(49 * time.Hour).Unix(),
+			expected: "2d",
+		},
+		{
+			name:     "7.5 days",
+			losedate: now.Add(180 * time.Hour).Unix(),
+			expected: "7d",
+		},
+		{
+			name:     "30.5 days",
+			losedate: now.Add(732 * time.Hour).Unix(),
+			expected: "30d",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatDueDate(tt.losedate)
+			if result != tt.expected {
+				t.Errorf("FormatDueDate(%d) = %q, want %q", tt.losedate, result, tt.expected)
 			}
 		})
 	}

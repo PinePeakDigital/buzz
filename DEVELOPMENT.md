@@ -30,6 +30,77 @@ To install and update dependencies:
 go mod tidy
 ```
 
+## Testing
+
+### Running Tests
+
+Run all tests:
+
+```bash
+go test
+```
+
+Run tests with verbose output:
+
+```bash
+go test -v
+```
+
+Run tests with coverage:
+
+```bash
+go test -cover
+```
+
+### Test Organization
+
+Tests are organized alongside their source files:
+
+- `beeminder_test.go` - Tests for Beeminder API functions
+- `handlers_test.go` - Tests for input validation and handlers
+- `utils_test.go` - Tests for utility functions
+- `config_test.go` - Tests for configuration management
+- `model_test.go` - Tests for application state and models
+
+### Writing Tests
+
+When adding new functionality:
+
+1. Write tests for pure functions first (functions with no side effects)
+2. Use table-driven tests for comprehensive coverage
+3. Test edge cases and error conditions
+4. Follow Go testing conventions and naming patterns
+
+Example test structure:
+
+```go
+func TestMyFunction(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        expected string
+    }{
+        {"basic case", "input", "expected"},
+        {"edge case", "", ""},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := MyFunction(tt.input)
+            if result != tt.expected {
+                t.Errorf("got %q, want %q", result, tt.expected)
+            }
+        })
+    }
+}
+```
+
+### CI/CD
+
+Tests are automatically run in CI/CD pipelines:
+- On every pull request
+- Before building cross-platform binaries
+
 ## Project Structure
 
 - `main.go` - Main application entry point and Bubble Tea orchestration

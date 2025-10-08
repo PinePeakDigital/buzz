@@ -68,6 +68,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Run tests
+        run: go test -v -cover
+
       - name: Build cross-platform binaries
         run: ./scripts/build.sh
 
