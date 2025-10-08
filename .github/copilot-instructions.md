@@ -49,33 +49,77 @@ ci: add linting to workflow
 
 ## Accessing CodeRabbit PR Feedback
 
-When working on a PR branch, you can access all CodeRabbit feedback using the provided shell script:
+When working on a PR branch, you can access all CodeRabbit feedback using the GitHub MCP tools available to Copilot. The GitHub MCP provides authenticated access to GitHub's API without requiring token configuration.
 
-```bash
-./scripts/get-coderabbit-feedback.sh
-```
+### What Feedback is Available
 
-### What the Script Retrieves
-
-The script fetches comprehensive CodeRabbit feedback from three sources:
+CodeRabbit provides feedback in three locations:
 
 1. **General PR Comments** - Timeline comments posted by CodeRabbit on the PR conversation
 2. **Inline Review Comments** - Code-specific comments attached to particular lines in the diff
 3. **Review Summaries** - Overall review summaries submitted by CodeRabbit
 
-### Usage
+### GitHub MCP Tools to Use
 
-Make sure you're on a PR branch before running the script:
+Use the following MCP tools in sequence to retrieve all CodeRabbit feedback:
 
-```bash
-git checkout <pr-branch>
-./scripts/get-coderabbit-feedback.sh
+#### Step 1: Find the Current PR
+
+```
+github-mcp-server-list_pull_requests
+  owner: <repo-owner>
+  repo: <repo-name>
+  state: open
 ```
 
-The script will automatically detect the current PR and display all CodeRabbit feedback in a structured, readable format.
+This returns a list of open PRs. Identify the current PR by matching the branch name.
 
-### Requirements
+#### Step 2: Get General PR Comments
 
-- GitHub CLI (`gh`) must be installed and authenticated
-- `jq` (JSON processor) must be installed for parsing API responses
-- Must be run from within a PR branch context
+```
+github-mcp-server-get_issue_comments
+  owner: <repo-owner>
+  repo: <repo-name>
+  issue_number: <pr-number>
+```
+
+Filter the results for comments where `author.login` is `"coderabbitai[bot]"` or `"coderabbitai"`.
+
+#### Step 3: Get Inline Review Comments
+
+```
+github-mcp-server-get_pull_request_review_comments
+  owner: <repo-owner>
+  repo: <repo-name>
+  pullNumber: <pr-number>
+```
+
+Filter the results for comments where `user.login` is `"coderabbitai[bot]"` or `"coderabbitai"`.
+
+#### Step 4: Get Review Summaries
+
+```
+github-mcp-server-get_pull_request_reviews
+  owner: <repo-owner>
+  repo: <repo-name>
+  pullNumber: <pr-number>
+```
+
+Filter the results for reviews where `user.login` is `"coderabbitai[bot]"` or `"coderabbitai"`.
+
+### Example Usage
+
+For the repository `narthur/buzz` with PR #97:
+
+1. List PRs to find current PR number
+2. Get issue comments: `issue_number: 97`
+3. Get review comments: `pullNumber: 97`
+4. Get reviews: `pullNumber: 97`
+
+### Benefits of GitHub MCP Approach
+
+- ✅ **Built-in authentication** - No token configuration needed
+- ✅ **Always available** - Works in Copilot environment without additional setup
+- ✅ **Type-safe** - Structured data from API
+- ✅ **Complete coverage** - Accesses all three types of CodeRabbit feedback
+- ✅ **Pagination handled** - MCP tools handle pagination automatically
