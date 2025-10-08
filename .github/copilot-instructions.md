@@ -46,3 +46,80 @@ ci: add linting to workflow
 - Keep the description concise but descriptive
 - A commit-msg hook enforces this format, so all commits must comply
 - See `DEVELOPMENT.md` for more details on our git workflow
+
+## Accessing CodeRabbit PR Feedback
+
+When working on a PR branch, you can access all CodeRabbit feedback using the GitHub MCP tools available to Copilot. The GitHub MCP provides authenticated access to GitHub's API without requiring token configuration.
+
+### What Feedback is Available
+
+CodeRabbit provides feedback in three locations:
+
+1. **General PR Comments** - Timeline comments posted by CodeRabbit on the PR conversation
+2. **Inline Review Comments** - Code-specific comments attached to particular lines in the diff
+3. **Review Summaries** - Overall review summaries submitted by CodeRabbit
+
+### GitHub MCP Tools to Use
+
+Use the following MCP tools in sequence to retrieve all CodeRabbit feedback:
+
+#### Step 1: Find the Current PR
+
+```
+github-mcp-server-list_pull_requests
+  owner: <repo-owner>
+  repo: <repo-name>
+  state: open
+```
+
+This returns a list of open PRs. Identify the current PR by matching the branch name.
+
+#### Step 2: Get General PR Comments
+
+```
+github-mcp-server-get_issue_comments
+  owner: <repo-owner>
+  repo: <repo-name>
+  issue_number: <pr-number>
+```
+
+Filter the results for comments where `author.login` is `"coderabbitai[bot]"` or `"coderabbitai"`.
+
+#### Step 3: Get Inline Review Comments
+
+```
+github-mcp-server-get_pull_request_review_comments
+  owner: <repo-owner>
+  repo: <repo-name>
+  pullNumber: <pr-number>
+```
+
+Filter the results for comments where `user.login` is `"coderabbitai[bot]"` or `"coderabbitai"`.
+
+#### Step 4: Get Review Summaries
+
+```
+github-mcp-server-get_pull_request_reviews
+  owner: <repo-owner>
+  repo: <repo-name>
+  pullNumber: <pr-number>
+```
+
+Filter the results for reviews where `user.login` is `"coderabbitai[bot]"` or `"coderabbitai"`.
+
+### Example Usage
+
+For the repository `narthur/buzz` with PR #97:
+
+1. List PRs to find current PR number
+2. Get issue comments: `issue_number: 97`
+3. Get review comments: `pullNumber: 97`
+4. Get reviews: `pullNumber: 97`
+
+### Benefits of GitHub MCP Approach
+
+- ✅ **Built-in authentication** - No token configuration needed
+- ✅ **Always available** - Works in Copilot environment without additional setup
+- ✅ **Type-safe** - Structured data from API
+- ✅ **Complete coverage** - Accesses all three types of CodeRabbit feedback
+- ✅ **Pagination handled** - MCP tools handle pagination automatically
