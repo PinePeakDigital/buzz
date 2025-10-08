@@ -92,6 +92,7 @@ func GetBufferColor(safebuf int) string {
 
 // ParseLimsumValue extracts the delta value from limsum string
 // e.g., "+2 within 1 day" -> "2", "+1 in 3 hours" -> "1", "0 today" -> "0"
+// Time formats are preserved: "+00:05 within 1 day" -> "00:05", "+1:30 in 2 hours" -> "1:30"
 func ParseLimsumValue(limsum string) string {
 	if limsum == "" {
 		return "0"
