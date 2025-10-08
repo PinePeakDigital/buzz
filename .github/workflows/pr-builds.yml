@@ -16,6 +16,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Post initial building comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            const prNumber = context.issue.number;
+            
+            const comment = `## 🔨 Building...
+            
+            Creating cross-platform binaries for PR #${prNumber}. This may take a few minutes.
+            
+            - Commit: ${{ github.sha }}
+            - Started: ${new Date().toISOString()}
+            
+            > This comment will be updated when the build completes.`;
+            
+            // Create the initial comment
+            const response = await github.rest.issues.createComment({
+              owner: repo.owner,
+              repo: repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });
+            
+            // Save the comment ID for later update
+            return response.data.id;
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -92,7 +119,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Post PR comment with pre-release links
+      - name: Update PR comment with pre-release links
         uses: actions/github-script@v7
         with:
           script: |
@@ -135,28 +162,28 @@ jobs:
             > 
             > 🗑️ This pre-release will be automatically deleted when the PR is closed.`;
             
-            // Check if we already posted a comment (with pagination)
+            // Find the building comment to update
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: repo.owner,
               repo: repo.repo,
               issue_number: prNumber,
             });
             
-            const botComment = comments.find(comment => 
+            const buildingComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
-              comment.body.includes('🚀 Pre-release Build Ready')
+              comment.body.includes('🔨 Building...')
             );
             
-            if (botComment) {
-              // Update existing comment
+            if (buildingComment) {
+              // Update the building comment with the final status
               await github.rest.issues.updateComment({
                 owner: repo.owner,
                 repo: repo.repo,
-                comment_id: botComment.id,
+                comment_id: buildingComment.id,
                 body: comment
               });
             } else {
-              // Create new comment
+              // Fallback: create new comment if building comment not found
               await github.rest.issues.createComment({
                 owner: repo.owner,
                 repo: repo.repo,
