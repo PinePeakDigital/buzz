@@ -16,6 +16,7 @@ type Goal struct {
 	Losedate   int64       `json:"losedate"`
 	Pledge     float64     `json:"pledge"`
 	Safebuf    int         `json:"safebuf"`
+	Limsum     string      `json:"limsum"`
 	Datapoints []Datapoint `json:"datapoints,omitempty"`
 }
 
