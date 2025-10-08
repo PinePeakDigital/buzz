@@ -612,7 +612,7 @@ func handleNextCommand() {
 	// limsum is like "+2 within 1 day" or "+1 in 3 hours"
 	// We'll output: "goalslug limsum timeframe"
 	timeframe := FormatDueDate(nextGoal.Losedate)
-	
+
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Limsum, timeframe)
 }
