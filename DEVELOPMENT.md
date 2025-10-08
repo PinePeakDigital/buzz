@@ -32,7 +32,9 @@ go mod tidy
 
 ## Project Structure
 
-- `main.go` - Main application entry point and state management
+- `main.go` - Main application entry point and Bubble Tea orchestration
+- `model.go` - Application state models and initialization
+- `handlers.go` - Keyboard input handlers
 - `grid.go` - Grid rendering and modal UI
 - `styles.go` - Lipgloss styling definitions
 - `beeminder.go` - Beeminder API integration
