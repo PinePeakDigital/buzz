@@ -8,11 +8,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// handleKeyPress processes keyboard input and returns updated model and command
-func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Handle text input in search mode FIRST
+// handleSearchInput handles text input in search mode
+func handleSearchInput(m model, char string) (model, bool) {
 	if m.appModel.searchMode && !m.appModel.showModal {
-		char := msg.String()
 		// Allow printable characters in search
 		if len(char) == 1 && char >= " " && char <= "~" {
 			m.appModel.searchQuery += char
@@ -21,75 +19,140 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
 			m.appModel.hasNavigated = false
-			return m, nil
+			return m, true
 		}
 	}
+	return m, false
+}
 
-	// Handle text input in create goal modal
-	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
-		char := msg.String()
-		if len(char) == 1 && char >= " " && char <= "~" {
-			switch m.appModel.createFocus {
-			case 0: // Slug - allow alphanumeric and dashes/underscores
-				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
-					(char >= "0" && char <= "9") || char == "-" || char == "_" {
-					m.appModel.createSlug += char
-					return m, nil
-				}
-			case 1: // Title - allow all printable characters
-				m.appModel.createTitle += char
-				return m, nil
-			case 2: // Goal type - allow letters
-				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") {
-					m.appModel.createGoalType += char
-					return m, nil
-				}
-			case 3: // Gunits - allow all printable characters
-				m.appModel.createGunits += char
-				return m, nil
-			case 4: // Goaldate - allow digits
-				if (char >= "0" && char <= "9") || char == "n" || char == "u" || char == "l" {
-					m.appModel.createGoaldate += char
-					return m, nil
-				}
-			case 5: // Goalval - allow digits, decimal point, and negative sign
-				if (char >= "0" && char <= "9") || char == "." || char == "-" || char == "n" || char == "u" || char == "l" {
-					m.appModel.createGoalval += char
-					return m, nil
-				}
-			case 6: // Rate - allow digits, decimal point, and negative sign
-				if (char >= "0" && char <= "9") || char == "." || char == "-" || char == "n" || char == "u" || char == "l" {
-					m.appModel.createRate += char
-					return m, nil
-				}
-			}
-		}
+// isAlphanumericOrDash checks if character is alphanumeric, dash, or underscore
+func isAlphanumericOrDash(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') || c == '-' || c == '_'
+}
+
+// isLetter checks if character is a letter
+func isLetter(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// isNumericOrNull checks if character is numeric or part of "null"
+func isNumericOrNull(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= '0' && c <= '9') || c == 'n' || c == 'u' || c == 'l'
+}
+
+// isNumericWithDecimal checks if character is numeric, decimal, negative, or part of "null"
+func isNumericWithDecimal(char string) bool {
+	if len(char) != 1 {
+		return false
+	}
+	c := char[0]
+	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == 'n' || c == 'u' || c == 'l'
+}
+
+// handleCreateModalInput handles text input in create goal modal
+func handleCreateModalInput(m model, char string) (model, bool) {
+	if !m.appModel.showCreateModal || m.appModel.creatingGoal {
+		return m, false
+	}
+	if len(char) != 1 || char < " " || char > "~" {
+		return m, false
 	}
 
-	// Handle text input in input mode SECOND, before command keys
+	switch m.appModel.createFocus {
+	case 0: // Slug - allow alphanumeric and dashes/underscores
+		if isAlphanumericOrDash(char) {
+			m.appModel.createSlug += char
+			return m, true
+		}
+	case 1: // Title - allow all printable characters
+		m.appModel.createTitle += char
+		return m, true
+	case 2: // Goal type - allow letters
+		if isLetter(char) {
+			m.appModel.createGoalType += char
+			return m, true
+		}
+	case 3: // Gunits - allow all printable characters
+		m.appModel.createGunits += char
+		return m, true
+	case 4: // Goaldate - allow digits or "null"
+		if isNumericOrNull(char) {
+			m.appModel.createGoaldate += char
+			return m, true
+		}
+	case 5: // Goalval - allow digits, decimal point, negative sign, or "null"
+		if isNumericWithDecimal(char) {
+			m.appModel.createGoalval += char
+			return m, true
+		}
+	case 6: // Rate - allow digits, decimal point, negative sign, or "null"
+		if isNumericWithDecimal(char) {
+			m.appModel.createRate += char
+			return m, true
+		}
+	}
+	return m, false
+}
+
+// handleDatapointInput handles text input in datapoint input mode
+func handleDatapointInput(m model, char string) (model, bool) {
+	// Handle text input in input mode
 	// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 	// can still be typed in comment fields
 	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
-		char := msg.String()
 		if len(char) == 1 {
 			switch m.appModel.inputFocus {
 			case 0: // Date field - allow digits and dashes
 				if (char >= "0" && char <= "9") || char == "-" {
 					m.appModel.inputDate += char
-					return m, nil
+					return m, true
 				}
 			case 1: // Value field - allow digits, decimal point, and negative sign
 				if (char >= "0" && char <= "9") || char == "." || char == "-" {
 					m.appModel.inputValue += char
-					return m, nil
+					return m, true
 				}
 			case 2: // Comment field - allow all printable characters
 				if char >= " " && char <= "~" {
 					m.appModel.inputComment += char
-					return m, nil
+					return m, true
 				}
 			}
 		}
+	}
+	return m, false
+}
+
+// handleKeyPress processes keyboard input and returns updated model and command
+func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	char := msg.String()
+
+	// Handle text input in search mode FIRST
+	if updatedModel, handled := handleSearchInput(m, char); handled {
+		return updatedModel, nil
+	}
+
+	// Handle text input in create goal modal
+	if updatedModel, handled := handleCreateModalInput(m, char); handled {
+		return updatedModel, nil
+	}
+
+	// Handle text input in datapoint input mode
+	if updatedModel, handled := handleDatapointInput(m, char); handled {
+		return updatedModel, nil
 	}
 
 	// Cool, what was the actual key pressed?
