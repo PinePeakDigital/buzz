@@ -30,6 +30,42 @@ To install and update dependencies:
 go mod tidy
 ```
 
+## Testing
+
+The project has comprehensive test coverage for business logic and utility functions. See [docs/TESTING.md](docs/TESTING.md) for complete testing documentation.
+
+### Quick Start
+
+Run all tests:
+
+```bash
+go test
+```
+
+Run tests with verbose output:
+
+```bash
+go test -v
+```
+
+Run tests with coverage:
+
+```bash
+go test -cover
+```
+
+### Test Files
+
+- `beeminder_test.go` - Tests for Beeminder API functions
+- `handlers_test.go` - Tests for input validation and handlers
+- `utils_test.go` - Tests for utility functions
+- `config_test.go` - Tests for configuration management
+- `model_test.go` - Tests for application state and models
+
+**Coverage:** 18.5% of statements (178 test cases)
+
+For detailed information about testing strategy, coverage, and best practices, see [docs/TESTING.md](docs/TESTING.md).
+
 ## Project Structure
 
 - `main.go` - Main application entry point and Bubble Tea orchestration
