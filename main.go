@@ -555,7 +555,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Navigation keys - spatial movement through grid (only when modal is closed)
 		case "up", "k":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -568,7 +568,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -589,7 +589,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Load detailed goal information including datapoints
 					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
-			} else if !m.appModel.showModal {
+			} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -610,7 +610,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Load detailed goal information including datapoints
 					return m, loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug)
 				}
-			} else if !m.appModel.showModal {
+			} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				if len(displayGoals) > 0 {
 					m.appModel.hasNavigated = true
@@ -624,13 +624,13 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Scroll up with Page Up or 'u' (only when modal is closed)
 		case "pgup", "u":
-			if !m.appModel.showModal && m.appModel.scrollRow > 0 {
+			if !m.appModel.showModal && !m.appModel.showCreateModal && m.appModel.scrollRow > 0 {
 				m.appModel.scrollRow--
 			}
 
 		// Scroll down with Page Down or 'd' (only when modal is closed)
 		case "pgdown", "d":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				displayGoals := m.appModel.getDisplayGoals()
 				cols := calculateColumns(m.appModel.width)
 				totalRows := (len(displayGoals) + cols - 1) / cols
@@ -642,14 +642,14 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Manual refresh with 'r' (only when modal is closed)
 		case "r":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				m.appModel.loading = true
 				return m, loadGoalsCmd(m.appModel.config)
 			}
 
 		// Toggle auto-refresh with 't' (only when modal is closed)
 		case "t":
-			if !m.appModel.showModal {
+			if !m.appModel.showModal && !m.appModel.showCreateModal {
 				m.appModel.refreshActive = !m.appModel.refreshActive
 				if m.appModel.refreshActive {
 					// If we just enabled auto-refresh, start the timer
@@ -659,7 +659,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Enter search mode with '/' (only when modal is closed and not already in search mode)
 		case "/":
-			if !m.appModel.showModal && !m.appModel.searchMode {
+			if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
 				m.appModel.searchMode = true
 				m.appModel.searchQuery = ""
 				m.appModel.filteredGoals = []Goal{}
