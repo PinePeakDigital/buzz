@@ -16,6 +16,21 @@ bin install https://github.com/narthur/buzz
 
 This will download the latest release and make it available in your PATH.
 
+### Homebrew
+
+Install using [Homebrew](https://brew.sh):
+
+```bash
+brew tap narthur/tap
+brew install narthur/tap/buzz
+```
+
+To upgrade:
+
+```bash
+brew upgrade narthur/tap/buzz
+```
+
 ### Direct Download
 
 You can also download pre-built binaries directly from the [releases page](https://github.com/narthur/buzz/releases). Choose the appropriate binary for your operating system and architecture.
