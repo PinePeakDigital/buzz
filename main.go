@@ -553,6 +553,20 @@ func (m model) viewApp() string {
 	return baseView
 }
 
+func printHelp() {
+	fmt.Println("buzz - A terminal user interface for Beeminder")
+	fmt.Println("")
+	fmt.Println("USAGE:")
+	fmt.Println("  buzz            Launch the interactive TUI")
+	fmt.Println("  buzz next       Output a terse summary of the next due goal")
+	fmt.Println("  buzz help       Show this help message")
+	fmt.Println("")
+	fmt.Println("OPTIONS:")
+	fmt.Println("  -h, --help      Show this help message")
+	fmt.Println("")
+	fmt.Println("For more information, visit: https://github.com/narthur/buzz")
+}
+
 func main() {
 	// Check for CLI arguments
 	if len(os.Args) > 1 {
@@ -560,9 +574,13 @@ func main() {
 		case "next":
 			handleNextCommand()
 			return
+		case "help", "-h", "--help":
+			printHelp()
+			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next")
+			fmt.Println("Available commands: next, help")
+			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
 	}
