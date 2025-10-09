@@ -16,7 +16,6 @@ func handleSearchInput(m model, msg tea.KeyMsg) (model, bool) {
 		// Allow printable Unicode characters in search
 		if len(msg.Runes) == 1 && unicode.IsPrint(msg.Runes[0]) {
 			m.appModel.searchQuery += string(msg.Runes)
-			m.appModel.filteredGoals = m.appModel.filterGoals()
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
