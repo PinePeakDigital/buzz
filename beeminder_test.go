@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,99 @@ func TestCreateGoalWithMockServer(t *testing.T) {
 	// This test ensures the function signature is correct
 	// without making real API calls
 	t.Log("CreateGoal function signature validated")
+}
+
+// TestCreateGoalURLEncoding tests that URL encoding works correctly for special characters
+func TestCreateGoalURLEncoding(t *testing.T) {
+	tests := []struct {
+		name              string
+		title             string
+		slug              string
+		titleShouldMatch  string // What the encoded title should contain
+		slugShouldMatch   string // What the encoded slug should contain
+	}{
+		{
+			name:             "space in title",
+			title:            "My Goal Title",
+			slug:             "my-goal",
+			titleShouldMatch: "title=My+Goal+Title",
+			slugShouldMatch:  "slug=my-goal",
+		},
+		{
+			name:             "ampersand in title",
+			title:            "Goal & Progress",
+			slug:             "goal-progress",
+			titleShouldMatch: "title=Goal+%26+Progress",
+			slugShouldMatch:  "slug=goal-progress",
+		},
+		{
+			name:             "equals sign in title",
+			title:            "x=5",
+			slug:             "x-equals-5",
+			titleShouldMatch: "title=x%3D5",
+			slugShouldMatch:  "slug=x-equals-5",
+		},
+		{
+			name:             "special characters",
+			title:            "Test!@#$%",
+			slug:             "test-special",
+			titleShouldMatch: "title=Test%21%40%23%24%25",
+			slugShouldMatch:  "slug=test-special",
+		},
+		{
+			name:             "plus sign",
+			title:            "2+2=4",
+			slug:             "math-test",
+			titleShouldMatch: "title=2%2B2%3D4",
+			slugShouldMatch:  "slug=math-test",
+		},
+		{
+			name:             "forward slash",
+			title:            "goal/test",
+			slug:             "goal-test",
+			titleShouldMatch: "title=goal%2Ftest",
+			slugShouldMatch:  "slug=goal-test",
+		},
+		{
+			name:             "slug with special characters",
+			title:            "Test Goal",
+			slug:             "test+goal&special",
+			titleShouldMatch: "title=Test+Goal",
+			slugShouldMatch:  "slug=test%2Bgoal%26special",
+		},
+		{
+			name:             "unicode characters",
+			title:            "目标 Test",
+			slug:             "unicode-goal",
+			titleShouldMatch: "title=%E7%9B%AE%E6%A0%87+Test",
+			slugShouldMatch:  "slug=unicode-goal",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test that url.Values.Encode() (which CreateGoal now uses) properly encodes
+			data := url.Values{}
+			data.Set("title", tt.title)
+			data.Set("slug", tt.slug)
+			
+			encoded := data.Encode()
+			
+			// Verify the encoded string contains the expected patterns
+			if !strings.Contains(encoded, tt.titleShouldMatch) {
+				t.Errorf("Encoded string %q does not contain expected title pattern %q", encoded, tt.titleShouldMatch)
+			}
+			if !strings.Contains(encoded, tt.slugShouldMatch) {
+				t.Errorf("Encoded string %q does not contain expected slug pattern %q", encoded, tt.slugShouldMatch)
+			}
+		})
+	}
+
+	t.Log("URL encoding validated")
+	
+	// Note: Once the hardcoded URL limitation in CreateGoal is addressed (see lines 38-40),
+	// we should add an integration test that verifies CreateGoal produces the expected
+	// encoded request body when called with special characters in parameters.
 }
 
 // TestGoalCreatedMsgStructure tests that goalCreatedMsg exists
