@@ -3,7 +3,16 @@ package main
 import (
 	"testing"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
+
+// mockKeyMsg creates a mock KeyMsg for testing
+func mockKeyMsg(runes []rune) tea.KeyMsg {
+	return tea.KeyMsg{
+		Runes: runes,
+	}
+}
 
 // TestValidateDatapointInput tests the validateDatapointInput function
 func TestValidateDatapointInput(t *testing.T) {
@@ -357,6 +366,169 @@ func TestIsNumericWithDecimal(t *testing.T) {
 			result := isNumericWithDecimal(tt.input)
 			if result != tt.expected {
 				t.Errorf("isNumericWithDecimal(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestHandleSearchInputUnicode tests Unicode support in search mode
+func TestHandleSearchInputUnicode(t *testing.T) {
+	tests := []struct {
+		name     string
+		runes    []rune
+		expected bool
+	}{
+		{"ASCII character", []rune{'a'}, true},
+		{"accented character", []rune{'é'}, true},
+		{"Chinese character", []rune{'中'}, true},
+		{"emoji", []rune{'😀'}, true},
+		{"Greek character", []rune{'α'}, true},
+		{"Cyrillic character", []rune{'Ж'}, true},
+		{"Hebrew character", []rune{'א'}, true},
+		{"Arabic character", []rune{'ع'}, true},
+		{"space", []rune{' '}, true},
+		{"multiple runes", []rune{'a', 'b'}, false},
+		{"empty runes", []rune{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock model in search mode
+			m := model{
+				appModel: appModel{
+					searchMode: true,
+					showModal:  false,
+				},
+			}
+
+			// Create a mock KeyMsg
+			msg := mockKeyMsg(tt.runes)
+
+			// Test the handler
+			updatedModel, handled := handleSearchInput(m, msg)
+
+			if handled != tt.expected {
+				t.Errorf("handleSearchInput with runes %v: handled = %v, want %v",
+					tt.runes, handled, tt.expected)
+			}
+
+			// If expected to handle, check that the search query was updated
+			if tt.expected && handled {
+				expectedQuery := string(tt.runes)
+				if updatedModel.appModel.searchQuery != expectedQuery {
+					t.Errorf("searchQuery = %q, want %q", updatedModel.appModel.searchQuery, expectedQuery)
+				}
+			}
+		})
+	}
+}
+
+// TestHandleCreateModalInputUnicode tests Unicode support in create goal modal
+func TestHandleCreateModalInputUnicode(t *testing.T) {
+	tests := []struct {
+		name        string
+		focus       int
+		runes       []rune
+		expected    bool
+		checkField  func(appModel) string
+		fieldName   string
+	}{
+		{"Title with ASCII", 1, []rune{'a'}, true, func(a appModel) string { return a.createTitle }, "Title"},
+		{"Title with accented char", 1, []rune{'é'}, true, func(a appModel) string { return a.createTitle }, "Title"},
+		{"Title with Chinese", 1, []rune{'中'}, true, func(a appModel) string { return a.createTitle }, "Title"},
+		{"Title with emoji", 1, []rune{'😀'}, true, func(a appModel) string { return a.createTitle }, "Title"},
+		{"Title with Greek", 1, []rune{'Ω'}, true, func(a appModel) string { return a.createTitle }, "Title"},
+		{"Gunits with ASCII", 3, []rune{'x'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
+		{"Gunits with accented char", 3, []rune{'ñ'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
+		{"Gunits with Cyrillic", 3, []rune{'Д'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
+		{"Gunits with emoji", 3, []rune{'📊'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock model with create modal open
+			m := model{
+				appModel: appModel{
+					showCreateModal: true,
+					creatingGoal:    false,
+					createFocus:     tt.focus,
+					createTitle:     "",
+					createGunits:    "",
+				},
+			}
+
+			// Create a mock KeyMsg
+			msg := mockKeyMsg(tt.runes)
+
+			// Test the handler
+			updatedModel, handled := handleCreateModalInput(m, msg)
+
+			if handled != tt.expected {
+				t.Errorf("handleCreateModalInput for %s with runes %v: handled = %v, want %v",
+					tt.fieldName, tt.runes, handled, tt.expected)
+			}
+
+			// If expected to handle, check that the field was updated
+			if tt.expected && handled {
+				fieldValue := tt.checkField(updatedModel.appModel)
+				expectedValue := string(tt.runes)
+				if fieldValue != expectedValue {
+					t.Errorf("%s = %q, want %q", tt.fieldName, fieldValue, expectedValue)
+				}
+			}
+		})
+	}
+}
+
+// TestHandleDatapointInputUnicode tests Unicode support in datapoint comment field
+func TestHandleDatapointInputUnicode(t *testing.T) {
+	tests := []struct {
+		name     string
+		runes    []rune
+		expected bool
+	}{
+		{"ASCII character", []rune{'a'}, true},
+		{"accented character", []rune{'ü'}, true},
+		{"Japanese character", []rune{'あ'}, true},
+		{"emoji", []rune{'🎉'}, true},
+		{"Arabic character", []rune{'ب'}, true},
+		{"Korean character", []rune{'한'}, true},
+		{"Thai character", []rune{'ก'}, true},
+		{"space", []rune{' '}, true},
+		{"multiple runes", []rune{'a', 'b'}, false},
+		{"empty runes", []rune{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock model in input mode with comment field focused
+			m := model{
+				appModel: appModel{
+					showModal:    true,
+					inputMode:    true,
+					submitting:   false,
+					inputFocus:   2, // Comment field
+					inputComment: "",
+				},
+			}
+
+			// Create a mock KeyMsg
+			msg := mockKeyMsg(tt.runes)
+
+			// Test the handler
+			updatedModel, handled := handleDatapointInput(m, msg)
+
+			if handled != tt.expected {
+				t.Errorf("handleDatapointInput with runes %v: handled = %v, want %v",
+					tt.runes, handled, tt.expected)
+			}
+
+			// If expected to handle, check that the comment was updated
+			if tt.expected && handled {
+				expectedComment := string(tt.runes)
+				if updatedModel.appModel.inputComment != expectedComment {
+					t.Errorf("inputComment = %q, want %q", updatedModel.appModel.inputComment, expectedComment)
+				}
 			}
 		})
 	}
