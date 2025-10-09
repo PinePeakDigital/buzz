@@ -254,13 +254,13 @@ func handleNextCommand() {
 	// Get the first goal (most urgent)
 	nextGoal := goals[0]
 
-	// Format the output: "goalslug limsum timeframe"
-	// limsum is like "+2 within 1 day" or "+1 in 3 hours"
-	// We'll output: "goalslug limsum timeframe"
+	// Format the output: "goalslug baremin timeframe"
+	// baremin is like "+2 in 3 days" or "-1 in 2 hours"
+	// We'll output: "goalslug baremin timeframe"
 	timeframe := FormatDueDate(nextGoal.Losedate)
 
 	// Output the terse summary
-	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Limsum, timeframe)
+	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
 }
 
 // handleAddCommand adds a datapoint to a goal without opening the TUI

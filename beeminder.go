@@ -18,6 +18,7 @@ type Goal struct {
 	Pledge     float64     `json:"pledge"`
 	Safebuf    int         `json:"safebuf"`
 	Limsum     string      `json:"limsum"`
+	Baremin    string      `json:"baremin"`
 	Datapoints []Datapoint `json:"datapoints,omitempty"`
 }
 
@@ -126,6 +127,38 @@ func ParseLimsumValue(limsum string) string {
 		return "0"
 	}
 	return cleaned
+}
+
+// ParseBareminValue extracts the delta value from baremin string
+// e.g., "+2 in 3 days" -> "2", "-1.5 in 2 hours" -> "-1.5", "3:00 in 1 day" -> "3:00"
+func ParseBareminValue(baremin string) string {
+	if baremin == "" {
+		return "0"
+	}
+	var value string
+	// Split on " in "
+	parts := strings.Split(baremin, " in ")
+	if len(parts) == 2 {
+		value = parts[0]
+	} else {
+		// Handle edge cases - extract just the number/value at the start
+		fields := strings.Fields(baremin)
+		if len(fields) > 0 {
+			value = fields[0]
+		} else {
+			return "0"
+		}
+	}
+
+	// Remove leading "+" if present (but keep "-" for negative values)
+	value = strings.TrimPrefix(value, "+")
+
+	// Return "0" if the value is empty after cleanup
+	if value == "" {
+		return "0"
+	}
+
+	return value
 }
 
 // FormatDueDate formats the losedate timestamp into a readable string
