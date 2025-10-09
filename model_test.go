@@ -94,36 +94,28 @@ func TestGetDisplayGoals(t *testing.T) {
 		{Slug: "goal3", Title: "Goal 3"},
 	}
 
-	filteredGoals := []Goal{
-		{Slug: "goal1", Title: "Goal 1"},
-	}
-
 	tests := []struct {
-		name          string
-		searchQuery   string
-		filteredGoals []Goal
-		expected      int // expected number of goals
+		name        string
+		searchQuery string
+		expected    int // expected number of goals
 	}{
 		{
-			name:          "no search query returns all goals",
-			searchQuery:   "",
-			filteredGoals: []Goal{},
-			expected:      3,
+			name:        "no search query returns all goals",
+			searchQuery: "",
+			expected:    3,
 		},
 		{
-			name:          "with search query returns filtered goals",
-			searchQuery:   "goal1",
-			filteredGoals: filteredGoals,
-			expected:      1,
+			name:        "with search query returns filtered goals",
+			searchQuery: "goal1",
+			expected:    1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &appModel{
-				goals:         allGoals,
-				searchQuery:   tt.searchQuery,
-				filteredGoals: tt.filteredGoals,
+				goals:       allGoals,
+				searchQuery: tt.searchQuery,
 			}
 
 			result := m.getDisplayGoals()
@@ -180,10 +172,6 @@ func TestInitialAppModel(t *testing.T) {
 
 	if len(m.goals) != 0 {
 		t.Errorf("initialAppModel() should start with empty goals slice, got %d goals", len(m.goals))
-	}
-
-	if len(m.filteredGoals) != 0 {
-		t.Errorf("initialAppModel() should start with empty filteredGoals slice, got %d goals", len(m.filteredGoals))
 	}
 }
 

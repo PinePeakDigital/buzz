@@ -14,7 +14,6 @@ func handleSearchInput(m model, char string) (model, bool) {
 		// Allow printable characters in search
 		if len(char) == 1 && char >= " " && char <= "~" {
 			m.appModel.searchQuery += char
-			m.appModel.filteredGoals = m.appModel.filterGoals()
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
@@ -233,7 +232,6 @@ func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 		// Exit search mode
 		m.appModel.searchMode = false
 		m.appModel.searchQuery = ""
-		m.appModel.filteredGoals = []Goal{}
 		m.appModel.cursor = 0
 		m.appModel.scrollRow = 0
 		m.appModel.hasNavigated = false
@@ -333,7 +331,6 @@ func handleBackspace(m model) (tea.Model, tea.Cmd) {
 		// Remove last character from search query
 		if len(m.appModel.searchQuery) > 0 {
 			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
-			m.appModel.filteredGoals = m.appModel.filterGoals()
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
@@ -612,7 +609,6 @@ func handleEnterSearch(m model) (tea.Model, tea.Cmd) {
 	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
 		m.appModel.searchMode = true
 		m.appModel.searchQuery = ""
-		m.appModel.filteredGoals = []Goal{}
 	}
 	return m, nil
 }
