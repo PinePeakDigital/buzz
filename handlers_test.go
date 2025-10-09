@@ -426,12 +426,12 @@ func TestHandleSearchInputUnicode(t *testing.T) {
 // TestHandleCreateModalInputUnicode tests Unicode support in create goal modal
 func TestHandleCreateModalInputUnicode(t *testing.T) {
 	tests := []struct {
-		name        string
-		focus       int
-		runes       []rune
-		expected    bool
-		checkField  func(appModel) string
-		fieldName   string
+		name       string
+		focus      int
+		runes      []rune
+		expected   bool
+		checkField func(appModel) string
+		fieldName  string
 	}{
 		{"Title with ASCII", 1, []rune{'a'}, true, func(a appModel) string { return a.createTitle }, "Title"},
 		{"Title with accented char", 1, []rune{'é'}, true, func(a appModel) string { return a.createTitle }, "Title"},
