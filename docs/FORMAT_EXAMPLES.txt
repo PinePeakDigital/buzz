@@ -5,47 +5,47 @@ BEFORE - Old Format (16-char width):
 │ $5 | +2 in 3 days │
 └──────────────────┘
 
-AFTER - New Format (18-char inner width, 22 total width):
+AFTER - New Format (16-char inner width, 20 total width):
 
-┌────────────────────┐
-│ the_slug        $5 │
-│ +2 in 3 days       │
-└────────────────────┘
+┌──────────────────┐
+│ the_slug      $5 │
+│ +2 in 3 days     │
+└──────────────────┘
 
-Note: The border has 20 characters (18 inner + 2 for left/right padding),
-      plus 2 more for the border characters themselves (│) = 22 total cell width.
+Note: The border has 18 characters (16 inner + 2 for left/right padding),
+      plus 2 more for the border characters themselves (│) = 20 total cell width.
 
 ---
 
 More Examples of New Format:
 
-┌────────────────────┐
-│ the_slug        $5 │
-│ +2 in 3 days       │
-└────────────────────┘
+┌──────────────────┐
+│ the_slug      $5 │
+│ +2 in 3 days     │
+└──────────────────┘
 
-┌────────────────────┐
-│ a_very_long_... $5 │
-│ +10 in 5 days      │
-└────────────────────┘
+┌──────────────────┐
+│ a_very_lon... $5 │
+│ +10 in 5 days    │
+└──────────────────┘
 
-┌────────────────────┐
-│ exercise      $270 │
-│ +1.5 in 12 hrs     │
-└────────────────────┘
+┌──────────────────┐
+│ exercise    $270 │
+│ +1.5 in 12 hrs   │
+└──────────────────┘
 
-┌────────────────────┐
-│ my_goal        $10 │
-│ 0 in today         │
-└────────────────────┘
+┌──────────────────┐
+│ my_goal      $10 │
+│ 0 in today       │
+└──────────────────┘
 
-┌────────────────────┐
-│ short           $5 │
-│ +1.315464 in 5 d   │
-└────────────────────┘
+┌──────────────────┐
+│ short         $5 │
+│ +1.315464 in 5 d │
+└──────────────────┘
 
 Key Features:
-- Each line is exactly 18 characters
+- Each line is exactly 16 characters
 - Stakes ($5) are on the first line with slug
 - Space expands between slug and stakes
 - Long slugs get ellipses (a_very_lon... $5)

@@ -24,11 +24,11 @@ func max(a, b int) int {
 // calculateColumns determines the optimal number of columns based on terminal width
 func calculateColumns(width int) int {
 	// Each cell needs approximately:
-	// - 18 chars for content (inner width)
+	// - 16 chars for content (inner width)
 	// - 2 chars for left/right borders
 	// - 2 chars for horizontal padding
-	// Total: ~22 chars per cell
-	const minCellWidth = 22
+	// Total: ~20 chars per cell
+	const minCellWidth = 20
 	const minCols = 1
 
 	if width < minCellWidth {
@@ -49,9 +49,9 @@ func truncateString(s string, maxLen int) string {
 }
 
 // formatGoalFirstLine formats the first line of a goal cell with slug and stakes
-// Format: "slug         $5" (exactly 18 characters)
+// Format: "slug         $5" (exactly 16 characters)
 func formatGoalFirstLine(slug string, pledge float64) string {
-	const width = 18
+	const width = 16
 
 	// Format the pledge part (e.g., "$5" or "$10")
 	pledgeStr := fmt.Sprintf("$%.0f", pledge)
@@ -92,9 +92,9 @@ func formatGoalFirstLine(slug string, pledge float64) string {
 }
 
 // formatGoalSecondLine formats the second line of a goal cell with delta value and timeframe
-// Format: "deltaValue in timeframe" (exactly 18 characters)
+// Format: "deltaValue in timeframe" (exactly 16 characters)
 func formatGoalSecondLine(deltaValue string, timeframe string) string {
-	const width = 18
+	const width = 16
 
 	// Build the full string
 	fullStr := deltaValue + " in " + timeframe
