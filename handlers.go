@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -44,21 +45,39 @@ func isLetter(char string) bool {
 }
 
 // isNumericOrNull checks if character is numeric or part of "null"
-func isNumericOrNull(char string) bool {
+// currentValue is the current field value before adding the new character
+func isNumericOrNull(char string, currentValue string) bool {
 	if len(char) != 1 {
 		return false
 	}
 	c := char[0]
-	return (c >= '0' && c <= '9') || c == 'n' || c == 'u' || c == 'l'
+	
+	// Allow digits
+	if c >= '0' && c <= '9' {
+		return true
+	}
+	
+	// Check if adding this character would form a valid prefix of "null"
+	newValue := currentValue + char
+	return strings.HasPrefix("null", newValue)
 }
 
 // isNumericWithDecimal checks if character is numeric, decimal, negative, or part of "null"
-func isNumericWithDecimal(char string) bool {
+// currentValue is the current field value before adding the new character
+func isNumericWithDecimal(char string, currentValue string) bool {
 	if len(char) != 1 {
 		return false
 	}
 	c := char[0]
-	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == 'n' || c == 'u' || c == 'l'
+	
+	// Allow digits, decimal point, and negative sign
+	if (c >= '0' && c <= '9') || c == '.' || c == '-' {
+		return true
+	}
+	
+	// Check if adding this character would form a valid prefix of "null"
+	newValue := currentValue + char
+	return strings.HasPrefix("null", newValue)
 }
 
 // handleCreateModalInput handles text input in create goal modal
@@ -88,17 +107,17 @@ func handleCreateModalInput(m model, char string) (model, bool) {
 		m.appModel.createGunits += char
 		return m, true
 	case 4: // Goaldate - allow digits or "null"
-		if isNumericOrNull(char) {
+		if isNumericOrNull(char, m.appModel.createGoaldate) {
 			m.appModel.createGoaldate += char
 			return m, true
 		}
 	case 5: // Goalval - allow digits, decimal point, negative sign, or "null"
-		if isNumericWithDecimal(char) {
+		if isNumericWithDecimal(char, m.appModel.createGoalval) {
 			m.appModel.createGoalval += char
 			return m, true
 		}
 	case 6: // Rate - allow digits, decimal point, negative sign, or "null"
-		if isNumericWithDecimal(char) {
+		if isNumericWithDecimal(char, m.appModel.createRate) {
 			m.appModel.createRate += char
 			return m, true
 		}
