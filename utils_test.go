@@ -66,10 +66,10 @@ func TestCalculateColumns(t *testing.T) {
 		expected int
 	}{
 		{"very narrow", 10, 1},
-		{"exactly one column", 20, 1},
-		{"two columns", 40, 2},
-		{"three columns", 60, 3},
-		{"large width", 200, 10},
+		{"exactly one column", 22, 1},
+		{"two columns", 44, 2},
+		{"three columns", 66, 3},
+		{"large width", 220, 10},
 		{"zero width", 0, 1},
 		{"negative width", -10, 1},
 	}
@@ -210,6 +210,70 @@ func TestFuzzyMatch(t *testing.T) {
 			result := fuzzyMatch(tt.pattern, tt.text)
 			if result != tt.expected {
 				t.Errorf("fuzzyMatch(%q, %q) = %v, want %v", tt.pattern, tt.text, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatGoalFirstLine tests the formatGoalFirstLine function
+func TestFormatGoalFirstLine(t *testing.T) {
+	tests := []struct {
+		name     string
+		slug     string
+		pledge   float64
+		expected string
+	}{
+		{"short slug with small pledge", "test", 5.0, "test            $5"},
+		{"short slug with large pledge", "test", 270.0, "test          $270"},
+		{"exact length slug", "the_slug", 5.0, "the_slug        $5"},
+		{"long slug needs truncation", "a_very_long_slug", 5.0, "a_very_long_... $5"},
+		{"very long slug", "this_is_an_extremely_long_slug_name", 10.0, "this_is_an_... $10"},
+		{"empty slug", "", 5.0, "                $5"},
+		{"slug with spaces", "my goal", 15.0, "my goal        $15"},
+		{"zero pledge", "test", 0.0, "test            $0"},
+		{"large pledge value", "x", 10000.0, "x           $10000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatGoalFirstLine(tt.slug, tt.pledge)
+			if result != tt.expected {
+				t.Errorf("formatGoalFirstLine(%q, %.0f) = %q, want %q", tt.slug, tt.pledge, result, tt.expected)
+			}
+			if len(result) != 18 {
+				t.Errorf("formatGoalFirstLine(%q, %.0f) length = %d, want 18", tt.slug, tt.pledge, len(result))
+			}
+		})
+	}
+}
+
+// TestFormatGoalSecondLine tests the formatGoalSecondLine function
+func TestFormatGoalSecondLine(t *testing.T) {
+	tests := []struct {
+		name       string
+		deltaValue string
+		timeframe  string
+		expected   string
+	}{
+		{"short values", "+2", "3 days", "+2 in 3 days      "},
+		{"medium values", "+10", "5 days", "+10 in 5 days     "},
+		{"exact length", "1.315464", "5 h", "1.315464 in 5 h   "},
+		{"needs truncation", "1.315464", "5 days", "1.315464 in 5 days"},
+		{"very long timeframe", "+5", "10 days 3 hours", "+5 in 10 days 3..."},
+		{"time format", "2:30:00", "6 hrs", "2:30:00 in 6 hrs  "},
+		{"negative value", "-3", "2 days", "-3 in 2 days      "},
+		{"zero value", "0", "today", "0 in today        "},
+		{"long delta value", "+1000000", "1 day", "+1000000 in 1 day "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatGoalSecondLine(tt.deltaValue, tt.timeframe)
+			if result != tt.expected {
+				t.Errorf("formatGoalSecondLine(%q, %q) = %q, want %q", tt.deltaValue, tt.timeframe, result, tt.expected)
+			}
+			if len(result) != 18 {
+				t.Errorf("formatGoalSecondLine(%q, %q) length = %d, want 18", tt.deltaValue, tt.timeframe, len(result))
 			}
 		})
 	}

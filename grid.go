@@ -73,11 +73,9 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 
 			// Format goal display
 			deltaValue := ParseBareminValue(goal.Baremin)
-			display := fmt.Sprintf("%s\n$%.0f | %s in %s",
-				truncateString(goal.Slug, 16),
-				goal.Pledge,
-				deltaValue,
-				FormatDueDate(goal.Losedate))
+			firstLine := formatGoalFirstLine(goal.Slug, goal.Pledge)
+			secondLine := formatGoalSecondLine(deltaValue, FormatDueDate(goal.Losedate))
+			display := fmt.Sprintf("%s\n%s", firstLine, secondLine)
 
 			cell := style.Render(display)
 			rowCells = append(rowCells, cell)
