@@ -247,6 +247,75 @@ func TestParseLimsumValue(t *testing.T) {
 	}
 }
 
+// TestParseBareminValue tests the ParseBareminValue function with various inputs
+func TestParseBareminValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "positive with in",
+			input:    "+2 in 3 days",
+			expected: "2",
+		},
+		{
+			name:     "negative value",
+			input:    "-1.5 in 2 hours",
+			expected: "-1.5",
+		},
+		{
+			name:     "time format",
+			input:    "+3:00 in 1 day",
+			expected: "3:00",
+		},
+		{
+			name:     "zero",
+			input:    "0 in 1 day",
+			expected: "0",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "0",
+		},
+		{
+			name:     "time format HH:MM",
+			input:    "+00:05 in 1 day",
+			expected: "00:05",
+		},
+		{
+			name:     "time format with hour and half",
+			input:    "+1:30 in 2 hours",
+			expected: "1:30",
+		},
+		{
+			name:     "decimal value",
+			input:    "+1.5 in 1 day",
+			expected: "1.5",
+		},
+		{
+			name:     "single digit hour time",
+			input:    "+2:45 in 3 hours",
+			expected: "2:45",
+		},
+		{
+			name:     "negative time format",
+			input:    "-00:30 in 1 day",
+			expected: "-00:30",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseBareminValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("ParseBareminValue(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestSortGoals tests the SortGoals function
 func TestSortGoals(t *testing.T) {
 	tests := []struct {
