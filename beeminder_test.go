@@ -57,11 +57,11 @@ func TestCreateGoalWithMockServer(t *testing.T) {
 // TestCreateGoalURLEncoding tests that URL encoding works correctly for special characters
 func TestCreateGoalURLEncoding(t *testing.T) {
 	tests := []struct {
-		name              string
-		title             string
-		slug              string
-		titleShouldMatch  string // What the encoded title should contain
-		slugShouldMatch   string // What the encoded slug should contain
+		name             string
+		title            string
+		slug             string
+		titleShouldMatch string // What the encoded title should contain
+		slugShouldMatch  string // What the encoded slug should contain
 	}{
 		{
 			name:             "space in title",
@@ -127,9 +127,9 @@ func TestCreateGoalURLEncoding(t *testing.T) {
 			data := url.Values{}
 			data.Set("title", tt.title)
 			data.Set("slug", tt.slug)
-			
+
 			encoded := data.Encode()
-			
+
 			// Verify the encoded string contains the expected patterns
 			if !strings.Contains(encoded, tt.titleShouldMatch) {
 				t.Errorf("Encoded string %q does not contain expected title pattern %q", encoded, tt.titleShouldMatch)
@@ -141,7 +141,7 @@ func TestCreateGoalURLEncoding(t *testing.T) {
 	}
 
 	t.Log("URL encoding validated")
-	
+
 	// Note: Once the hardcoded URL limitation in CreateGoal is addressed (see lines 38-40),
 	// we should add an integration test that verifies CreateGoal produces the expected
 	// encoded request body when called with special characters in parameters.
@@ -516,6 +516,63 @@ func TestFormatDueDate(t *testing.T) {
 			result := FormatDueDateAt(tt.losedate, now)
 			if result != tt.expected {
 				t.Errorf("FormatDueDateAt(%d, %v) = %q, want %q", tt.losedate, now, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsDueToday tests the IsDueToday function
+func TestIsDueToday(t *testing.T) {
+	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		losedate int64
+		expected bool
+	}{
+		{
+			name:     "due in 1 hour (still today)",
+			losedate: now.Add(1 * time.Hour).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due at end of today",
+			losedate: time.Date(2025, 1, 15, 23, 59, 59, 0, time.UTC).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due tomorrow morning",
+			losedate: time.Date(2025, 1, 16, 1, 0, 0, 0, time.UTC).Unix(),
+			expected: false,
+		},
+		{
+			name:     "overdue from yesterday",
+			losedate: now.Add(-24 * time.Hour).Unix(),
+			expected: true,
+		},
+		{
+			name:     "overdue from last week",
+			losedate: now.Add(-7 * 24 * time.Hour).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due in 5 days",
+			losedate: now.Add(5 * 24 * time.Hour).Unix(),
+			expected: false,
+		},
+		{
+			name:     "due right now",
+			losedate: now.Unix(),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDueTodayAt(tt.losedate, now)
+			if result != tt.expected {
+				t.Errorf("IsDueTodayAt(%d, %v) = %v, want %v", tt.losedate, now, result, tt.expected)
 			}
 		})
 	}

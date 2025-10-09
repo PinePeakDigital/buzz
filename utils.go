@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -22,11 +23,11 @@ func max(a, b int) int {
 // calculateColumns determines the optimal number of columns based on terminal width
 func calculateColumns(width int) int {
 	// Each cell needs approximately:
-	// - 16 chars for content (truncateString maxLen)
+	// - 18 chars for content (inner width)
 	// - 2 chars for left/right borders
 	// - 2 chars for horizontal padding
-	// Total: ~20 chars per cell
-	const minCellWidth = 20
+	// Total: ~22 chars per cell
+	const minCellWidth = 22
 	const minCols = 1
 
 	if width < minCellWidth {
@@ -44,6 +45,66 @@ func truncateString(s string, maxLen int) string {
 		return s + strings.Repeat(" ", maxLen-len(s))
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// formatGoalFirstLine formats the first line of a goal cell with slug and stakes
+// Format: "slug         $5" (exactly 18 characters)
+func formatGoalFirstLine(slug string, pledge float64) string {
+	const width = 18
+
+	// Format the pledge part (e.g., "$5" or "$10")
+	pledgeStr := fmt.Sprintf("$%.0f", pledge)
+
+	// Calculate space available for slug (need at least 1 space between slug and pledge)
+	availableForSlug := width - len(pledgeStr) - 1
+
+	if availableForSlug < 1 {
+		// If pledge is too long, clamp spaces to avoid negative Repeat count
+		spaces := width - 3 - len(pledgeStr)
+		if spaces < 0 {
+			// Fallback: truncate pledge to fit the line
+			return truncateString(pledgeStr, width)
+		}
+		return "..." + strings.Repeat(" ", spaces) + pledgeStr
+	}
+
+	// Truncate slug if necessary
+	var slugPart string
+	if len(slug) <= availableForSlug {
+		slugPart = slug
+	} else {
+		// Need to truncate slug with ellipsis
+		if availableForSlug < 3 {
+			slugPart = strings.Repeat(".", min(availableForSlug, 3))
+		} else {
+			slugPart = slug[:availableForSlug-3] + "..."
+		}
+	}
+
+	// Calculate spaces needed to fill the width
+	spacesNeeded := width - len(slugPart) - len(pledgeStr)
+	if spacesNeeded < 0 {
+		spacesNeeded = 0
+	}
+
+	return slugPart + strings.Repeat(" ", spacesNeeded) + pledgeStr
+}
+
+// formatGoalSecondLine formats the second line of a goal cell with delta value and timeframe
+// Format: "deltaValue in timeframe" (exactly 18 characters)
+func formatGoalSecondLine(deltaValue string, timeframe string) string {
+	const width = 18
+
+	// Build the full string
+	fullStr := deltaValue + " in " + timeframe
+
+	if len(fullStr) <= width {
+		// Pad with spaces to reach exact width
+		return fullStr + strings.Repeat(" ", width-len(fullStr))
+	}
+
+	// Need to truncate with ellipsis
+	return fullStr[:width-3] + "..."
 }
 
 // wrapText wraps text to fit within the specified width

@@ -25,9 +25,8 @@ type appModel struct {
 	submitting   bool   // whether we're currently submitting a datapoint
 
 	// Filter/search fields
-	searchMode    bool   // whether we're in search/filter mode
-	searchQuery   string // current search query
-	filteredGoals []Goal // goals filtered by search query
+	searchMode  bool   // whether we're in search/filter mode
+	searchQuery string // current search query
 
 	// Goal creation fields
 	showCreateModal bool   // whether to show goal creation modal
@@ -60,7 +59,6 @@ func initialAppModel(config *Config) appModel {
 		refreshActive: true,
 		searchMode:    false,
 		searchQuery:   "",
-		filteredGoals: []Goal{},
 	}
 }
 
@@ -82,10 +80,7 @@ func (m *appModel) filterGoals() []Goal {
 
 // getDisplayGoals returns the goals to display (either filtered or all)
 func (m *appModel) getDisplayGoals() []Goal {
-	if m.searchQuery != "" {
-		return m.filteredGoals
-	}
-	return m.goals
+	return m.filterGoals()
 }
 
 func initialModel() model {

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 	"unicode"
 
@@ -46,21 +47,48 @@ func isLetter(char string) bool {
 }
 
 // isNumericOrNull checks if character is numeric or part of "null"
-func isNumericOrNull(char string) bool {
+// currentValue is the current field value before adding the new character
+func isNumericOrNull(char string, currentValue string) bool {
 	if len(char) != 1 {
 		return false
 	}
 	c := char[0]
-	return (c >= '0' && c <= '9') || c == 'n' || c == 'u' || c == 'l'
+	
+	// Allow digits
+	if c >= '0' && c <= '9' {
+		return true
+	}
+	
+	// Check if adding this character would form a valid prefix of "null"
+	newValue := currentValue + char
+	return strings.HasPrefix("null", newValue)
 }
 
 // isNumericWithDecimal checks if character is numeric, decimal, negative, or part of "null"
-func isNumericWithDecimal(char string) bool {
+// currentValue is the current field value before adding the new character
+func isNumericWithDecimal(char string, currentValue string) bool {
 	if len(char) != 1 {
 		return false
 	}
 	c := char[0]
-	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == 'n' || c == 'u' || c == 'l'
+	
+	// Allow digits, decimal point, and negative sign
+	if (c >= '0' && c <= '9') || c == '.' || c == '-' {
+		return true
+	}
+	
+	// Check if adding this character would form a valid prefix of "null"
+	newValue := currentValue + char
+	return strings.HasPrefix("null", newValue)
+}
+
+// handleNumericDecimalInput handles input for fields that accept numeric with decimal values
+func handleNumericDecimalInput(m model, char string, fieldPtr *string) (model, bool) {
+	if isNumericWithDecimal(char, *fieldPtr) {
+		*fieldPtr += char
+		return m, true
+	}
+	return m, false
 }
 
 // handleCreateModalInput handles text input in create goal modal
@@ -97,20 +125,14 @@ func handleCreateModalInput(m model, msg tea.KeyMsg) (model, bool) {
 			return m, true
 		}
 	case 4: // Goaldate - allow digits or "null"
-		if isNumericOrNull(char) {
+		if isNumericOrNull(char, m.appModel.createGoaldate) {
 			m.appModel.createGoaldate += char
 			return m, true
 		}
 	case 5: // Goalval - allow digits, decimal point, negative sign, or "null"
-		if isNumericWithDecimal(char) {
-			m.appModel.createGoalval += char
-			return m, true
-		}
+		return handleNumericDecimalInput(m, char, &m.appModel.createGoalval)
 	case 6: // Rate - allow digits, decimal point, negative sign, or "null"
-		if isNumericWithDecimal(char) {
-			m.appModel.createRate += char
-			return m, true
-		}
+		return handleNumericDecimalInput(m, char, &m.appModel.createRate)
 	}
 	return m, false
 }
@@ -241,7 +263,6 @@ func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 		// Exit search mode
 		m.appModel.searchMode = false
 		m.appModel.searchQuery = ""
-		m.appModel.filteredGoals = []Goal{}
 		m.appModel.cursor = 0
 		m.appModel.scrollRow = 0
 		m.appModel.hasNavigated = false
@@ -341,7 +362,6 @@ func handleBackspace(m model) (tea.Model, tea.Cmd) {
 		// Remove last character from search query
 		if len(m.appModel.searchQuery) > 0 {
 			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
-			m.appModel.filteredGoals = m.appModel.filterGoals()
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
@@ -395,6 +415,24 @@ func validateDatapointInput(inputDate, inputValue string) string {
 	return ""
 }
 
+// isValidInteger checks if a string is a valid integer (for epoch timestamps)
+func isValidInteger(s string) bool {
+	if s == "" || s == "null" {
+		return false
+	}
+	_, err := strconv.ParseInt(s, 10, 64)
+	return err == nil
+}
+
+// isValidFloat checks if a string is a valid float
+func isValidFloat(s string) bool {
+	if s == "" || s == "null" {
+		return false
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
 // validateCreateGoalInput validates create goal input fields and returns error message if invalid
 func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, rate string) string {
 	if slug == "" {
@@ -415,13 +453,28 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 
 	// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
 	countProvided := 0
+	
+	// Validate goaldate: must be empty, "null", or a valid integer (epoch timestamp)
 	if goaldate != "" && goaldate != "null" {
+		if !isValidInteger(goaldate) {
+			return "Goal date must be a valid epoch timestamp or 'null'"
+		}
 		countProvided++
 	}
+	
+	// Validate goalval: must be empty, "null", or a valid number
 	if goalval != "" && goalval != "null" {
+		if !isValidFloat(goalval) {
+			return "Goal value must be a valid number or 'null'"
+		}
 		countProvided++
 	}
+	
+	// Validate rate: must be empty, "null", or a valid number
 	if rate != "" && rate != "null" {
+		if !isValidFloat(rate) {
+			return "Rate must be a valid number or 'null'"
+		}
 		countProvided++
 	}
 
@@ -620,7 +673,6 @@ func handleEnterSearch(m model) (tea.Model, tea.Cmd) {
 	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
 		m.appModel.searchMode = true
 		m.appModel.searchQuery = ""
-		m.appModel.filteredGoals = []Goal{}
 	}
 	return m, nil
 }
