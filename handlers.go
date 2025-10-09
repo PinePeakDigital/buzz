@@ -5,16 +5,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // handleSearchInput handles text input in search mode
-func handleSearchInput(m model, char string) (model, bool) {
+func handleSearchInput(m model, msg tea.KeyMsg) (model, bool) {
 	if m.appModel.searchMode && !m.appModel.showModal {
-		// Allow printable characters in search
-		if len(char) == 1 && char >= " " && char <= "~" {
-			m.appModel.searchQuery += char
+		// Allow printable Unicode characters in search
+		if len(msg.Runes) == 1 && unicode.IsPrint(msg.Runes[0]) {
+			m.appModel.searchQuery += string(msg.Runes)
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
@@ -90,13 +91,16 @@ func handleNumericDecimalInput(m model, char string, fieldPtr *string) (model, b
 }
 
 // handleCreateModalInput handles text input in create goal modal
-func handleCreateModalInput(m model, char string) (model, bool) {
+func handleCreateModalInput(m model, msg tea.KeyMsg) (model, bool) {
 	if !m.appModel.showCreateModal || m.appModel.creatingGoal {
 		return m, false
 	}
-	if len(char) != 1 || char < " " || char > "~" {
+	if len(msg.Runes) != 1 {
 		return m, false
 	}
+
+	char := string(msg.Runes)
+	r := msg.Runes[0]
 
 	switch m.appModel.createFocus {
 	case 0: // Slug - allow alphanumeric and dashes/underscores
@@ -104,17 +108,21 @@ func handleCreateModalInput(m model, char string) (model, bool) {
 			m.appModel.createSlug += char
 			return m, true
 		}
-	case 1: // Title - allow all printable characters
-		m.appModel.createTitle += char
-		return m, true
+	case 1: // Title - allow all printable Unicode characters
+		if unicode.IsPrint(r) {
+			m.appModel.createTitle += char
+			return m, true
+		}
 	case 2: // Goal type - allow letters
 		if isLetter(char) {
 			m.appModel.createGoalType += char
 			return m, true
 		}
-	case 3: // Gunits - allow all printable characters
-		m.appModel.createGunits += char
-		return m, true
+	case 3: // Gunits - allow all printable Unicode characters
+		if unicode.IsPrint(r) {
+			m.appModel.createGunits += char
+			return m, true
+		}
 	case 4: // Goaldate - allow digits or "null"
 		if isNumericOrNull(char, m.appModel.createGoaldate) {
 			m.appModel.createGoaldate += char
@@ -129,12 +137,14 @@ func handleCreateModalInput(m model, char string) (model, bool) {
 }
 
 // handleDatapointInput handles text input in datapoint input mode
-func handleDatapointInput(m model, char string) (model, bool) {
+func handleDatapointInput(m model, msg tea.KeyMsg) (model, bool) {
 	// Handle text input in input mode
 	// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 	// can still be typed in comment fields
 	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
-		if len(char) == 1 {
+		if len(msg.Runes) == 1 {
+			char := string(msg.Runes)
+			r := msg.Runes[0]
 			switch m.appModel.inputFocus {
 			case 0: // Date field - allow digits and dashes
 				if (char >= "0" && char <= "9") || char == "-" {
@@ -146,8 +156,8 @@ func handleDatapointInput(m model, char string) (model, bool) {
 					m.appModel.inputValue += char
 					return m, true
 				}
-			case 2: // Comment field - allow all printable characters
-				if char >= " " && char <= "~" {
+			case 2: // Comment field - allow all printable Unicode characters
+				if unicode.IsPrint(r) {
 					m.appModel.inputComment += char
 					return m, true
 				}
@@ -159,20 +169,18 @@ func handleDatapointInput(m model, char string) (model, bool) {
 
 // handleKeyPress processes keyboard input and returns updated model and command
 func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	char := msg.String()
-
 	// Handle text input in search mode FIRST
-	if updatedModel, handled := handleSearchInput(m, char); handled {
+	if updatedModel, handled := handleSearchInput(m, msg); handled {
 		return updatedModel, nil
 	}
 
 	// Handle text input in create goal modal
-	if updatedModel, handled := handleCreateModalInput(m, char); handled {
+	if updatedModel, handled := handleCreateModalInput(m, msg); handled {
 		return updatedModel, nil
 	}
 
 	// Handle text input in datapoint input mode
-	if updatedModel, handled := handleDatapointInput(m, char); handled {
+	if updatedModel, handled := handleDatapointInput(m, msg); handled {
 		return updatedModel, nil
 	}
 
