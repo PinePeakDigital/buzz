@@ -530,3 +530,66 @@ func TestIsValidFloat(t *testing.T) {
 		})
 	}
 }
+
+// TestIssueEdgeCases verifies the specific edge cases mentioned in issue #84
+func TestIssueEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		goaldate string
+		goalval  string
+		rate     string
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:     "partial 'nu' should be rejected",
+			goaldate: "nu",
+			goalval:  "10",
+			rate:     "1",
+			wantErr:  true,
+			errMsg:   "Goal date must be a valid epoch timestamp or 'null'",
+		},
+		{
+			name:     "partial 'n' should be rejected",
+			goaldate: "1234567890",
+			goalval:  "n",
+			rate:     "1",
+			wantErr:  true,
+			errMsg:   "Goal value must be a valid number or 'null'",
+		},
+		{
+			name:     "exact 'null' should be accepted",
+			goaldate: "null",
+			goalval:  "10",
+			rate:     "1",
+			wantErr:  false,
+		},
+		{
+			name:     "valid epoch timestamp should be accepted",
+			goaldate: "1234567890",
+			goalval:  "10.5",
+			rate:     "null",
+			wantErr:  false,
+		},
+		{
+			name:     "valid float should be accepted",
+			goaldate: "null",
+			goalval:  "-5.5",
+			rate:     "0.25",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := validateCreateGoalInput("slug", "title", "hustler", "units", tt.goaldate, tt.goalval, tt.rate)
+			gotErr := result != ""
+			if gotErr != tt.wantErr {
+				t.Errorf("got error=%v, want error=%v; error message: %q", gotErr, tt.wantErr, result)
+			}
+			if tt.wantErr && result != tt.errMsg {
+				t.Errorf("got error message %q, want %q", result, tt.errMsg)
+			}
+		})
+	}
+}
