@@ -279,3 +279,78 @@ func TestFormatGoalSecondLine(t *testing.T) {
 		})
 	}
 }
+
+// TestIsTimeFormat tests the isTimeFormat function
+func TestIsTimeFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"simple time HH:MM", "1:30", true},
+		{"zero-padded time", "00:05", true},
+		{"time with seconds", "2:45:30", true},
+		{"negative time", "-1:30", true},
+		{"positive time", "+1:30", true},
+		{"decimal number", "1.5", false},
+		{"integer", "5", false},
+		{"negative integer", "-5", false},
+		{"decimal with plus", "+2.5", false},
+		{"zero", "0", false},
+		{"empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isTimeFormat(tt.input)
+			if result != tt.expected {
+				t.Errorf("isTimeFormat(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestTimeToDecimalHours tests the timeToDecimalHours function
+func TestTimeToDecimalHours(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		expected  float64
+		shouldOk  bool
+		tolerance float64
+	}{
+		{"1 hour 30 minutes", "1:30", 1.5, true, 0.0001},
+		{"5 minutes", "00:05", 0.083333, true, 0.0001},
+		{"2 hours 45 minutes", "2:45", 2.75, true, 0.0001},
+		{"3 hours exact", "3:00", 3.0, true, 0.0001},
+		{"30 seconds", "00:00:30", 0.008333, true, 0.0001},
+		{"1 hour 30 min 45 sec", "1:30:45", 1.5125, true, 0.0001},
+		{"negative time", "-1:30", -1.5, true, 0.0001},
+		{"positive time with plus", "+1:30", 1.5, true, 0.0001},
+		{"negative time with seconds", "-2:15:30", -2.258333, true, 0.0001},
+		{"invalid format - no colon", "130", 0, false, 0},
+		{"invalid format - too many parts", "1:30:45:60", 0, false, 0},
+		{"invalid format - non-numeric", "a:b", 0, false, 0},
+		{"invalid format - empty", "", 0, false, 0},
+		{"zero time", "0:00", 0, true, 0.0001},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := timeToDecimalHours(tt.input)
+			if ok != tt.shouldOk {
+				t.Errorf("timeToDecimalHours(%q) ok = %v, want %v", tt.input, ok, tt.shouldOk)
+			}
+			if tt.shouldOk {
+				// Check if result is within tolerance
+				diff := result - tt.expected
+				if diff < 0 {
+					diff = -diff
+				}
+				if diff > tt.tolerance {
+					t.Errorf("timeToDecimalHours(%q) = %f, want %f (within %f)", tt.input, result, tt.expected, tt.tolerance)
+				}
+			}
+		})
+	}
+}

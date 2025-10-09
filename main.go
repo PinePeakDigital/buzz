@@ -357,6 +357,16 @@ func handleAddCommand() {
 	// Use current time as timestamp
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 
+	// Convert time format to decimal hours if needed
+	if isTimeFormat(value) {
+		decimalValue, ok := timeToDecimalHours(value)
+		if !ok {
+			fmt.Printf("Error: Invalid time format: %s\n", value)
+			os.Exit(1)
+		}
+		value = fmt.Sprintf("%f", decimalValue)
+	}
+
 	// Validate value is a number
 	if _, err := strconv.ParseFloat(value, 64); err != nil {
 		fmt.Printf("Error: Value must be a valid number, got: %s\n", value)
