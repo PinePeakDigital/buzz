@@ -51,18 +51,18 @@ func truncateString(s string, maxLen int) string {
 // Format: "slug         $5" (exactly 18 characters)
 func formatGoalFirstLine(slug string, pledge float64) string {
 	const width = 18
-	
+
 	// Format the pledge part (e.g., "$5" or "$10")
 	pledgeStr := fmt.Sprintf("$%.0f", pledge)
-	
+
 	// Calculate space available for slug (need at least 1 space between slug and pledge)
 	availableForSlug := width - len(pledgeStr) - 1
-	
+
 	if availableForSlug < 1 {
 		// If pledge is too long, just show ellipsis and pledge
 		return "..." + strings.Repeat(" ", width-3-len(pledgeStr)) + pledgeStr
 	}
-	
+
 	// Truncate slug if necessary
 	var slugPart string
 	if len(slug) <= availableForSlug {
@@ -75,13 +75,13 @@ func formatGoalFirstLine(slug string, pledge float64) string {
 			slugPart = slug[:availableForSlug-3] + "..."
 		}
 	}
-	
+
 	// Calculate spaces needed to fill the width
 	spacesNeeded := width - len(slugPart) - len(pledgeStr)
 	if spacesNeeded < 0 {
 		spacesNeeded = 0
 	}
-	
+
 	return slugPart + strings.Repeat(" ", spacesNeeded) + pledgeStr
 }
 
@@ -89,15 +89,15 @@ func formatGoalFirstLine(slug string, pledge float64) string {
 // Format: "deltaValue in timeframe" (exactly 18 characters)
 func formatGoalSecondLine(deltaValue string, timeframe string) string {
 	const width = 18
-	
+
 	// Build the full string
 	fullStr := deltaValue + " in " + timeframe
-	
+
 	if len(fullStr) <= width {
 		// Pad with spaces to reach exact width
 		return fullStr + strings.Repeat(" ", width-len(fullStr))
 	}
-	
+
 	// Need to truncate with ellipsis
 	return fullStr[:width-3] + "..."
 }
