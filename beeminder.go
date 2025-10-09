@@ -153,6 +153,11 @@ func ParseBareminValue(baremin string) string {
 	// Remove leading "+" if present (but keep "-" for negative values)
 	value = strings.TrimPrefix(value, "+")
 
+	// Return "0" if the value is empty after cleanup
+	if value == "" {
+		return "0"
+	}
+
 	return value
 }
 

@@ -304,6 +304,11 @@ func TestParseBareminValue(t *testing.T) {
 			input:    "-00:30 in 1 day",
 			expected: "-00:30",
 		},
+		{
+			name:     "just plus sign",
+			input:    "+ in 1 day",
+			expected: "0",
+		},
 	}
 
 	for _, tt := range tests {
