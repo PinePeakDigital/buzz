@@ -520,3 +520,60 @@ func TestFormatDueDate(t *testing.T) {
 		})
 	}
 }
+
+// TestIsDueToday tests the IsDueToday function
+func TestIsDueToday(t *testing.T) {
+	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		losedate int64
+		expected bool
+	}{
+		{
+			name:     "due in 1 hour (still today)",
+			losedate: now.Add(1 * time.Hour).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due at end of today",
+			losedate: time.Date(2025, 1, 15, 23, 59, 59, 0, time.UTC).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due tomorrow morning",
+			losedate: time.Date(2025, 1, 16, 1, 0, 0, 0, time.UTC).Unix(),
+			expected: false,
+		},
+		{
+			name:     "overdue from yesterday",
+			losedate: now.Add(-24 * time.Hour).Unix(),
+			expected: true,
+		},
+		{
+			name:     "overdue from last week",
+			losedate: now.Add(-7 * 24 * time.Hour).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due in 5 days",
+			losedate: now.Add(5 * 24 * time.Hour).Unix(),
+			expected: false,
+		},
+		{
+			name:     "due right now",
+			losedate: now.Unix(),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDueTodayAt(tt.losedate, now)
+			if result != tt.expected {
+				t.Errorf("IsDueTodayAt(%d, %v) = %v, want %v", tt.losedate, now, result, tt.expected)
+			}
+		})
+	}
+}

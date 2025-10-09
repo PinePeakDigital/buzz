@@ -161,6 +161,23 @@ func ParseBareminValue(baremin string) string {
 	return value
 }
 
+// IsDueToday checks if a goal is due today (on or before midnight tonight)
+func IsDueToday(losedate int64) bool {
+	return IsDueTodayAt(losedate, time.Now())
+}
+
+// IsDueTodayAt checks if a goal is due today relative to a given time
+func IsDueTodayAt(losedate int64, now time.Time) bool {
+	goalTime := time.Unix(losedate, 0)
+	
+	// Get start of tomorrow (midnight tonight)
+	startOfTomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	
+	// Goal is due today if it's due before the start of tomorrow
+	// This includes overdue goals and goals due later today
+	return goalTime.Before(startOfTomorrow)
+}
+
 // FormatDueDate formats the losedate timestamp into a readable string
 func FormatDueDate(losedate int64) string {
 	return FormatDueDateAt(losedate, time.Now())
