@@ -333,6 +333,11 @@ func TestTimeToDecimalHours(t *testing.T) {
 		{"invalid format - non-numeric", "a:b", 0, false, 0},
 		{"invalid format - empty", "", 0, false, 0},
 		{"zero time", "0:00", 0, true, 0.0001},
+		{"invalid minutes - too high", "1:60", 0, false, 0},
+		{"invalid seconds - too high", "1:30:60", 0, false, 0},
+		{"negative minutes", "1:-30", 0, false, 0},
+		{"decimal minutes", "1:30.5", 0, false, 0},
+		{"large hours", "100:30", 100.5, true, 0.0001},
 	}
 
 	for _, tt := range tests {

@@ -364,7 +364,7 @@ func handleAddCommand() {
 			fmt.Printf("Error: Invalid time format: %s\n", value)
 			os.Exit(1)
 		}
-		value = fmt.Sprintf("%f", decimalValue)
+		value = fmt.Sprintf("%.6g", decimalValue)
 	}
 
 	// Validate value is a number

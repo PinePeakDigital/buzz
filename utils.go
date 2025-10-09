@@ -206,19 +206,32 @@ func timeToDecimalHours(timeStr string) (float64, bool) {
 		return 0, false
 	}
 
-	// Parse minutes
+	// Parse minutes (must be integer)
 	minutes, err := strconv.ParseFloat(parts[1], 64)
 	if err != nil {
 		return 0, false
 	}
+	// Check if minutes has decimal part
+	if minutes != float64(int(minutes)) {
+		return 0, false
+	}
 
-	// Parse seconds if present
+	// Parse seconds if present (must be integer)
 	seconds := 0.0
 	if len(parts) == 3 {
 		seconds, err = strconv.ParseFloat(parts[2], 64)
 		if err != nil {
 			return 0, false
 		}
+		// Check if seconds has decimal part
+		if seconds != float64(int(seconds)) {
+			return 0, false
+		}
+	}
+
+	// Validate ranges
+	if hours < 0 || minutes < 0 || minutes >= 60 || seconds < 0 || seconds >= 60 {
+		return 0, false
 	}
 
 	// Convert to decimal hours
