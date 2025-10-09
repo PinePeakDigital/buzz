@@ -5,12 +5,15 @@ BEFORE - Old Format (16-char width):
 │ $5 | +2 in 3 days │
 └──────────────────┘
 
-AFTER - New Format (18-char width):
+AFTER - New Format (18-char inner width, 22 total width):
 
 ┌────────────────────┐
 │ the_slug        $5 │
 │ +2 in 3 days       │
 └────────────────────┘
+
+Note: The border has 20 characters (18 inner + 2 for left/right padding),
+      plus 2 more for the border characters themselves (│) = 22 total cell width.
 
 ---
 

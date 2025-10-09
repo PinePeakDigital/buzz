@@ -39,7 +39,8 @@ Format:
 ### Various Scenarios
 
 **Short slug with small pledge:**
-```
+
+```text
 ┌────────────────────┐
 │ the_slug        $5 │
 │ +2 in 3 days       │
@@ -47,7 +48,8 @@ Format:
 ```
 
 **Long slug (truncated with ellipsis):**
-```
+
+```text
 ┌────────────────────┐
 │ a_very_long_... $5 │
 │ +10 in 5 days      │
@@ -55,7 +57,8 @@ Format:
 ```
 
 **Large pledge amount:**
-```
+
+```text
 ┌────────────────────┐
 │ exercise      $270 │
 │ +1.5 in 12 hrs     │
@@ -63,7 +66,8 @@ Format:
 ```
 
 **Short timeframe:**
-```
+
+```text
 ┌────────────────────┐
 │ my_goal        $10 │
 │ 0 in today         │
@@ -71,7 +75,8 @@ Format:
 ```
 
 **Decimal delta value:**
-```
+
+```text
 ┌────────────────────┐
 │ short           $5 │
 │ +1.315464 in 5 d   │

@@ -59,8 +59,13 @@ func formatGoalFirstLine(slug string, pledge float64) string {
 	availableForSlug := width - len(pledgeStr) - 1
 
 	if availableForSlug < 1 {
-		// If pledge is too long, just show ellipsis and pledge
-		return "..." + strings.Repeat(" ", width-3-len(pledgeStr)) + pledgeStr
+		// If pledge is too long, clamp spaces to avoid negative Repeat count
+		spaces := width - 3 - len(pledgeStr)
+		if spaces < 0 {
+			// Fallback: truncate pledge to fit the line
+			return truncateString(pledgeStr, width)
+		}
+		return "..." + strings.Repeat(" ", spaces) + pledgeStr
 	}
 
 	// Truncate slug if necessary

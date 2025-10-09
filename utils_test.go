@@ -232,6 +232,7 @@ func TestFormatGoalFirstLine(t *testing.T) {
 		{"slug with spaces", "my goal", 15.0, "my goal        $15"},
 		{"zero pledge", "test", 0.0, "test            $0"},
 		{"large pledge value", "x", 10000.0, "x           $10000"},
+		{"extremely large pledge that exceeds width", "", 999999999999999.0, "  $999999999999999"},
 	}
 
 	for _, tt := range tests {
