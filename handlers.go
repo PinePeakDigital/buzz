@@ -384,6 +384,24 @@ func validateDatapointInput(inputDate, inputValue string) string {
 	return ""
 }
 
+// isValidInteger checks if a string is a valid integer (for epoch timestamps)
+func isValidInteger(s string) bool {
+	if s == "" || s == "null" {
+		return false
+	}
+	_, err := strconv.ParseInt(s, 10, 64)
+	return err == nil
+}
+
+// isValidFloat checks if a string is a valid float
+func isValidFloat(s string) bool {
+	if s == "" || s == "null" {
+		return false
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
 // validateCreateGoalInput validates create goal input fields and returns error message if invalid
 func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, rate string) string {
 	if slug == "" {
@@ -404,13 +422,28 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 
 	// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
 	countProvided := 0
+	
+	// Validate goaldate: must be empty, "null", or a valid integer (epoch timestamp)
 	if goaldate != "" && goaldate != "null" {
+		if !isValidInteger(goaldate) {
+			return "Goal date must be a valid epoch timestamp or 'null'"
+		}
 		countProvided++
 	}
+	
+	// Validate goalval: must be empty, "null", or a valid number
 	if goalval != "" && goalval != "null" {
+		if !isValidFloat(goalval) {
+			return "Goal value must be a valid number or 'null'"
+		}
 		countProvided++
 	}
+	
+	// Validate rate: must be empty, "null", or a valid number
 	if rate != "" && rate != "null" {
+		if !isValidFloat(rate) {
+			return "Rate must be a valid number or 'null'"
+		}
 		countProvided++
 	}
 

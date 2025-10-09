@@ -231,6 +231,114 @@ func TestValidateCreateGoalInput(t *testing.T) {
 			expectError: true,
 			errorMsg:    "Exactly 2 out of 3 (goaldate, goalval, rate) must be provided",
 		},
+		{
+			name:        "invalid goaldate - partial null",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "nu",
+			goalval:     "10",
+			rate:        "1",
+			expectError: true,
+			errorMsg:    "Goal date must be a valid epoch timestamp or 'null'",
+		},
+		{
+			name:        "invalid goaldate - non-numeric",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "abc",
+			goalval:     "10",
+			rate:        "null",
+			expectError: true,
+			errorMsg:    "Goal date must be a valid epoch timestamp or 'null'",
+		},
+		{
+			name:        "invalid goaldate - mixed alphanumeric",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "123abc",
+			goalval:     "10",
+			rate:        "null",
+			expectError: true,
+			errorMsg:    "Goal date must be a valid epoch timestamp or 'null'",
+		},
+		{
+			name:        "invalid goalval - partial null",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "1234567890",
+			goalval:     "n",
+			rate:        "1",
+			expectError: true,
+			errorMsg:    "Goal value must be a valid number or 'null'",
+		},
+		{
+			name:        "invalid goalval - non-numeric",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "1234567890",
+			goalval:     "xyz",
+			rate:        "null",
+			expectError: true,
+			errorMsg:    "Goal value must be a valid number or 'null'",
+		},
+		{
+			name:        "invalid rate - partial null",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "1234567890",
+			goalval:     "10",
+			rate:        "nul",
+			expectError: true,
+			errorMsg:    "Rate must be a valid number or 'null'",
+		},
+		{
+			name:        "invalid rate - non-numeric",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "null",
+			goalval:     "10",
+			rate:        "abc",
+			expectError: true,
+			errorMsg:    "Rate must be a valid number or 'null'",
+		},
+		{
+			name:        "valid negative goalval",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "1234567890",
+			goalval:     "-10.5",
+			rate:        "null",
+			expectError: false,
+			errorMsg:    "",
+		},
+		{
+			name:        "valid decimal rate",
+			slug:        "testgoal",
+			title:       "Test Goal",
+			goalType:    "hustler",
+			gunits:      "units",
+			goaldate:    "null",
+			goalval:     "100",
+			rate:        "0.5",
+			expectError: false,
+			errorMsg:    "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -357,6 +465,130 @@ func TestIsNumericWithDecimal(t *testing.T) {
 			result := isNumericWithDecimal(tt.input)
 			if result != tt.expected {
 				t.Errorf("isNumericWithDecimal(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsValidInteger tests the isValidInteger function
+func TestIsValidInteger(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"valid positive integer", "1234567890", true},
+		{"valid negative integer", "-123", true},
+		{"zero", "0", true},
+		{"invalid - partial null", "nu", false},
+		{"invalid - null string", "null", false},
+		{"invalid - empty string", "", false},
+		{"invalid - letters", "abc", false},
+		{"invalid - mixed alphanumeric", "123abc", false},
+		{"invalid - float", "123.45", false},
+		{"invalid - decimal point only", ".", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidInteger(tt.input)
+			if result != tt.expected {
+				t.Errorf("isValidInteger(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsValidFloat tests the isValidFloat function
+func TestIsValidFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"valid positive integer", "123", true},
+		{"valid negative integer", "-456", true},
+		{"valid positive float", "123.45", true},
+		{"valid negative float", "-67.89", true},
+		{"valid decimal starting with point", ".5", true},
+		{"zero", "0", true},
+		{"zero float", "0.0", true},
+		{"scientific notation", "1e10", true},
+		{"invalid - partial null", "n", false},
+		{"invalid - null string", "null", false},
+		{"invalid - empty string", "", false},
+		{"invalid - letters", "xyz", false},
+		{"invalid - mixed alphanumeric", "12.3abc", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidFloat(tt.input)
+			if result != tt.expected {
+				t.Errorf("isValidFloat(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIssueEdgeCases verifies the specific edge cases mentioned in issue #84
+func TestIssueEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		goaldate string
+		goalval  string
+		rate     string
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:     "partial 'nu' should be rejected",
+			goaldate: "nu",
+			goalval:  "10",
+			rate:     "1",
+			wantErr:  true,
+			errMsg:   "Goal date must be a valid epoch timestamp or 'null'",
+		},
+		{
+			name:     "partial 'n' should be rejected",
+			goaldate: "1234567890",
+			goalval:  "n",
+			rate:     "1",
+			wantErr:  true,
+			errMsg:   "Goal value must be a valid number or 'null'",
+		},
+		{
+			name:     "exact 'null' should be accepted",
+			goaldate: "null",
+			goalval:  "10",
+			rate:     "1",
+			wantErr:  false,
+		},
+		{
+			name:     "valid epoch timestamp should be accepted",
+			goaldate: "1234567890",
+			goalval:  "10.5",
+			rate:     "null",
+			wantErr:  false,
+		},
+		{
+			name:     "valid float should be accepted",
+			goaldate: "null",
+			goalval:  "-5.5",
+			rate:     "0.25",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := validateCreateGoalInput("slug", "title", "hustler", "units", tt.goaldate, tt.goalval, tt.rate)
+			gotErr := result != ""
+			if gotErr != tt.wantErr {
+				t.Errorf("got error=%v, want error=%v; error message: %q", gotErr, tt.wantErr, result)
+			}
+			if tt.wantErr && result != tt.errMsg {
+				t.Errorf("got error message %q, want %q", result, tt.errMsg)
 			}
 		})
 	}
