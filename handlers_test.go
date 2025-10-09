@@ -309,25 +309,46 @@ func TestIsLetter(t *testing.T) {
 // TestIsNumericOrNull tests the isNumericOrNull function
 func TestIsNumericOrNull(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected bool
+		name         string
+		input        string
+		currentValue string
+		expected     bool
 	}{
-		{"digit", "5", true},
-		{"n from null", "n", true},
-		{"u from null", "u", true},
-		{"l from null", "l", true},
-		{"letter a", "a", false},
-		{"space", " ", false},
-		{"empty string", "", false},
-		{"multiple chars", "12", false},
+		// Numeric inputs
+		{"digit", "5", "", true},
+		{"digit after digit", "3", "12", true},
+		
+		// Valid null prefixes
+		{"n from null on empty", "n", "", true},
+		{"u after n", "u", "n", true},
+		{"first l after nu", "l", "nu", true},
+		{"second l after nul", "l", "nul", true},
+		
+		// Invalid null sequences
+		{"u without n", "u", "", false},
+		{"l without nu", "l", "", false},
+		{"l after n only", "l", "n", false},
+		{"n after n", "n", "n", false},
+		{"u after nu", "u", "nu", false},
+		{"extra char after null", "x", "null", false},
+		
+		// Invalid arbitrary combinations
+		{"l without context", "l", "12", false},
+		{"u in middle of number", "u", "12", false},
+		{"n in middle of number", "n", "12", false},
+		
+		// Other invalid inputs
+		{"letter a", "a", "", false},
+		{"space", " ", "", false},
+		{"empty string", "", "", false},
+		{"multiple chars", "12", "", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isNumericOrNull(tt.input)
+			result := isNumericOrNull(tt.input, tt.currentValue)
 			if result != tt.expected {
-				t.Errorf("isNumericOrNull(%q) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("isNumericOrNull(%q, %q) = %v, want %v", tt.input, tt.currentValue, result, tt.expected)
 			}
 		})
 	}
@@ -336,27 +357,50 @@ func TestIsNumericOrNull(t *testing.T) {
 // TestIsNumericWithDecimal tests the isNumericWithDecimal function
 func TestIsNumericWithDecimal(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected bool
+		name         string
+		input        string
+		currentValue string
+		expected     bool
 	}{
-		{"digit", "5", true},
-		{"decimal point", ".", true},
-		{"negative sign", "-", true},
-		{"n from null", "n", true},
-		{"u from null", "u", true},
-		{"l from null", "l", true},
-		{"letter a", "a", false},
-		{"space", " ", false},
-		{"empty string", "", false},
-		{"multiple chars", "12", false},
+		// Numeric inputs
+		{"digit", "5", "", true},
+		{"digit after digit", "3", "12", true},
+		{"decimal point", ".", "", true},
+		{"decimal after digit", ".", "5", true},
+		{"negative sign", "-", "", true},
+		{"negative at start", "-", "", true},
+		
+		// Valid null prefixes
+		{"n from null on empty", "n", "", true},
+		{"u after n", "u", "n", true},
+		{"first l after nu", "l", "nu", true},
+		{"second l after nul", "l", "nul", true},
+		
+		// Invalid null sequences
+		{"u without n", "u", "", false},
+		{"l without nu", "l", "", false},
+		{"l after n only", "l", "n", false},
+		{"n after n", "n", "n", false},
+		{"u after nu", "u", "nu", false},
+		{"extra char after null", "x", "null", false},
+		
+		// Invalid arbitrary combinations
+		{"l without context", "l", "12", false},
+		{"u in middle of number", "u", "12.5", false},
+		{"n in middle of number", "n", "-3.14", false},
+		
+		// Other invalid inputs
+		{"letter a", "a", "", false},
+		{"space", " ", "", false},
+		{"empty string", "", "", false},
+		{"multiple chars", "12", "", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isNumericWithDecimal(tt.input)
+			result := isNumericWithDecimal(tt.input, tt.currentValue)
 			if result != tt.expected {
-				t.Errorf("isNumericWithDecimal(%q) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("isNumericWithDecimal(%q, %q) = %v, want %v", tt.input, tt.currentValue, result, tt.expected)
 			}
 		})
 	}
