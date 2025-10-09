@@ -57,39 +57,67 @@ func TestCreateGoalWithMockServer(t *testing.T) {
 // TestCreateGoalURLEncoding tests that URL encoding works correctly for special characters
 func TestCreateGoalURLEncoding(t *testing.T) {
 	tests := []struct {
-		name        string
-		title       string
-		shouldMatch string // What the encoded form should contain
+		name              string
+		title             string
+		slug              string
+		titleShouldMatch  string // What the encoded title should contain
+		slugShouldMatch   string // What the encoded slug should contain
 	}{
 		{
-			name:        "space in title",
-			title:       "My Goal Title",
-			shouldMatch: "title=My+Goal+Title",
+			name:             "space in title",
+			title:            "My Goal Title",
+			slug:             "my-goal",
+			titleShouldMatch: "title=My+Goal+Title",
+			slugShouldMatch:  "slug=my-goal",
 		},
 		{
-			name:        "ampersand in title",
-			title:       "Goal & Progress",
-			shouldMatch: "title=Goal+%26+Progress",
+			name:             "ampersand in title",
+			title:            "Goal & Progress",
+			slug:             "goal-progress",
+			titleShouldMatch: "title=Goal+%26+Progress",
+			slugShouldMatch:  "slug=goal-progress",
 		},
 		{
-			name:        "equals sign in title",
-			title:       "x=5",
-			shouldMatch: "title=x%3D5",
+			name:             "equals sign in title",
+			title:            "x=5",
+			slug:             "x-equals-5",
+			titleShouldMatch: "title=x%3D5",
+			slugShouldMatch:  "slug=x-equals-5",
 		},
 		{
-			name:        "special characters",
-			title:       "Test!@#$%",
-			shouldMatch: "title=Test%21%40%23%24%25",
+			name:             "special characters",
+			title:            "Test!@#$%",
+			slug:             "test-special",
+			titleShouldMatch: "title=Test%21%40%23%24%25",
+			slugShouldMatch:  "slug=test-special",
 		},
 		{
-			name:        "plus sign",
-			title:       "2+2=4",
-			shouldMatch: "title=2%2B2%3D4",
+			name:             "plus sign",
+			title:            "2+2=4",
+			slug:             "math-test",
+			titleShouldMatch: "title=2%2B2%3D4",
+			slugShouldMatch:  "slug=math-test",
 		},
 		{
-			name:        "forward slash",
-			title:       "goal/test",
-			shouldMatch: "title=goal%2Ftest",
+			name:             "forward slash",
+			title:            "goal/test",
+			slug:             "goal-test",
+			titleShouldMatch: "title=goal%2Ftest",
+			slugShouldMatch:  "slug=goal-test",
+		},
+		{
+			name:             "slug with special characters",
+			title:            "Test Goal",
+			slug:             "test+goal&special",
+			titleShouldMatch: "title=Test+Goal",
+			slugShouldMatch:  "slug=test%2Bgoal%26special",
+		},
+		{
+			name:             "unicode characters",
+			title:            "目标 Test",
+			slug:             "unicode-goal",
+			titleShouldMatch: "title=%E7%9B%AE%E6%A0%87+Test",
+			slugShouldMatch:  "slug=unicode-goal",
 		},
 	}
 
@@ -98,18 +126,25 @@ func TestCreateGoalURLEncoding(t *testing.T) {
 			// Test that url.Values.Encode() (which CreateGoal now uses) properly encodes
 			data := url.Values{}
 			data.Set("title", tt.title)
-			data.Set("slug", "testgoal")
+			data.Set("slug", tt.slug)
 			
 			encoded := data.Encode()
 			
-			// Verify the encoded string contains the expected pattern
-			if !strings.Contains(encoded, tt.shouldMatch) {
-				t.Errorf("Encoded string %q does not contain expected pattern %q", encoded, tt.shouldMatch)
+			// Verify the encoded string contains the expected patterns
+			if !strings.Contains(encoded, tt.titleShouldMatch) {
+				t.Errorf("Encoded string %q does not contain expected title pattern %q", encoded, tt.titleShouldMatch)
+			}
+			if !strings.Contains(encoded, tt.slugShouldMatch) {
+				t.Errorf("Encoded string %q does not contain expected slug pattern %q", encoded, tt.slugShouldMatch)
 			}
 		})
 	}
 
 	t.Log("URL encoding validated")
+	
+	// Note: Once the hardcoded URL limitation in CreateGoal is addressed (see lines 38-40),
+	// we should add an integration test that verifies CreateGoal produces the expected
+	// encoded request body when called with special characters in parameters.
 }
 
 // TestGoalCreatedMsgStructure tests that goalCreatedMsg exists
