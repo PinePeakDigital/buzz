@@ -169,10 +169,10 @@ func IsDueToday(losedate int64) bool {
 // IsDueTodayAt checks if a goal is due today relative to a given time
 func IsDueTodayAt(losedate int64, now time.Time) bool {
 	goalTime := time.Unix(losedate, 0)
-	
+
 	// Get start of tomorrow (midnight tonight)
 	startOfTomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
-	
+
 	// Goal is due today if it's due before the start of tomorrow
 	// This includes overdue goals and goals due later today
 	return goalTime.Before(startOfTomorrow)

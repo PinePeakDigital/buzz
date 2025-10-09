@@ -57,11 +57,11 @@ func TestCreateGoalWithMockServer(t *testing.T) {
 // TestCreateGoalURLEncoding tests that URL encoding works correctly for special characters
 func TestCreateGoalURLEncoding(t *testing.T) {
 	tests := []struct {
-		name              string
-		title             string
-		slug              string
-		titleShouldMatch  string // What the encoded title should contain
-		slugShouldMatch   string // What the encoded slug should contain
+		name             string
+		title            string
+		slug             string
+		titleShouldMatch string // What the encoded title should contain
+		slugShouldMatch  string // What the encoded slug should contain
 	}{
 		{
 			name:             "space in title",
@@ -127,9 +127,9 @@ func TestCreateGoalURLEncoding(t *testing.T) {
 			data := url.Values{}
 			data.Set("title", tt.title)
 			data.Set("slug", tt.slug)
-			
+
 			encoded := data.Encode()
-			
+
 			// Verify the encoded string contains the expected patterns
 			if !strings.Contains(encoded, tt.titleShouldMatch) {
 				t.Errorf("Encoded string %q does not contain expected title pattern %q", encoded, tt.titleShouldMatch)
@@ -141,7 +141,7 @@ func TestCreateGoalURLEncoding(t *testing.T) {
 	}
 
 	t.Log("URL encoding validated")
-	
+
 	// Note: Once the hardcoded URL limitation in CreateGoal is addressed (see lines 38-40),
 	// we should add an integration test that verifies CreateGoal produces the expected
 	// encoded request body when called with special characters in parameters.
