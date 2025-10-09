@@ -8,9 +8,9 @@ This document describes the refactoring effort to separate UI components from bu
 
 ### File Structure
 
-The refactoring reorganized code from a single large `main.go` file (618 lines) into multiple focused files:
+The refactoring reorganized code from a single large `main.go` file into multiple focused files:
 
-1. **main.go** (217 lines) - Core Bubble Tea orchestration
+1. **main.go** - Core Bubble Tea orchestration
    - `Init()` - Initialize the application
    - `Update()` - Handle state transitions
    - `updateApp()` - Process application messages
@@ -19,7 +19,7 @@ The refactoring reorganized code from a single large `main.go` file (618 lines) 
    - `main()` - Entry point
    - `handleNextCommand()` - CLI command handler
 
-2. **model.go** (96 lines) - State definitions and initialization
+2. **model.go** - State definitions and initialization
    - `appModel` struct - Application state
    - `model` struct - Top-level model
    - `initialAppModel()` - Create initial app state
@@ -27,7 +27,7 @@ The refactoring reorganized code from a single large `main.go` file (618 lines) 
    - `filterGoals()` - Filter goals by search query
    - `getDisplayGoals()` - Get goals to display
 
-3. **handlers.go** (623 lines) - Input handling logic
+3. **handlers.go** - Input handling logic
    - `handleKeyPress()` - Main keyboard input router
    - Input text handlers for different modes:
      - `handleSearchInput()` - Text input in search mode
@@ -54,7 +54,7 @@ The refactoring reorganized code from a single large `main.go` file (618 lines) 
      - `handleEnterSearch()` - Enter search mode
      - `handleCreateGoal()` - Open create goal modal
 
-4. **handlers_test.go** (323 lines) - Input handler tests
+4. **handlers_test.go** - Input handler tests
    - `TestValidateDatapointInput()` - Tests for datapoint validation
    - `TestValidateCreateGoalInput()` - Tests for create goal validation
    - `TestIsAlphanumericOrDash()` - Tests for character validation
@@ -62,7 +62,7 @@ The refactoring reorganized code from a single large `main.go` file (618 lines) 
    - `TestIsNumericOrNull()` - Tests for numeric/null validation
    - `TestIsNumericWithDecimal()` - Tests for decimal validation
 
-5. **grid.go** (245 lines) - UI rendering (unchanged)
+5. **grid.go** - UI rendering (unchanged)
    - Grid, modal, and footer rendering functions
 
 6. **Other files** - Unchanged
@@ -202,7 +202,7 @@ Potential next steps for further refactoring:
 ## Metrics
 
 ### Initial Refactoring
-- **Lines Reduced in main.go**: 401 lines (65% reduction)
+- **Code Reorganization**: Split main.go into multiple focused files (65% reduction)
 - **New Files Created**: 2 (model.go, handlers.go)
 - **Build Status**: ✅ Successful
 - **Functionality**: ✅ Preserved (no regressions)
@@ -210,8 +210,8 @@ Potential next steps for further refactoring:
 ### Input Handling Improvements
 - **Validation Functions Extracted**: 2 (validateDatapointInput, validateCreateGoalInput)
 - **Test Cases Added**: 50+ test cases covering validation and character helpers
-- **Lines of Test Code**: 323 lines (handlers_test.go)
-- **Code Complexity Reduced**: handleEnterKey simplified by ~40 lines
+- **Test Coverage Added**: handlers_test.go
+- **Code Complexity Reduced**: handleEnterKey simplified significantly
 - **Test Coverage**: ✅ All validation logic now tested
 - **Build Status**: ✅ Successful
 - **Functionality**: ✅ Preserved (no regressions)
