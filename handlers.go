@@ -62,6 +62,15 @@ func isNumericWithDecimal(char string) bool {
 	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == 'n' || c == 'u' || c == 'l'
 }
 
+// handleNumericDecimalInput handles input for fields that accept numeric with decimal values
+func handleNumericDecimalInput(m model, char string, fieldPtr *string) (model, bool) {
+	if isNumericWithDecimal(char) {
+		*fieldPtr += char
+		return m, true
+	}
+	return m, false
+}
+
 // handleCreateModalInput handles text input in create goal modal
 func handleCreateModalInput(m model, char string) (model, bool) {
 	if !m.appModel.showCreateModal || m.appModel.creatingGoal {
@@ -94,15 +103,9 @@ func handleCreateModalInput(m model, char string) (model, bool) {
 			return m, true
 		}
 	case 5: // Goalval - allow digits, decimal point, negative sign, or "null"
-		if isNumericWithDecimal(char) {
-			m.appModel.createGoalval += char
-			return m, true
-		}
+		return handleNumericDecimalInput(m, char, &m.appModel.createGoalval)
 	case 6: // Rate - allow digits, decimal point, negative sign, or "null"
-		if isNumericWithDecimal(char) {
-			m.appModel.createRate += char
-			return m, true
-		}
+		return handleNumericDecimalInput(m, char, &m.appModel.createRate)
 	}
 	return m, false
 }

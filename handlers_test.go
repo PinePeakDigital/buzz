@@ -361,3 +361,49 @@ func TestIsNumericWithDecimal(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleNumericDecimalInput tests the handleNumericDecimalInput helper function
+func TestHandleNumericDecimalInput(t *testing.T) {
+	tests := []struct {
+		name          string
+		char          string
+		initialValue  string
+		expectedValue string
+		expectedOk    bool
+	}{
+		{"valid digit", "5", "10", "105", true},
+		{"valid decimal", ".", "10", "10.", true},
+		{"valid negative", "-", "", "-", true},
+		{"valid null char n", "n", "", "n", true},
+		{"valid null char u", "u", "n", "nu", true},
+		{"valid null char l", "l", "nu", "nul", true},
+		{"invalid letter", "a", "10", "10", false},
+		{"invalid space", " ", "10", "10", false},
+		{"invalid special", "@", "10", "10", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test model
+			m := model{
+				appModel: appModel{},
+			}
+			field := tt.initialValue
+
+			// Call the function
+			resultModel, ok := handleNumericDecimalInput(m, tt.char, &field)
+
+			// Verify the result
+			if ok != tt.expectedOk {
+				t.Errorf("handleNumericDecimalInput(%q) returned ok=%v, want %v", tt.char, ok, tt.expectedOk)
+			}
+			if field != tt.expectedValue {
+				t.Errorf("handleNumericDecimalInput(%q) resulted in field=%q, want %q", tt.char, field, tt.expectedValue)
+			}
+			// Verify model is returned unchanged
+			if resultModel.appModel.createGoalval != "" {
+				t.Errorf("handleNumericDecimalInput should not modify model")
+			}
+		})
+	}
+}
