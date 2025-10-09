@@ -1,0 +1,50 @@
+BEFORE - Old Format (16-char width):
+
+┌──────────────────┐
+│ the_slug         │
+│ $5 | +2 in 3 days │
+└──────────────────┘
+
+AFTER - New Format (18-char width):
+
+┌────────────────────┐
+│ the_slug        $5 │
+│ +2 in 3 days       │
+└────────────────────┘
+
+---
+
+More Examples of New Format:
+
+┌────────────────────┐
+│ the_slug        $5 │
+│ +2 in 3 days       │
+└────────────────────┘
+
+┌────────────────────┐
+│ a_very_long_... $5 │
+│ +10 in 5 days      │
+└────────────────────┘
+
+┌────────────────────┐
+│ exercise      $270 │
+│ +1.5 in 12 hrs     │
+└────────────────────┘
+
+┌────────────────────┐
+│ my_goal        $10 │
+│ 0 in today         │
+└────────────────────┘
+
+┌────────────────────┐
+│ short           $5 │
+│ +1.315464 in 5 d   │
+└────────────────────┘
+
+Key Features:
+- Each line is exactly 18 characters
+- Stakes ($5) are on the first line with slug
+- Space expands between slug and stakes
+- Long slugs get ellipses (a_very_lon... $5)
+- Second line shows delta value and timeframe
+- Long second lines also get ellipses
