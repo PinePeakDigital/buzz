@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -170,4 +171,75 @@ func fuzzyMatch(pattern, text string) bool {
 	}
 
 	return patternIdx == len(pattern)
+}
+
+// isTimeFormat checks if a string is in time format (HH:MM or HH:MM:SS)
+// Returns true for formats like "1:30", "00:05", "2:45:30", etc.
+func isTimeFormat(s string) bool {
+	s = strings.TrimPrefix(s, "+")
+	s = strings.TrimPrefix(s, "-")
+	return strings.Contains(s, ":")
+}
+
+// timeToDecimalHours converts a time string (HH:MM or HH:MM:SS) to decimal hours
+// Examples: "1:30" -> 1.5, "00:05" -> 0.083333, "2:45:30" -> 2.758333
+// Returns the decimal hours and true if successful, 0 and false if the format is invalid
+func timeToDecimalHours(timeStr string) (float64, bool) {
+	// Handle negative times
+	isNegative := false
+	if strings.HasPrefix(timeStr, "-") {
+		isNegative = true
+		timeStr = strings.TrimPrefix(timeStr, "-")
+	}
+	// Remove leading + if present
+	timeStr = strings.TrimPrefix(timeStr, "+")
+
+	// Split by colon
+	parts := strings.Split(timeStr, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, false
+	}
+
+	// Parse hours
+	hours, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return 0, false
+	}
+
+	// Parse minutes (must be integer)
+	minutes, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return 0, false
+	}
+	// Check if minutes has decimal part
+	if minutes != float64(int(minutes)) {
+		return 0, false
+	}
+
+	// Parse seconds if present (must be integer)
+	seconds := 0.0
+	if len(parts) == 3 {
+		seconds, err = strconv.ParseFloat(parts[2], 64)
+		if err != nil {
+			return 0, false
+		}
+		// Check if seconds has decimal part
+		if seconds != float64(int(seconds)) {
+			return 0, false
+		}
+	}
+
+	// Validate ranges
+	if hours < 0 || minutes < 0 || minutes >= 60 || seconds < 0 || seconds >= 60 {
+		return 0, false
+	}
+
+	// Convert to decimal hours
+	decimalHours := hours + (minutes / 60.0) + (seconds / 3600.0)
+
+	if isNegative {
+		decimalHours = -decimalHours
+	}
+
+	return decimalHours, true
 }

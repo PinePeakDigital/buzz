@@ -89,7 +89,16 @@ buzz add <goalslug> <value> [comment]
 # Examples:
 buzz add opsec 1                    # Adds value 1 with default comment "Added via buzz"
 buzz add workout 2.5 'morning run'  # Adds value 2.5 with custom comment
+buzz add study 00:05 'quick review' # Adds 5 minutes (converted to 0.083333 hours)
+buzz add focus 1:30                 # Adds 1.5 hours (1 hour 30 minutes)
 ```
+
+The `<value>` parameter supports both decimal numbers and time formats:
+- **Decimal numbers**: `1`, `2.5`, `-1.5`
+- **Time format (HH:MM)**: `00:05` (5 minutes), `1:30` (1.5 hours), `2:45` (2.75 hours)
+- **Time format (HH:MM:SS)**: `1:30:45` (1.5125 hours)
+
+Time formats are automatically converted to decimal hours before submitting to Beeminder.
 
 The comment parameter is optional and defaults to "Added via buzz" if not provided.
 
