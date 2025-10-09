@@ -305,10 +305,22 @@ func handleTodayCommand() {
 		return
 	}
 
-	// Output each goal on a separate line
+	// Calculate column widths for alignment
+	maxSlugWidth := 0
+	maxBareminWidth := 0
+	for _, goal := range todayGoals {
+		if len(goal.Slug) > maxSlugWidth {
+			maxSlugWidth = len(goal.Slug)
+		}
+		if len(goal.Baremin) > maxBareminWidth {
+			maxBareminWidth = len(goal.Baremin)
+		}
+	}
+
+	// Output each goal on a separate line with aligned columns
 	for _, goal := range todayGoals {
 		timeframe := FormatDueDate(goal.Losedate)
-		fmt.Printf("%s %s %s\n", goal.Slug, goal.Baremin, timeframe)
+		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
 	}
 }
 
