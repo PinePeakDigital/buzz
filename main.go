@@ -182,6 +182,7 @@ func printHelp() {
 	fmt.Println("USAGE:")
 	fmt.Println("  buzz                              Launch the interactive TUI")
 	fmt.Println("  buzz next                         Output a terse summary of the next due goal")
+	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  buzz help                         Show this help message")
@@ -199,6 +200,9 @@ func main() {
 		case "next":
 			handleNextCommand()
 			return
+		case "today":
+			handleTodayCommand()
+			return
 		case "add":
 			handleAddCommand()
 			return
@@ -207,7 +211,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, add, help")
+			fmt.Println("Available commands: next, today, add, help")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -261,6 +265,63 @@ func handleNextCommand() {
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
+}
+
+// handleTodayCommand outputs all goals that are due today
+func handleTodayCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Sort goals (by due date ascending, then by stakes descending, then by name)
+	SortGoals(goals)
+
+	// Filter goals that are due today
+	var todayGoals []Goal
+	for _, goal := range goals {
+		if IsDueToday(goal.Losedate) {
+			todayGoals = append(todayGoals, goal)
+		}
+	}
+
+	// If no goals due today, exit
+	if len(todayGoals) == 0 {
+		fmt.Println("No goals due today.")
+		return
+	}
+
+	// Calculate column widths for alignment
+	maxSlugWidth := 0
+	maxBareminWidth := 0
+	for _, goal := range todayGoals {
+		if len(goal.Slug) > maxSlugWidth {
+			maxSlugWidth = len(goal.Slug)
+		}
+		if len(goal.Baremin) > maxBareminWidth {
+			maxBareminWidth = len(goal.Baremin)
+		}
+	}
+
+	// Output each goal on a separate line with aligned columns
+	for _, goal := range todayGoals {
+		timeframe := FormatDueDate(goal.Losedate)
+		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
+	}
 }
 
 // handleAddCommand adds a datapoint to a goal without opening the TUI

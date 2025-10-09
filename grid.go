@@ -8,6 +8,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// CommonGoalTypes is a list of common Beeminder goal types
+const CommonGoalTypes = "hustler, biker, fatloser, gainer, inboxer, drinker"
+
 // RenderGrid renders the goals grid based on the app model
 func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated bool, username string, searchMode bool, searchQuery string) string {
 	if len(goals) == 0 {
@@ -73,11 +76,9 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 
 			// Format goal display
 			deltaValue := ParseBareminValue(goal.Baremin)
-			display := fmt.Sprintf("%s\n$%.0f | %s in %s",
-				truncateString(goal.Slug, 16),
-				goal.Pledge,
-				deltaValue,
-				FormatDueDate(goal.Losedate))
+			firstLine := formatGoalFirstLine(goal.Slug, goal.Pledge)
+			secondLine := formatGoalSecondLine(deltaValue, FormatDueDate(goal.Losedate))
+			display := fmt.Sprintf("%s\n%s", firstLine, secondLine)
 
 			cell := style.Render(display)
 			rowCells = append(rowCells, cell)
@@ -331,9 +332,9 @@ func RenderCreateGoalModal(width, height int, slug, title, goalType, gunits, goa
 		"Goal Value: %s\n"+
 		"Rate: %s%s%s\n\n"+
 		"Note: Provide exactly 2 of 3: goaldate, goalval, rate (use 'null' to skip)\n"+
-		"Common goal types: hustler, biker, fatloser, gainer, inboxer, drinker\n\n"+
+		"Common goal types: %s\n\n"+
 		"Tab/Shift+Tab: Navigate • Enter: Submit • Esc: Cancel",
-		slugField, titleField, goalTypeField, gunitsField, goaldateField, goalvalField, rateField, errorMsg, statusMsg)
+		slugField, titleField, goalTypeField, gunitsField, goaldateField, goalvalField, rateField, errorMsg, statusMsg, CommonGoalTypes)
 
 	// Apply width constraint to content
 	styledContent := modalStyle.Width(modalWidth).Render(content)
