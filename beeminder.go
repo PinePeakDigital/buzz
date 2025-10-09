@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -243,14 +244,21 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 // CreateGoal creates a new goal for the user
 // Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate
 func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json",
+	apiURL := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json",
 		config.Username)
 
-	data := fmt.Sprintf("auth_token=%s&slug=%s&title=%s&goal_type=%s&gunits=%s&goaldate=%s&goalval=%s&rate=%s",
-		config.AuthToken, slug, title, goalType, gunits, goaldate, goalval, rate)
+	data := url.Values{}
+	data.Set("auth_token", config.AuthToken)
+	data.Set("slug", slug)
+	data.Set("title", title)
+	data.Set("goal_type", goalType)
+	data.Set("gunits", gunits)
+	data.Set("goaldate", goaldate)
+	data.Set("goalval", goalval)
+	data.Set("rate", rate)
 
-	resp, err := http.Post(url, "application/x-www-form-urlencoded",
-		strings.NewReader(data))
+	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
+		strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create goal: %w", err)
 	}

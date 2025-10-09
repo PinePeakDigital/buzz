@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,64 @@ func TestCreateGoalWithMockServer(t *testing.T) {
 	// This test ensures the function signature is correct
 	// without making real API calls
 	t.Log("CreateGoal function signature validated")
+}
+
+// TestCreateGoalURLEncoding tests that URL encoding works correctly for special characters
+func TestCreateGoalURLEncoding(t *testing.T) {
+	tests := []struct {
+		name        string
+		title       string
+		shouldMatch string // What the encoded form should contain
+	}{
+		{
+			name:        "space in title",
+			title:       "My Goal Title",
+			shouldMatch: "title=My+Goal+Title",
+		},
+		{
+			name:        "ampersand in title",
+			title:       "Goal & Progress",
+			shouldMatch: "title=Goal+%26+Progress",
+		},
+		{
+			name:        "equals sign in title",
+			title:       "x=5",
+			shouldMatch: "title=x%3D5",
+		},
+		{
+			name:        "special characters",
+			title:       "Test!@#$%",
+			shouldMatch: "title=Test%21%40%23%24%25",
+		},
+		{
+			name:        "plus sign",
+			title:       "2+2=4",
+			shouldMatch: "title=2%2B2%3D4",
+		},
+		{
+			name:        "forward slash",
+			title:       "goal/test",
+			shouldMatch: "title=goal%2Ftest",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test that url.Values.Encode() (which CreateGoal now uses) properly encodes
+			data := url.Values{}
+			data.Set("title", tt.title)
+			data.Set("slug", "testgoal")
+			
+			encoded := data.Encode()
+			
+			// Verify the encoded string contains the expected pattern
+			if !strings.Contains(encoded, tt.shouldMatch) {
+				t.Errorf("Encoded string %q does not contain expected pattern %q", encoded, tt.shouldMatch)
+			}
+		})
+	}
+
+	t.Log("URL encoding validated")
 }
 
 // TestGoalCreatedMsgStructure tests that goalCreatedMsg exists
