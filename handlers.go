@@ -52,12 +52,12 @@ func isNumericOrNull(char string, currentValue string) bool {
 		return false
 	}
 	c := char[0]
-	
+
 	// Allow digits
 	if c >= '0' && c <= '9' {
 		return true
 	}
-	
+
 	// Check if adding this character would form a valid prefix of "null"
 	newValue := currentValue + char
 	return strings.HasPrefix("null", newValue)
@@ -70,12 +70,12 @@ func isNumericWithDecimal(char string, currentValue string) bool {
 		return false
 	}
 	c := char[0]
-	
+
 	// Allow digits, decimal point, and negative sign
 	if (c >= '0' && c <= '9') || c == '.' || c == '-' {
 		return true
 	}
-	
+
 	// Check if adding this character would form a valid prefix of "null"
 	newValue := currentValue + char
 	return strings.HasPrefix("null", newValue)
@@ -452,7 +452,7 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 
 	// Validate that exactly 2 out of 3 (goaldate, goalval, rate) are provided
 	countProvided := 0
-	
+
 	// Validate goaldate: must be empty, "null", or a valid integer (epoch timestamp)
 	if goaldate != "" && goaldate != "null" {
 		if !isValidInteger(goaldate) {
@@ -460,7 +460,7 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 		}
 		countProvided++
 	}
-	
+
 	// Validate goalval: must be empty, "null", or a valid number
 	if goalval != "" && goalval != "null" {
 		if !isValidFloat(goalval) {
@@ -468,7 +468,7 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 		}
 		countProvided++
 	}
-	
+
 	// Validate rate: must be empty, "null", or a valid number
 	if rate != "" && rate != "null" {
 		if !isValidFloat(rate) {

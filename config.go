@@ -70,3 +70,42 @@ func SaveConfig(config *Config) error {
 
 	return nil
 }
+
+// getRefreshFlagPath returns the path to the refresh flag file
+func getRefreshFlagPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".buzz-refresh"), nil
+}
+
+// createRefreshFlag creates the refresh flag file
+func createRefreshFlag() error {
+	path, err := getRefreshFlagPath()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte{}, 0600)
+}
+
+// deleteRefreshFlag deletes the refresh flag file
+func deleteRefreshFlag() error {
+	path, err := getRefreshFlagPath()
+	if err != nil {
+		return err
+	}
+	// Ignore error if file doesn't exist
+	os.Remove(path)
+	return nil
+}
+
+// refreshFlagExists checks if the refresh flag file exists
+func refreshFlagExists() bool {
+	path, err := getRefreshFlagPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}

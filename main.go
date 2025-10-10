@@ -18,6 +18,7 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		loadGoalsCmd(m.appModel.config),
 		refreshTickCmd(),
+		checkRefreshFlagCmd(),
 	)
 }
 
@@ -123,6 +124,18 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, loadGoalsCmd(m.appModel.config)
 		}
 		return m, nil
+
+	case checkRefreshFlagMsg:
+		// Check if another process requested a refresh
+		if refreshFlagExists() {
+			deleteRefreshFlag()
+			return m, tea.Batch(
+				loadGoalsCmd(m.appModel.config),
+				checkRefreshFlagCmd(), // Schedule next check
+			)
+		}
+		// Schedule next check
+		return m, checkRefreshFlagCmd()
 
 	// Is it a key press?
 	case tea.KeyMsg:
@@ -378,6 +391,12 @@ func handleAddCommand() {
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Signal any running TUI instances to refresh
+	if err := createRefreshFlag(); err != nil {
+		// Don't fail the command if flag creation fails
+		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %v\n", err)
 	}
 
 	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
