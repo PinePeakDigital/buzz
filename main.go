@@ -225,29 +225,33 @@ func main() {
 	}
 }
 
-// handleNextCommand outputs a terse summary of the next due goal
-func handleNextCommand() {
-	// Load config
+// loadConfigAndGoals loads configuration and fetches sorted goals from Beeminder
+func loadConfigAndGoals() (*Config, []Goal, error) {
 	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("no configuration found. Please run 'buzz' first to authenticate")
 	}
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Fetch goals
 	goals, err := FetchGoals(config)
 	if err != nil {
-		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("failed to fetch goals: %w", err)
 	}
 
-	// Sort goals (by due date ascending, then by stakes descending, then by name)
 	SortGoals(goals)
+	return config, goals, nil
+}
+
+// handleNextCommand outputs a terse summary of the next due goal
+func handleNextCommand() {
+	_, goals, err := loadConfigAndGoals()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
 
 	// If no goals, exit
 	if len(goals) == 0 {
@@ -269,27 +273,11 @@ func handleNextCommand() {
 
 // handleTodayCommand outputs all goals that are due today
 func handleTodayCommand() {
-	// Load config
-	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
-		os.Exit(1)
-	}
-
-	config, err := LoadConfig()
+	_, goals, err := loadConfigAndGoals()
 	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
-
-	// Fetch goals
-	goals, err := FetchGoals(config)
-	if err != nil {
-		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Sort goals (by due date ascending, then by stakes descending, then by name)
-	SortGoals(goals)
 
 	// Filter goals that are due today
 	var todayGoals []Goal
