@@ -36,11 +36,6 @@ func TestDisplayNextGoalNoConfig(t *testing.T) {
 	// This test is here as a placeholder for future improvement
 	// For now, we just ensure the function exists and has the correct signature
 	
-	var err error
-	_ = err
-	// err = displayNextGoal()
-	// Would need to mock ConfigExists() to properly test this
-	
 	t.Log("displayNextGoal function signature validated")
 }
 
