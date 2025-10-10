@@ -65,12 +65,22 @@ create_expect_script() {
 set timeout 10
 set send_slow {1 0.05}
 
-# Start bash
-spawn bash
+# Set consistent terminal environment - disable colors and interactions
+set env(TERM) "dumb"
+set env(COLORTERM) ""
+set env(NO_COLOR) "1"
+set env(FORCE_COLOR) "0"
+
+# Start bash with consistent environment
+spawn env TERM=dumb COLORTERM= NO_COLOR=1 FORCE_COLOR=0 bash --noprofile --norc
 expect "$ "
 
 # Change to repo directory
 send -s "cd $REPO_DIR\r"
+expect "$ "
+
+# Set simple PS1 to avoid complex prompts
+send -s "export PS1='\$ '\r"
 expect "$ "
 
 # Clear screen and start demo
@@ -138,10 +148,11 @@ record_demo() {
     mkdir -p "$DEMOS_DIR"
     
     # Record with specific dimensions for better display
-    if asciinema rec \
-        --cols 100 \
-        --rows 30 \
+    if env TERM=dumb NO_COLOR=1 FORCE_COLOR=0 asciinema rec \
+        --cols 80 \
+        --rows 24 \
         --title "Buzz CLI Demo" \
+        --env="TERM,NO_COLOR,FORCE_COLOR" \
         --quiet \
         "$RECORDING_FILE" \
         --command "expect -f $TEMP_EXPECT_FILE" 2>/dev/null; then
