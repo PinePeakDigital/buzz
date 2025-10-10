@@ -99,7 +99,7 @@ sleep 0.5
 # Demo 1: buzz next
 send -s "./buzz next\r"
 expect "$ "
-sleep 2
+sleep 3
 
 send -s "# That shows: goalslug limsum timeframe\r"
 expect "$ "
