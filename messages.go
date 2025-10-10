@@ -32,6 +32,9 @@ type goalCreatedMsg struct {
 	err  error
 }
 
+// checkRefreshFlagMsg is sent periodically to check for external refresh requests
+type checkRefreshFlagMsg struct{}
+
 // loadGoalsCmd fetches goals from Beeminder API
 func loadGoalsCmd(config *Config) tea.Cmd {
 	return func() tea.Msg {
@@ -73,4 +76,11 @@ func createGoalCmd(config *Config, slug, title, goalType, gunits, goaldate, goal
 		goal, err := CreateGoal(config, slug, title, goalType, gunits, goaldate, goalval, rate)
 		return goalCreatedMsg{goal: goal, err: err}
 	}
+}
+
+// checkRefreshFlagCmd creates a command that checks for the refresh flag
+func checkRefreshFlagCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return checkRefreshFlagMsg{}
+	})
 }

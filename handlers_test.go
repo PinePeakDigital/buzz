@@ -434,13 +434,13 @@ func TestIsNumericOrNull(t *testing.T) {
 		// Numeric inputs
 		{"digit", "5", "", true},
 		{"digit after digit", "3", "12", true},
-		
+
 		// Valid null prefixes
 		{"n from null on empty", "n", "", true},
 		{"u after n", "u", "n", true},
 		{"first l after nu", "l", "nu", true},
 		{"second l after nul", "l", "nul", true},
-		
+
 		// Invalid null sequences
 		{"u without n", "u", "", false},
 		{"l without nu", "l", "", false},
@@ -448,12 +448,12 @@ func TestIsNumericOrNull(t *testing.T) {
 		{"n after n", "n", "n", false},
 		{"u after nu", "u", "nu", false},
 		{"extra char after null", "x", "null", false},
-		
+
 		// Invalid arbitrary combinations
 		{"l without context", "l", "12", false},
 		{"u in middle of number", "u", "12", false},
 		{"n in middle of number", "n", "12", false},
-		
+
 		// Other invalid inputs
 		{"letter a", "a", "", false},
 		{"space", " ", "", false},
@@ -486,13 +486,13 @@ func TestIsNumericWithDecimal(t *testing.T) {
 		{"decimal after digit", ".", "5", true},
 		{"negative sign", "-", "", true},
 		{"negative at start", "-", "", true},
-		
+
 		// Valid null prefixes
 		{"n from null on empty", "n", "", true},
 		{"u after n", "u", "n", true},
 		{"first l after nu", "l", "nu", true},
 		{"second l after nul", "l", "nul", true},
-		
+
 		// Invalid null sequences
 		{"u without n", "u", "", false},
 		{"l without nu", "l", "", false},
@@ -500,12 +500,12 @@ func TestIsNumericWithDecimal(t *testing.T) {
 		{"n after n", "n", "n", false},
 		{"u after nu", "u", "nu", false},
 		{"extra char after null", "x", "null", false},
-		
+
 		// Invalid arbitrary combinations
 		{"l without context", "l", "12", false},
 		{"u in middle of number", "u", "12.5", false},
 		{"n in middle of number", "n", "-3.14", false},
-		
+
 		// Other invalid inputs
 		{"letter a", "a", "", false},
 		{"space", " ", "", false},
