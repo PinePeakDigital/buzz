@@ -95,8 +95,11 @@ func deleteRefreshFlag() error {
 	if err != nil {
 		return err
 	}
-	// Ignore error if file doesn't exist
-	os.Remove(path)
+	// Remove the file, but ignore "file not found" errors
+	err = os.Remove(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
 
