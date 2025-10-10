@@ -102,6 +102,8 @@ Time formats are automatically converted to decimal hours before submitting to B
 
 The comment parameter is optional and defaults to "Added via buzz" if not provided.
 
+**Note:** When you run `buzz add` while the TUI is running in another terminal, the TUI will automatically refresh within 1 second to show the new datapoint.
+
 Running `buzz` without arguments launches the interactive TUI.
 
 ### Navigation
@@ -148,6 +150,7 @@ Goals are displayed in a colorful grid based on their deadline urgency:
 ### Auto-refresh
 - Press **t** to toggle auto-refresh (refreshes every 5 minutes)
 - Press **r** to manually refresh goals
+- The TUI also automatically refreshes when you use `buzz add` in another terminal
 
 ## Development
 
