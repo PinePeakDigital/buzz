@@ -174,7 +174,7 @@ func TestMyFunction(t *testing.T) {
 
 ## CI/CD Integration
 
-Tests are automatically run in a separate job in the PR build workflow:
+Tests are automatically run in a separate job in the CI workflow:
 
 ```yaml
 jobs:

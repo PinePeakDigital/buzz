@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared build script for cross-platform binaries
-# Used by both release workflow and PR builds workflow
+# Used by both release workflow and CI workflow
 
 set -e
 
