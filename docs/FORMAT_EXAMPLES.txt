@@ -12,7 +12,7 @@ AFTER - New Format (16-char inner width, 20 total width):
 │ +2 in 3 days     │
 └──────────────────┘
 
-Note: The border has 18 characters (16 inner + 2 for left/right padding),
+Note: Each line has 16 characters of inner content, plus 2 for left/right padding (1 space on each side),
       plus 2 more for the border characters themselves (│) = 20 total cell width.
 
 ---

@@ -21,7 +21,7 @@ Format:
 
 ## After (New Format)
 
-Each cell now has a 16-character inner width (18 total with borders):
+Each cell now has a 16-character inner width (20 total with borders and padding):
 
 ```
 ┌──────────────────┐
@@ -115,5 +115,5 @@ Added comprehensive tests for both new formatting functions covering:
 
 1. **Consistency**: All cells have the same width
 2. **Cleaner Display**: Stakes integrated into first line looks cleaner
-3. **Compact Layout**: Narrower cells (16 vs original 16 chars) provide a more compact display
+3. **Compact Layout**: Narrower cells (16 vs original 18 chars) provide a more compact display
 4. **Better Truncation**: Clear ellipsis handling for both lines
