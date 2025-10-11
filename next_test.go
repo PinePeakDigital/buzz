@@ -28,31 +28,21 @@ func TestClearScreen(t *testing.T) {
 
 // TestDisplayNextGoalNoConfig tests displayNextGoal when config doesn't exist
 func TestDisplayNextGoalNoConfig(t *testing.T) {
-	// This test assumes no config exists in the test environment
-	// If a config exists in the home directory, this test may fail
-	// In a real test environment, we'd mock the filesystem
-	
-	// We can't fully test displayNextGoal without mocking the config system
-	// This test is here as a placeholder for future improvement
-	// For now, we just ensure the function exists and has the correct signature
-	
-	t.Log("displayNextGoal function signature validated")
+	t.Setenv("HOME", t.TempDir())
+	if err := displayNextGoal(); err == nil {
+		t.Fatalf("expected error when no config present")
+	}
 }
 
 // TestDisplayNextGoalWithTimestamp tests that displayNextGoalWithTimestamp doesn't panic
 func TestDisplayNextGoalWithTimestamp(t *testing.T) {
-	// This test just verifies the function doesn't panic
-	// We can't easily test the output without capturing stdout
-	// and mocking the config/API
-	
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("displayNextGoalWithTimestamp() panicked: %v", r)
 		}
 	}()
-	
-	// Don't actually call it since it requires a valid config
-	t.Log("displayNextGoalWithTimestamp function signature validated")
+	t.Setenv("HOME", t.TempDir())
+	displayNextGoalWithTimestamp()
 }
 
 // TestTimestampFormat tests that the timestamp format used in watch mode is correct

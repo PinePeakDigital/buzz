@@ -246,10 +246,19 @@ func main() {
 // handleNextCommand outputs a terse summary of the next due goal
 func handleNextCommand() {
 	// Parse flags for the next command
-	nextFlags := flag.NewFlagSet("next", flag.ExitOnError)
+	nextFlags := flag.NewFlagSet("next", flag.ContinueOnError)
 	watch := nextFlags.Bool("watch", false, "Watch mode - continuously refresh every 5 minutes")
 	watchShort := nextFlags.Bool("w", false, "Watch mode - continuously refresh every 5 minutes (shorthand)")
-	nextFlags.Parse(os.Args[2:])
+	if err := nextFlags.Parse(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Usage: buzz next [-w|--watch]")
+		os.Exit(2)
+	}
+	if args := nextFlags.Args(); len(args) > 0 {
+		fmt.Fprintf(os.Stderr, "Unknown arguments: %v\n", args)
+		fmt.Fprintln(os.Stderr, "Usage: buzz next [-w|--watch]")
+		os.Exit(2)
+	}
 
 	// If either watch flag is set, enable watch mode
 	watchMode := *watch || *watchShort
@@ -311,6 +320,7 @@ func runWatchMode() {
 	// Signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	// Initial display
 	clearScreen()
@@ -330,6 +340,9 @@ func runWatchMode() {
 
 // clearScreen clears the terminal screen
 func clearScreen() {
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
+		return // not a terminal; skip clearing
+	}
 	fmt.Print("\033[2J\033[H")
 }
 
@@ -337,9 +350,9 @@ func clearScreen() {
 func displayNextGoalWithTimestamp() {
 	fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
 	if err := displayNextGoal(); err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
-	fmt.Printf("\nRefreshing every %v... (Press Ctrl+C to exit)\n", RefreshInterval)
+	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
 
 // handleTodayCommand outputs all goals that are due today
