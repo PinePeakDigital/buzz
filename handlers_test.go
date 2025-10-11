@@ -877,17 +877,17 @@ func TestNavigationTimeout(t *testing.T) {
 		// Navigate down
 		updatedModel, cmd := handleNavigationDown(m)
 		appModel := updatedModel.(model).appModel
-		
+
 		// Check hasNavigated is true
 		if !appModel.hasNavigated {
 			t.Error("hasNavigated should be true after navigation")
 		}
-		
+
 		// Check lastNavigationTime is set
 		if appModel.lastNavigationTime.IsZero() {
 			t.Error("lastNavigationTime should be set after navigation")
 		}
-		
+
 		// Check command is returned
 		if cmd == nil {
 			t.Error("navigationTimeoutCmd should be returned after navigation")
@@ -908,11 +908,11 @@ func TestNavigationTimeout(t *testing.T) {
 				searchMode:         false,
 			},
 		}
-		
+
 		// Process navigationTimeoutMsg
 		result, _ := testModel.updateApp(navigationTimeoutMsg{})
 		resultAppModel := result.(model).appModel
-		
+
 		// hasNavigated should be false after timeout
 		if resultAppModel.hasNavigated {
 			t.Error("hasNavigated should be false after timeout")
@@ -933,11 +933,11 @@ func TestNavigationTimeout(t *testing.T) {
 				searchMode:         false,
 			},
 		}
-		
+
 		// Process navigationTimeoutMsg
 		result, _ := testModel.updateApp(navigationTimeoutMsg{})
 		resultAppModel := result.(model).appModel
-		
+
 		// hasNavigated should still be true
 		if !resultAppModel.hasNavigated {
 			t.Error("hasNavigated should still be true if less than 3 seconds elapsed")
@@ -958,11 +958,11 @@ func TestNavigationTimeout(t *testing.T) {
 				searchMode:         false,
 			},
 		}
-		
+
 		// Process navigationTimeoutMsg
 		result, _ := testModel.updateApp(navigationTimeoutMsg{})
 		resultAppModel := result.(model).appModel
-		
+
 		// hasNavigated should still be true (modal is open)
 		if !resultAppModel.hasNavigated {
 			t.Error("hasNavigated should remain true when modal is open")
@@ -983,11 +983,11 @@ func TestNavigationTimeout(t *testing.T) {
 				searchMode:         true,
 			},
 		}
-		
+
 		// Process navigationTimeoutMsg
 		result, _ := testModel.updateApp(navigationTimeoutMsg{})
 		resultAppModel := result.(model).appModel
-		
+
 		// hasNavigated should still be true (search mode is active)
 		if !resultAppModel.hasNavigated {
 			t.Error("hasNavigated should remain true when in search mode")
@@ -1024,15 +1024,15 @@ func TestNavigationTimeout(t *testing.T) {
 			t.Run(h.name, func(t *testing.T) {
 				result, cmd := h.handler(testModel)
 				resultModel := result.(model)
-				
+
 				if !resultModel.appModel.hasNavigated {
 					t.Errorf("%s: hasNavigated should be true", h.name)
 				}
-				
+
 				if resultModel.appModel.lastNavigationTime.IsZero() {
 					t.Errorf("%s: lastNavigationTime should be set", h.name)
 				}
-				
+
 				if cmd == nil {
 					t.Errorf("%s: should return navigationTimeoutCmd", h.name)
 				}
