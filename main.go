@@ -137,6 +137,18 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Schedule next check
 		return m, checkRefreshFlagCmd()
 
+	case navigationTimeoutMsg:
+		// Auto-disable highlight after inactivity
+		// Only disable if not in modal or search mode
+		if !m.appModel.showModal && !m.appModel.searchMode {
+			// Check if enough time has elapsed since last navigation
+			elapsed := time.Since(m.appModel.lastNavigationTime)
+			if elapsed >= 3*time.Second {
+				m.appModel.hasNavigated = false
+			}
+		}
+		return m, nil
+
 	// Is it a key press?
 	case tea.KeyMsg:
 		return handleKeyPress(m, msg)
