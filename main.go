@@ -10,6 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// navigationTimeout is the duration of inactivity before the cell highlight is auto-disabled
+const navigationTimeout = 3 * time.Second
+
 func (m model) Init() tea.Cmd {
 	if m.state == "auth" {
 		return m.authModel.Init()
@@ -143,7 +146,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.appModel.showModal && !m.appModel.searchMode {
 			// Check if enough time has elapsed since last navigation
 			elapsed := time.Since(m.appModel.lastNavigationTime)
-			if elapsed >= 3*time.Second {
+			if elapsed >= navigationTimeout {
 				m.appModel.hasNavigated = false
 			}
 		}

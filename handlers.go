@@ -556,7 +556,7 @@ func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
 			if newCursor >= 0 {
 				m.appModel.cursor = newCursor
 			}
-			return m, navigationTimeoutCmd(3 * time.Second)
+			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
 	return m, nil
@@ -574,7 +574,7 @@ func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
 			if newCursor < len(displayGoals) {
 				m.appModel.cursor = newCursor
 			}
-			return m, navigationTimeoutCmd(3 * time.Second)
+			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
 	return m, nil
@@ -600,7 +600,7 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 			if currentCol > 0 {
 				m.appModel.cursor--
 			}
-			return m, navigationTimeoutCmd(3 * time.Second)
+			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
 	return m, nil
@@ -626,7 +626,7 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 			if currentCol < cols-1 && m.appModel.cursor+1 < len(displayGoals) {
 				m.appModel.cursor++
 			}
-			return m, navigationTimeoutCmd(3 * time.Second)
+			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
 	return m, nil
