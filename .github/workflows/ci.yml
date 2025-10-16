@@ -28,6 +28,7 @@ jobs:
         run: go fmt ./...
       
       - name: Auto-commit formatting changes
+        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'chore: run go fmt'
