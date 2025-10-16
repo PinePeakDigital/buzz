@@ -14,6 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// navigationTimeout is the duration of inactivity before the cell highlight is auto-disabled
+const navigationTimeout = 3 * time.Second
+
 func (m model) Init() tea.Cmd {
 	if m.state == "auth" {
 		return m.authModel.Init()
@@ -140,6 +143,18 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Schedule next check
 		return m, checkRefreshFlagCmd()
+
+	case navigationTimeoutMsg:
+		// Auto-disable highlight after inactivity
+		// Only disable if not in modal or search mode
+		if !m.appModel.showModal && !m.appModel.searchMode {
+			// Check if enough time has elapsed since last navigation
+			elapsed := time.Since(m.appModel.lastNavigationTime)
+			if elapsed >= navigationTimeout {
+				m.appModel.hasNavigated = false
+			}
+		}
+		return m, nil
 
 	// Is it a key press?
 	case tea.KeyMsg:
@@ -280,31 +295,37 @@ func handleNextCommand() {
 	}
 }
 
-// displayNextGoal fetches and displays the next due goal
-// Returns error instead of calling os.Exit() for reusability in watch mode
-func displayNextGoal() error {
-	// Load config
+// loadConfigAndGoals loads configuration and fetches sorted goals from Beeminder
+func loadConfigAndGoals() (*Config, []Goal, error) {
 	if !ConfigExists() {
-		return fmt.Errorf("No configuration found. Please run 'buzz' first to authenticate.")
+		return nil, nil, fmt.Errorf("no configuration found. Please run 'buzz' first to authenticate")
 	}
 
 	config, err := LoadConfig()
 	if err != nil {
-		return fmt.Errorf("Failed to load config: %w", err)
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Fetch goals
 	goals, err := FetchGoals(config)
 	if err != nil {
-		return fmt.Errorf("Failed to fetch goals: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch goals: %w", err)
 	}
 
-	// Sort goals (by due date ascending, then by stakes descending, then by name)
 	SortGoals(goals)
+	return config, goals, nil
+}
+
+// displayNextGoal fetches and displays the next due goal
+// Returns error instead of calling os.Exit() for reusability in watch mode
+func displayNextGoal() error {
+	_, goals, err := loadConfigAndGoals()
+	if err != nil {
+		return err
+	}
 
 	// If no goals, return error
 	if len(goals) == 0 {
-		return fmt.Errorf("No goals found.")
+		return fmt.Errorf("no goals found")
 	}
 
 	// Get the first goal (most urgent)
