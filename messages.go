@@ -35,6 +35,9 @@ type goalCreatedMsg struct {
 // checkRefreshFlagMsg is sent periodically to check for external refresh requests
 type checkRefreshFlagMsg struct{}
 
+// navigationTimeoutMsg is sent when navigation highlight should be auto-disabled
+type navigationTimeoutMsg struct{}
+
 // loadGoalsCmd fetches goals from Beeminder API
 func loadGoalsCmd(config *Config) tea.Cmd {
 	return func() tea.Msg {
@@ -82,5 +85,12 @@ func createGoalCmd(config *Config, slug, title, goalType, gunits, goaldate, goal
 func checkRefreshFlagCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg {
 		return checkRefreshFlagMsg{}
+	})
+}
+
+// navigationTimeoutCmd creates a command that sends navigationTimeoutMsg after a duration
+func navigationTimeoutCmd(duration time.Duration) tea.Cmd {
+	return tea.Tick(duration, func(time.Time) tea.Msg {
+		return navigationTimeoutMsg{}
 	})
 }

@@ -855,3 +855,188 @@ func TestHandleDatapointInputUnicode(t *testing.T) {
 		})
 	}
 }
+
+// TestNavigationTimeout tests the auto-disable highlight feature
+func TestNavigationTimeout(t *testing.T) {
+	// Create a test model with some goals
+	m := model{
+		appModel: appModel{
+			goals: []Goal{
+				{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+				{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+			},
+			hasNavigated:       false,
+			lastNavigationTime: time.Time{},
+			width:              80,
+			height:             24,
+		},
+	}
+
+	t.Run("navigation sets hasNavigated and lastNavigationTime", func(t *testing.T) {
+		// Navigate down
+		updatedModel, cmd := handleNavigationDown(m)
+		appModel := updatedModel.(model).appModel
+
+		// Check hasNavigated is true
+		if !appModel.hasNavigated {
+			t.Error("hasNavigated should be true after navigation")
+		}
+
+		// Check lastNavigationTime is set
+		if appModel.lastNavigationTime.IsZero() {
+			t.Error("lastNavigationTime should be set after navigation")
+		}
+
+		// Check command is returned
+		if cmd == nil {
+			t.Error("navigationTimeoutCmd should be returned after navigation")
+		}
+	})
+
+	t.Run("timeout message disables highlight after 3 seconds", func(t *testing.T) {
+		// Create model with navigation that happened 4 seconds ago
+		pastTime := time.Now().Add(-4 * time.Second)
+		testModel := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				hasNavigated:       true,
+				lastNavigationTime: pastTime,
+				showModal:          false,
+				searchMode:         false,
+			},
+		}
+
+		// Process navigationTimeoutMsg
+		result, _ := testModel.updateApp(navigationTimeoutMsg{})
+		resultAppModel := result.(model).appModel
+
+		// hasNavigated should be false after timeout
+		if resultAppModel.hasNavigated {
+			t.Error("hasNavigated should be false after timeout")
+		}
+	})
+
+	t.Run("timeout message does not disable if less than 3 seconds", func(t *testing.T) {
+		// Create model with navigation that happened 2 seconds ago
+		recentTime := time.Now().Add(-2 * time.Second)
+		testModel := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				hasNavigated:       true,
+				lastNavigationTime: recentTime,
+				showModal:          false,
+				searchMode:         false,
+			},
+		}
+
+		// Process navigationTimeoutMsg
+		result, _ := testModel.updateApp(navigationTimeoutMsg{})
+		resultAppModel := result.(model).appModel
+
+		// hasNavigated should still be true
+		if !resultAppModel.hasNavigated {
+			t.Error("hasNavigated should still be true if less than 3 seconds elapsed")
+		}
+	})
+
+	t.Run("timeout does not disable highlight while modal is open", func(t *testing.T) {
+		// Create model with navigation that happened 4 seconds ago, modal open
+		pastTime := time.Now().Add(-4 * time.Second)
+		testModel := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				hasNavigated:       true,
+				lastNavigationTime: pastTime,
+				showModal:          true,
+				searchMode:         false,
+			},
+		}
+
+		// Process navigationTimeoutMsg
+		result, _ := testModel.updateApp(navigationTimeoutMsg{})
+		resultAppModel := result.(model).appModel
+
+		// hasNavigated should still be true (modal is open)
+		if !resultAppModel.hasNavigated {
+			t.Error("hasNavigated should remain true when modal is open")
+		}
+	})
+
+	t.Run("timeout does not disable highlight while in search mode", func(t *testing.T) {
+		// Create model with navigation that happened 4 seconds ago, in search mode
+		pastTime := time.Now().Add(-4 * time.Second)
+		testModel := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				hasNavigated:       true,
+				lastNavigationTime: pastTime,
+				showModal:          false,
+				searchMode:         true,
+			},
+		}
+
+		// Process navigationTimeoutMsg
+		result, _ := testModel.updateApp(navigationTimeoutMsg{})
+		resultAppModel := result.(model).appModel
+
+		// hasNavigated should still be true (search mode is active)
+		if !resultAppModel.hasNavigated {
+			t.Error("hasNavigated should remain true when in search mode")
+		}
+	})
+
+	t.Run("all navigation handlers set time and return command", func(t *testing.T) {
+		// Test model with multiple goals in a grid layout
+		testModel := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+				},
+				cursor: 0,
+				width:  80,
+				height: 24,
+			},
+		}
+
+		handlers := []struct {
+			name    string
+			handler func(model) (tea.Model, tea.Cmd)
+		}{
+			{"up", handleNavigationUp},
+			{"down", handleNavigationDown},
+			{"left", handleNavigationLeft},
+			{"right", handleNavigationRight},
+		}
+
+		for _, h := range handlers {
+			t.Run(h.name, func(t *testing.T) {
+				result, cmd := h.handler(testModel)
+				resultModel := result.(model)
+
+				if !resultModel.appModel.hasNavigated {
+					t.Errorf("%s: hasNavigated should be true", h.name)
+				}
+
+				if resultModel.appModel.lastNavigationTime.IsZero() {
+					t.Errorf("%s: lastNavigationTime should be set", h.name)
+				}
+
+				if cmd == nil {
+					t.Errorf("%s: should return navigationTimeoutCmd", h.name)
+				}
+			})
+		}
+	})
+}
