@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -250,6 +251,11 @@ func handleNextCommand() {
 	watch := nextFlags.Bool("watch", false, "Watch mode - continuously refresh every 5 minutes")
 	watchShort := nextFlags.Bool("w", false, "Watch mode - continuously refresh every 5 minutes (shorthand)")
 	if err := nextFlags.Parse(os.Args[2:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			// Help was requested; print usage and exit 0
+			fmt.Println("Usage: buzz next [-w|--watch]")
+			return
+		}
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 		fmt.Fprintln(os.Stderr, "Usage: buzz next [-w|--watch]")
 		os.Exit(2)
