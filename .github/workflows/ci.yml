@@ -13,10 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
+        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.head_ref }}
+
+      - name: Checkout code (fork)
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/checkout@v4
       
       - name: Set up Go
         uses: actions/setup-go@v6
