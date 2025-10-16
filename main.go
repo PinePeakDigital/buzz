@@ -1,10 +1,14 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -210,6 +214,8 @@ func printHelp() {
 	fmt.Println("USAGE:")
 	fmt.Println("  buzz                              Launch the interactive TUI")
 	fmt.Println("  buzz next                         Output a terse summary of the next due goal")
+	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
+	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
@@ -253,6 +259,42 @@ func main() {
 	}
 }
 
+// handleNextCommand outputs a terse summary of the next due goal
+func handleNextCommand() {
+	// Parse flags for the next command
+	nextFlags := flag.NewFlagSet("next", flag.ContinueOnError)
+	watch := nextFlags.Bool("watch", false, "Watch mode - continuously refresh every 5 minutes")
+	watchShort := nextFlags.Bool("w", false, "Watch mode - continuously refresh every 5 minutes (shorthand)")
+	if err := nextFlags.Parse(os.Args[2:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			// Help was requested; print usage and exit 0
+			fmt.Println("Usage: buzz next [-w|--watch]")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Usage: buzz next [-w|--watch]")
+		os.Exit(2)
+	}
+	if args := nextFlags.Args(); len(args) > 0 {
+		fmt.Fprintf(os.Stderr, "Unknown arguments: %v\n", args)
+		fmt.Fprintln(os.Stderr, "Usage: buzz next [-w|--watch]")
+		os.Exit(2)
+	}
+
+	// If either watch flag is set, enable watch mode
+	watchMode := *watch || *watchShort
+
+	if watchMode {
+		runWatchMode()
+	} else {
+		// One-shot mode - display and exit
+		if err := displayNextGoal(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+}
+
 // loadConfigAndGoals loads configuration and fetches sorted goals from Beeminder
 func loadConfigAndGoals() (*Config, []Goal, error) {
 	if !ConfigExists() {
@@ -273,39 +315,96 @@ func loadConfigAndGoals() (*Config, []Goal, error) {
 	return config, goals, nil
 }
 
-// handleNextCommand outputs a terse summary of the next due goal
-func handleNextCommand() {
+// displayNextGoal fetches and displays the next due goal
+// Returns error instead of calling os.Exit() for reusability in watch mode
+func displayNextGoal() error {
 	_, goals, err := loadConfigAndGoals()
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
-	// If no goals, exit
+	// If no goals, return error
 	if len(goals) == 0 {
-		fmt.Println("No goals found.")
-		return
+		return fmt.Errorf("no goals found")
 	}
 
 	// Get the first goal (most urgent)
 	nextGoal := goals[0]
 
 	// Format the output: "goalslug baremin timeframe"
-	// baremin is like "+2 in 3 days" or "-1 in 2 hours"
-	// We'll output: "goalslug baremin timeframe"
 	timeframe := FormatDueDate(nextGoal.Losedate)
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
+	return nil
+}
+
+// runWatchMode runs the next command in watch mode with periodic refresh
+func runWatchMode() {
+	ticker := time.NewTicker(RefreshInterval)
+	defer ticker.Stop()
+
+	// Signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
+
+	// Initial display
+	clearScreen()
+	displayNextGoalWithTimestamp()
+
+	for {
+		select {
+		case <-ticker.C:
+			clearScreen()
+			displayNextGoalWithTimestamp()
+		case <-sigChan:
+			fmt.Println("\nExiting...")
+			return
+		}
+	}
+}
+
+// clearScreen clears the terminal screen
+func clearScreen() {
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
+		return // not a terminal; skip clearing
+	}
+	fmt.Print("\033[2J\033[H")
+}
+
+// displayNextGoalWithTimestamp displays the next goal with a timestamp and refresh info
+func displayNextGoalWithTimestamp() {
+	fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
+	if err := displayNextGoal(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
 
 // handleTodayCommand outputs all goals that are due today
 func handleTodayCommand() {
-	_, goals, err := loadConfigAndGoals()
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
 		os.Exit(1)
 	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Sort goals (by due date ascending, then by stakes descending, then by name)
+	SortGoals(goals)
 
 	// Filter goals that are due today
 	var todayGoals []Goal

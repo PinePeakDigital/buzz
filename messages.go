@@ -6,6 +6,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// RefreshInterval is the interval for auto-refreshing data in the TUI and watch mode
+const RefreshInterval = time.Minute * 5
+
 // goalsLoadedMsg is sent when goals are loaded from the API
 type goalsLoadedMsg struct {
 	goals []Goal
@@ -52,7 +55,7 @@ func loadGoalsCmd(config *Config) tea.Cmd {
 
 // refreshTickCmd creates a command that sends refresh tick messages at intervals
 func refreshTickCmd() tea.Cmd {
-	return tea.Tick(time.Minute*5, func(time.Time) tea.Msg {
+	return tea.Tick(RefreshInterval, func(time.Time) tea.Msg {
 		return refreshTickMsg{}
 	})
 }
