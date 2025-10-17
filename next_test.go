@@ -22,7 +22,7 @@ func TestClearScreen(t *testing.T) {
 			t.Errorf("clearScreen() panicked: %v", r)
 		}
 	}()
-	
+
 	clearScreen()
 }
 
@@ -51,7 +51,7 @@ func TestTimestampFormat(t *testing.T) {
 	testTime := time.Date(2025, 10, 10, 23, 27, 13, 0, time.UTC)
 	formatted := testTime.Format("2006-01-02 15:04:05")
 	expected := "2025-10-10 23:27:13"
-	
+
 	if formatted != expected {
 		t.Errorf("Timestamp format = %q, want %q", formatted, expected)
 	}

@@ -11,7 +11,7 @@ View your goals in a colorful grid, navigate with arrow keys, and add datapoints
 Install using [bin](https://github.com/marcosnils/bin):
 
 ```bash
-bin install https://github.com/narthur/buzz
+bin install https://github.com/pinepeakdigital/buzz
 ```
 
 This will download the latest release and make it available in your PATH.
@@ -33,7 +33,7 @@ brew upgrade narthur/tap/buzz
 
 ### Direct Download
 
-You can also download pre-built binaries directly from the [releases page](https://github.com/narthur/buzz/releases). Choose the appropriate binary for your operating system and architecture.
+You can also download pre-built binaries directly from the [releases page](https://github.com/pinepeakdigital/buzz/releases). Choose the appropriate binary for your operating system and architecture.
 
 #### macOS Users
 
@@ -52,7 +52,7 @@ Replace `/path/to/buzz` with the actual path to the downloaded binary.
 If you have Go installed:
 
 ```bash
-go install github.com/narthur/buzz@latest
+go install github.com/pinepeakdigital/buzz@latest
 ```
 
 ## Authentication
