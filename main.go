@@ -224,7 +224,7 @@ func printHelp() {
 	fmt.Println("OPTIONS:")
 	fmt.Println("  -h, --help                        Show this help message")
 	fmt.Println("")
-	fmt.Println("For more information, visit: https://github.com/narthur/buzz")
+	fmt.Println("For more information, visit: https://github.com/pinepeakdigital/buzz")
 }
 
 func main() {
