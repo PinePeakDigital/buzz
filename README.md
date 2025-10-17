@@ -21,14 +21,14 @@ This will download the latest release and make it available in your PATH.
 Install using [Homebrew](https://brew.sh):
 
 ```bash
-brew tap pinepeakdigital/tap
-brew install pinepeakdigital/tap/buzz
+brew tap narthur/tap
+brew install narthur/tap/buzz
 ```
 
 To upgrade:
 
 ```bash
-brew upgrade pinepeakdigital/tap/buzz
+brew upgrade narthur/tap/buzz
 ```
 
 ### Direct Download
