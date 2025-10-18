@@ -134,14 +134,16 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case checkRefreshFlagMsg:
 		// Check if another process requested a refresh
-		if refreshFlagExists() {
-			deleteRefreshFlag()
+		flagTimestamp := getRefreshFlagTimestamp()
+		if flagTimestamp > m.lastRefreshTimestamp {
+			// New refresh event detected - update our last processed timestamp
+			m.lastRefreshTimestamp = flagTimestamp
 			return m, tea.Batch(
 				loadGoalsCmd(m.appModel.config),
 				checkRefreshFlagCmd(), // Schedule next check
 			)
 		}
-		// Schedule next check
+		// No new refresh event, but continue checking
 		return m, checkRefreshFlagCmd()
 
 	case navigationTimeoutMsg:
