@@ -124,16 +124,16 @@ func getRefreshFlagTimestamp() int64 {
 	if err != nil {
 		return 0
 	}
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
-	
+
 	timestamp, err := strconv.ParseInt(string(data), 10, 64)
 	if err != nil {
 		return 0
 	}
-	
+
 	return timestamp
 }
