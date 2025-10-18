@@ -205,8 +205,8 @@ func TestRefreshFlagTimestamp(t *testing.T) {
 		}
 		timestamp1 := getRefreshFlagTimestamp()
 
-		// Wait a bit to ensure different timestamp
-		time.Sleep(1100 * time.Millisecond)
+		// Wait 1 second to ensure different Unix timestamp
+		time.Sleep(1 * time.Second)
 
 		// Create second flag (overwrites first)
 		if err := createRefreshFlag(); err != nil {
