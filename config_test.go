@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 // TestConfigStructMarshaling tests the Config struct JSON marshaling
@@ -127,6 +128,98 @@ func TestRefreshFlagFunctions(t *testing.T) {
 				t.Errorf("cycle %d: flag should not exist after delete", i)
 			}
 		}
+	})
+
+	// Clean up after all tests
+	deleteRefreshFlag()
+}
+
+// TestRefreshFlagTimestamp tests the timestamp-based refresh flag operations
+func TestRefreshFlagTimestamp(t *testing.T) {
+	// Clean up any existing flag file before test
+	deleteRefreshFlag()
+
+	t.Run("getRefreshFlagTimestamp returns 0 when flag does not exist", func(t *testing.T) {
+		// Ensure flag doesn't exist
+		deleteRefreshFlag()
+
+		timestamp := getRefreshFlagTimestamp()
+		if timestamp != 0 {
+			t.Errorf("getRefreshFlagTimestamp() = %d, want 0 when flag doesn't exist", timestamp)
+		}
+	})
+
+	t.Run("createRefreshFlag writes valid timestamp", func(t *testing.T) {
+		// Clean up first
+		deleteRefreshFlag()
+
+		// Create the flag
+		beforeTime := time.Now().Unix()
+		if err := createRefreshFlag(); err != nil {
+			t.Fatalf("createRefreshFlag() error = %v", err)
+		}
+		afterTime := time.Now().Unix()
+
+		// Get the timestamp
+		timestamp := getRefreshFlagTimestamp()
+		if timestamp < beforeTime || timestamp > afterTime {
+			t.Errorf("getRefreshFlagTimestamp() = %d, want timestamp between %d and %d", timestamp, beforeTime, afterTime)
+		}
+
+		// Clean up
+		deleteRefreshFlag()
+	})
+
+	t.Run("multiple instances can read same timestamp", func(t *testing.T) {
+		// Clean up first
+		deleteRefreshFlag()
+
+		// Create the flag
+		if err := createRefreshFlag(); err != nil {
+			t.Fatalf("createRefreshFlag() error = %v", err)
+		}
+
+		// Read timestamp multiple times (simulating multiple instances)
+		timestamp1 := getRefreshFlagTimestamp()
+		timestamp2 := getRefreshFlagTimestamp()
+		timestamp3 := getRefreshFlagTimestamp()
+
+		if timestamp1 == 0 {
+			t.Error("First read should return valid timestamp")
+		}
+		if timestamp1 != timestamp2 || timestamp1 != timestamp3 {
+			t.Errorf("All reads should return same timestamp: got %d, %d, %d", timestamp1, timestamp2, timestamp3)
+		}
+
+		// Clean up
+		deleteRefreshFlag()
+	})
+
+	t.Run("timestamp updates on new createRefreshFlag call", func(t *testing.T) {
+		// Clean up first
+		deleteRefreshFlag()
+
+		// Create first flag
+		if err := createRefreshFlag(); err != nil {
+			t.Fatalf("createRefreshFlag() error = %v", err)
+		}
+		timestamp1 := getRefreshFlagTimestamp()
+
+		// Wait 1 second to ensure different Unix timestamp
+		time.Sleep(1 * time.Second)
+
+		// Create second flag (overwrites first)
+		if err := createRefreshFlag(); err != nil {
+			t.Fatalf("createRefreshFlag() error = %v", err)
+		}
+		timestamp2 := getRefreshFlagTimestamp()
+
+		if timestamp2 <= timestamp1 {
+			t.Errorf("Second timestamp (%d) should be greater than first (%d)", timestamp2, timestamp1)
+		}
+
+		// Clean up
+		deleteRefreshFlag()
 	})
 
 	// Clean up after all tests

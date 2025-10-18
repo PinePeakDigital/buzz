@@ -47,11 +47,12 @@ type appModel struct {
 
 // model is the top-level model that switches between auth and app
 type model struct {
-	state     string // "auth" or "app"
-	authModel authModel
-	appModel  appModel
-	width     int // terminal width
-	height    int // terminal height
+	state                string // "auth" or "app"
+	authModel            authModel
+	appModel             appModel
+	width                int   // terminal width
+	height               int   // terminal height
+	lastRefreshTimestamp int64 // last processed refresh flag timestamp
 }
 
 func initialAppModel(config *Config) appModel {
@@ -93,15 +94,17 @@ func initialModel() model {
 		if err == nil {
 			// Config exists and is valid, go straight to app
 			return model{
-				state:    "app",
-				appModel: initialAppModel(config),
+				state:                "app",
+				appModel:             initialAppModel(config),
+				lastRefreshTimestamp: time.Now().Unix(), // Initialize to current timestamp
 			}
 		}
 	}
 
 	// No config, start with auth
 	return model{
-		state:     "auth",
-		authModel: initialAuthModel(),
+		state:                "auth",
+		authModel:            initialAuthModel(),
+		lastRefreshTimestamp: time.Now().Unix(), // Initialize to current timestamp
 	}
 }

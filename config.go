@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 )
 
 // Config holds the Beeminder API credentials
@@ -80,13 +83,14 @@ func getRefreshFlagPath() (string, error) {
 	return filepath.Join(home, ".buzz-refresh"), nil
 }
 
-// createRefreshFlag creates the refresh flag file
+// createRefreshFlag creates the refresh flag file with current Unix timestamp
 func createRefreshFlag() error {
 	path, err := getRefreshFlagPath()
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte{}, 0600)
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	return os.WriteFile(path, []byte(timestamp), 0600)
 }
 
 // deleteRefreshFlag deletes the refresh flag file
@@ -111,4 +115,25 @@ func refreshFlagExists() bool {
 	}
 	_, err = os.Stat(path)
 	return err == nil
+}
+
+// getRefreshFlagTimestamp reads and returns the timestamp from the refresh flag file
+// Returns 0 if the file doesn't exist or contains invalid data
+func getRefreshFlagTimestamp() int64 {
+	path, err := getRefreshFlagPath()
+	if err != nil {
+		return 0
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+
+	timestamp, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	return timestamp
 }
