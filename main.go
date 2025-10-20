@@ -14,6 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// version is set via ldflags during build
+var version = "dev"
+
 // navigationTimeout is the duration of inactivity before the cell highlight is auto-disabled
 const navigationTimeout = 3 * time.Second
 
@@ -226,8 +229,13 @@ func printHelp() {
 	fmt.Println("")
 	fmt.Println("OPTIONS:")
 	fmt.Println("  -h, --help                        Show this help message")
+	fmt.Println("  -v, --version                     Show version information")
 	fmt.Println("")
 	fmt.Println("For more information, visit: https://github.com/pinepeakdigital/buzz")
+}
+
+func printVersion() {
+	fmt.Printf("buzz version %s\n", version)
 }
 
 func main() {
@@ -248,6 +256,9 @@ func main() {
 			return
 		case "help", "-h", "--help":
 			printHelp()
+			return
+		case "-v", "--version", "version":
+			printVersion()
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
