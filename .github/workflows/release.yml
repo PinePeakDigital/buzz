@@ -56,6 +56,8 @@ jobs:
       - name: Build cross-platform binaries
         if: steps.check.outputs.skip == 'false'
         run: ./scripts/build.sh
+        env:
+          VERSION: ${{ steps.semver.outputs.next }}
 
       - name: Create Release
         if: steps.check.outputs.skip == 'false'
