@@ -593,22 +593,31 @@ func TestRefreshGoalWithMockServer(t *testing.T) {
 				t.Errorf("Unexpected URL path: %s", r.URL.Path)
 			}
 
+			// Verify the URL contains the expected username and goal slug
+			expectedPath := "/api/v1/users/testuser/goals/testgoal/refresh_graph.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+
 			// Return true to indicate goal was queued
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(true)
 		}))
 		defer mockServer.Close()
 
-		// Note: This test verifies the function exists and returns the expected type
-		// In production, RefreshGoal uses a hardcoded URL, so we can't actually call it with the mock
-		// But we can verify the function signature
 		config := &Config{
 			Username:  "testuser",
 			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
 		}
-		_ = config
-		_ = mockServer
-		t.Log("RefreshGoal function signature validated")
+
+		queued, err := RefreshGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("RefreshGoal failed: %v", err)
+		}
+		if !queued {
+			t.Error("Expected queued=true, got false")
+		}
 	})
 
 	// Test case 2: unsuccessful refresh (returns false)
@@ -623,9 +632,38 @@ func TestRefreshGoalWithMockServer(t *testing.T) {
 		config := &Config{
 			Username:  "testuser",
 			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
 		}
-		_ = config
-		_ = mockServer
-		t.Log("RefreshGoal function handles false response")
+
+		queued, err := RefreshGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("RefreshGoal failed: %v", err)
+		}
+		if queued {
+			t.Error("Expected queued=false, got true")
+		}
+	})
+
+	// Test case 3: API error handling
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Return a non-200 status code
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		_, err := RefreshGoal(config, "testgoal")
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if !strings.Contains(err.Error(), "API returned status 500") {
+			t.Errorf("Expected error message about status 500, got: %v", err)
+		}
 	})
 }

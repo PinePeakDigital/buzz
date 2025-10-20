@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Username  string `json:"username"`
 	AuthToken string `json:"auth_token"`
+	BaseURL   string `json:"base_url,omitempty"` // Optional base URL for API, defaults to https://www.beeminder.com
 }
 
 // getConfigPath returns the path to the config file

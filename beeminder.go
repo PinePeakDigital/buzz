@@ -329,8 +329,12 @@ func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval
 // RefreshGoal forces a fetch of autodata and graph refresh for a goal
 // Returns true if the goal was queued for refresh, false if not
 func RefreshGoal(config *Config, goalSlug string) (bool, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
-		config.Username, goalSlug, config.AuthToken)
+	baseURL := config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://www.beeminder.com"
+	}
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
+		baseURL, config.Username, goalSlug, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
