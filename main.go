@@ -225,6 +225,7 @@ func printHelp() {
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
+	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("OPTIONS:")
@@ -254,6 +255,9 @@ func main() {
 		case "refresh":
 			handleRefreshCommand()
 			return
+		case "review":
+			handleReviewCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -262,7 +266,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, add, refresh, help, version")
+			fmt.Println("Available commands: next, today, add, refresh, review, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -555,5 +559,42 @@ func handleRefreshCommand() {
 		fmt.Printf("Successfully queued refresh for goal: %s\n", goalSlug)
 	} else {
 		fmt.Printf("Goal %s was not queued for refresh\n", goalSlug)
+	}
+}
+
+// handleReviewCommand launches an interactive review of all goals
+func handleReviewCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Sort goals alphabetically by slug as specified
+	SortGoalsBySlug(goals)
+
+	if len(goals) == 0 {
+		fmt.Println("No goals found.")
+		return
+	}
+
+	// Launch the interactive review TUI
+	p := tea.NewProgram(initialReviewModel(goals, config), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 	}
 }

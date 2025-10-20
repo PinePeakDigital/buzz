@@ -1,0 +1,156 @@
+package main
+
+import (
+	"fmt"
+	"os/exec"
+	"runtime"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// reviewModel holds the state for the review command
+type reviewModel struct {
+	goals   []Goal
+	config  *Config
+	current int    // current goal index
+	width   int    // terminal width
+	height  int    // terminal height
+}
+
+// initialReviewModel creates a new review model
+func initialReviewModel(goals []Goal, config *Config) reviewModel {
+	return reviewModel{
+		goals:   goals,
+		config:  config,
+		current: 0,
+	}
+}
+
+func (m reviewModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			return m, tea.Quit
+
+		case "right", "l", "n", "j":
+			// Next goal
+			if m.current < len(m.goals)-1 {
+				m.current++
+			}
+			return m, nil
+
+		case "left", "h", "p", "k":
+			// Previous goal
+			if m.current > 0 {
+				m.current--
+			}
+			return m, nil
+
+		case "o", "enter":
+			// Open current goal in browser
+			if m.current < len(m.goals) {
+				goal := m.goals[m.current]
+				openBrowser(m.config, goal.Slug)
+			}
+			return m, nil
+		}
+	}
+
+	return m, nil
+}
+
+func (m reviewModel) View() string {
+	if len(m.goals) == 0 {
+		return "No goals to review.\n\nPress q to quit."
+	}
+
+	goal := m.goals[m.current]
+
+	// Create the goal details view
+	var view string
+
+	// Title section with counter
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("12")).
+		Padding(0, 1)
+
+	counterStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Padding(0, 1)
+
+	view += titleStyle.Render(fmt.Sprintf("Goal: %s", goal.Title)) + "\n"
+	view += counterStyle.Render(fmt.Sprintf("Goal %d of %d", m.current+1, len(m.goals))) + "\n\n"
+
+	// Goal details section
+	detailStyle := lipgloss.NewStyle().
+		Padding(0, 2)
+
+	details := ""
+	details += fmt.Sprintf("Slug:          %s\n", goal.Slug)
+	details += fmt.Sprintf("Rate:          %s\n", goal.Limsum)
+	details += fmt.Sprintf("Current Value: %s\n", goal.Baremin)
+	details += fmt.Sprintf("Buffer:        %d days\n", goal.Safebuf)
+	details += fmt.Sprintf("Pledge:        $%.0f\n", goal.Pledge)
+	details += fmt.Sprintf("Due:           %s\n", FormatDueDate(goal.Losedate))
+
+	// Color the details based on buffer
+	color := GetBufferColor(goal.Safebuf)
+	var lipglossColor lipgloss.Color
+	switch color {
+	case "red":
+		lipglossColor = lipgloss.Color("9")
+	case "orange":
+		lipglossColor = lipgloss.Color("214")
+	case "blue":
+		lipglossColor = lipgloss.Color("12")
+	case "green":
+		lipglossColor = lipgloss.Color("10")
+	default:
+		lipglossColor = lipgloss.Color("241")
+	}
+
+	detailStyleColored := detailStyle.Foreground(lipglossColor)
+	view += detailStyleColored.Render(details) + "\n"
+
+	// Help section
+	helpStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Padding(1, 2)
+
+	help := "Navigation: ← → (or h l, or j k, or p n)  |  Open in browser: o or Enter  |  Quit: q or Esc"
+	view += helpStyle.Render(help)
+
+	return view
+}
+
+// openBrowser opens the goal page in the default browser
+func openBrowser(config *Config, goalSlug string) error {
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/%s/%s", baseURL, config.Username, goalSlug)
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	return cmd.Start()
+}

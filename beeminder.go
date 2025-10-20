@@ -79,6 +79,13 @@ func SortGoals(goals []Goal) {
 	})
 }
 
+// SortGoalsBySlug sorts goals alphabetically by slug
+func SortGoalsBySlug(goals []Goal) {
+	sort.Slice(goals, func(i, j int) bool {
+		return goals[i].Slug < goals[j].Slug
+	})
+}
+
 // GetBufferColor returns the color name based on safebuf value
 // 0 days buffer (safebuf < 1) = red
 // 1 day buffer (safebuf < 2) = orange
