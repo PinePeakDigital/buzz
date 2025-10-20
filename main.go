@@ -583,13 +583,13 @@ func handleReviewCommand() {
 		os.Exit(1)
 	}
 
-	// Sort goals alphabetically by slug as specified
-	SortGoalsBySlug(goals)
-
 	if len(goals) == 0 {
 		fmt.Println("No goals found.")
 		return
 	}
+
+	// Sort goals alphabetically by slug as specified
+	SortGoalsBySlug(goals)
 
 	// Launch the interactive review TUI
 	p := tea.NewProgram(initialReviewModel(goals, config), tea.WithAltScreen())

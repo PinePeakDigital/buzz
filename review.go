@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os/exec"
 	"runtime"
 
@@ -13,9 +14,10 @@ import (
 type reviewModel struct {
 	goals   []Goal
 	config  *Config
-	current int // current goal index
-	width   int // terminal width
-	height  int // terminal height
+	current int    // current goal index
+	width   int    // terminal width
+	height  int    // terminal height
+	err     string // error message to display
 }
 
 // initialReviewModel creates a new review model
@@ -61,7 +63,11 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open current goal in browser
 			if m.current < len(m.goals) {
 				goal := m.goals[m.current]
-				openBrowser(m.config, goal.Slug)
+				if err := openBrowser(m.config, goal.Slug); err != nil {
+					m.err = fmt.Sprintf("Failed to open browser: %v", err)
+				} else {
+					m.err = "" // Clear any previous error
+				}
 			}
 			return m, nil
 		}
@@ -124,6 +130,14 @@ func (m reviewModel) View() string {
 	detailStyleColored := detailStyle.Foreground(lipglossColor)
 	view += detailStyleColored.Render(details) + "\n"
 
+	// Error message section (if any)
+	if m.err != "" {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("9")).
+			Padding(0, 2)
+		view += errorStyle.Render(fmt.Sprintf("⚠ %s", m.err)) + "\n"
+	}
+
 	// Help section
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
@@ -138,16 +152,16 @@ func (m reviewModel) View() string {
 // openBrowser opens the goal page in the default browser
 func openBrowser(config *Config, goalSlug string) error {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/%s/%s", baseURL, config.Username, goalSlug)
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goalSlug))
 
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", goalURL)
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", goalURL)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
+		cmd = exec.Command("cmd", "/c", "start", goalURL)
 	default:
 		return fmt.Errorf("unsupported platform")
 	}

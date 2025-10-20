@@ -1,7 +1,10 @@
 package main
 
 import (
+	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestSortGoalsBySlug(t *testing.T) {
@@ -64,6 +67,80 @@ func TestReviewModelInit(t *testing.T) {
 	}
 }
 
+func TestReviewModelNavigationForward(t *testing.T) {
+	goals := []Goal{
+		{Slug: "goal1", Title: "First Goal"},
+		{Slug: "goal2", Title: "Second Goal"},
+		{Slug: "goal3", Title: "Third Goal"},
+	}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	m := initialReviewModel(goals, config)
+
+	// Test moving forward from first goal
+	if m.current != 0 {
+		t.Errorf("Expected initial current to be 0, got %d", m.current)
+	}
+
+	// Simulate pressing right arrow
+	updatedModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updatedModel.(reviewModel)
+
+	if m.current != 1 {
+		t.Errorf("Expected current to be 1 after right key, got %d", m.current)
+	}
+
+	// Move forward again
+	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updatedModel.(reviewModel)
+
+	if m.current != 2 {
+		t.Errorf("Expected current to be 2 after second right key, got %d", m.current)
+	}
+
+	// Test boundary - should not go past last goal
+	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updatedModel.(reviewModel)
+
+	if m.current != 2 {
+		t.Errorf("Expected current to stay at 2 at boundary, got %d", m.current)
+	}
+}
+
+func TestReviewModelNavigationBackward(t *testing.T) {
+	goals := []Goal{
+		{Slug: "goal1", Title: "First Goal"},
+		{Slug: "goal2", Title: "Second Goal"},
+		{Slug: "goal3", Title: "Third Goal"},
+	}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	m := initialReviewModel(goals, config)
+	m.current = 2 // Start at last goal
+
+	// Simulate pressing left arrow
+	updatedModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updatedModel.(reviewModel)
+
+	if m.current != 1 {
+		t.Errorf("Expected current to be 1 after left key, got %d", m.current)
+	}
+
+	// Move backward again
+	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updatedModel.(reviewModel)
+
+	if m.current != 0 {
+		t.Errorf("Expected current to be 0 after second left key, got %d", m.current)
+	}
+
+	// Test boundary - should not go below 0
+	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updatedModel.(reviewModel)
+
+	if m.current != 0 {
+		t.Errorf("Expected current to stay at 0 at boundary, got %d", m.current)
+	}
+}
+
 func TestReviewModelView(t *testing.T) {
 	goals := []Goal{
 		{
@@ -92,12 +169,12 @@ func TestReviewModelView(t *testing.T) {
 
 	// Check for goal counter
 	expectedCounter := "Goal 1 of 1"
-	if !containsString(view, expectedCounter) {
+	if !strings.Contains(view, expectedCounter) {
 		t.Errorf("Expected view to contain '%s'", expectedCounter)
 	}
 
 	// Check for goal slug
-	if !containsString(view, "testgoal") {
+	if !strings.Contains(view, "testgoal") {
 		t.Error("Expected view to contain goal slug")
 	}
 }
@@ -113,22 +190,7 @@ func TestReviewModelEmptyGoals(t *testing.T) {
 	view := m.View()
 
 	expectedMessage := "No goals to review"
-	if !containsString(view, expectedMessage) {
+	if !strings.Contains(view, expectedMessage) {
 		t.Errorf("Expected view to contain '%s'", expectedMessage)
 	}
-}
-
-// Helper function to check if a string contains a substring
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr || len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
