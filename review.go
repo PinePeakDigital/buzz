@@ -88,7 +88,7 @@ func (m reviewModel) View() string {
 	// Create the goal details view
 	var view string
 
-	// Title section with counter
+	// Title section with counter and status indicator
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("12")).
@@ -98,7 +98,33 @@ func (m reviewModel) View() string {
 		Foreground(lipgloss.Color("241")).
 		Padding(0, 1)
 
-	view += titleStyle.Render(fmt.Sprintf("Goal: %s", goal.Slug)) + "\n"
+	// Add colored status indicator based on buffer
+	color := GetBufferColor(goal.Safebuf)
+	var statusColor lipgloss.Color
+	var statusSymbol string
+	switch color {
+	case "red":
+		statusColor = lipgloss.Color("9")
+		statusSymbol = "●"
+	case "orange":
+		statusColor = lipgloss.Color("214")
+		statusSymbol = "●"
+	case "blue":
+		statusColor = lipgloss.Color("12")
+		statusSymbol = "●"
+	case "green":
+		statusColor = lipgloss.Color("10")
+		statusSymbol = "●"
+	default:
+		statusColor = lipgloss.Color("241")
+		statusSymbol = "●"
+	}
+
+	statusStyle := lipgloss.NewStyle().
+		Foreground(statusColor).
+		Padding(0, 1, 0, 0)
+
+	view += statusStyle.Render(statusSymbol) + titleStyle.Render(fmt.Sprintf("Goal: %s", goal.Slug)) + "\n"
 	view += counterStyle.Render(fmt.Sprintf("Goal %d of %d", m.current+1, len(m.goals))) + "\n\n"
 
 	// Goal details section
@@ -112,24 +138,7 @@ func (m reviewModel) View() string {
 	details += fmt.Sprintf("Due:           %s (%d day buffer)\n", FormatDueDate(goal.Losedate), goal.Safebuf)
 	details += fmt.Sprintf("Pledge:        $%.2f\n", goal.Pledge)
 
-	// Color the details based on buffer
-	color := GetBufferColor(goal.Safebuf)
-	var lipglossColor lipgloss.Color
-	switch color {
-	case "red":
-		lipglossColor = lipgloss.Color("9")
-	case "orange":
-		lipglossColor = lipgloss.Color("214")
-	case "blue":
-		lipglossColor = lipgloss.Color("12")
-	case "green":
-		lipglossColor = lipgloss.Color("10")
-	default:
-		lipglossColor = lipgloss.Color("241")
-	}
-
-	detailStyleColored := detailStyle.Foreground(lipglossColor)
-	view += detailStyleColored.Render(details) + "\n"
+	view += detailStyle.Render(details) + "\n"
 
 	// Error message section (if any)
 	if m.err != "" {
