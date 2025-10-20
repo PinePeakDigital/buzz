@@ -98,7 +98,7 @@ func (m reviewModel) View() string {
 		Foreground(lipgloss.Color("241")).
 		Padding(0, 1)
 
-	view += titleStyle.Render(fmt.Sprintf("Goal: %s", goal.Title)) + "\n"
+	view += titleStyle.Render(fmt.Sprintf("Goal: %s", goal.Slug)) + "\n"
 	view += counterStyle.Render(fmt.Sprintf("Goal %d of %d", m.current+1, len(m.goals))) + "\n\n"
 
 	// Goal details section
@@ -106,12 +106,11 @@ func (m reviewModel) View() string {
 		Padding(0, 2)
 
 	details := ""
-	details += fmt.Sprintf("Slug:          %s\n", goal.Slug)
+	details += fmt.Sprintf("Title:         %s\n", goal.Title)
 	details += fmt.Sprintf("Rate:          %s\n", goal.Limsum)
 	details += fmt.Sprintf("Current Value: %s\n", goal.Baremin)
-	details += fmt.Sprintf("Buffer:        %d days\n", goal.Safebuf)
+	details += fmt.Sprintf("Due:           %s (%d day buffer)\n", FormatDueDate(goal.Losedate), goal.Safebuf)
 	details += fmt.Sprintf("Pledge:        $%.2f\n", goal.Pledge)
-	details += fmt.Sprintf("Due:           %s\n", FormatDueDate(goal.Losedate))
 
 	// Color the details based on buffer
 	color := GetBufferColor(goal.Safebuf)
