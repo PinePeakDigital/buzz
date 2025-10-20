@@ -33,8 +33,12 @@ type Datapoint struct {
 
 // FetchGoals fetches the user's goals from Beeminder API
 func FetchGoals(config *Config) ([]Goal, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json?auth_token=%s",
-		config.Username, config.AuthToken)
+	baseURL := config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://www.beeminder.com"
+	}
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals.json?auth_token=%s",
+		baseURL, config.Username, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -218,8 +222,12 @@ func FormatDueDateAt(losedate int64, now time.Time) string {
 
 // GetLastDatapointValue fetches the last datapoint value for a goal
 func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
-		config.Username, goalSlug, config.AuthToken)
+	baseURL := config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://www.beeminder.com"
+	}
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
+		baseURL, config.Username, goalSlug, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -248,8 +256,12 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 
 // CreateDatapoint submits a new datapoint to a Beeminder goal
 func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s/datapoints.json",
-		config.Username, goalSlug)
+	baseURL := config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://www.beeminder.com"
+	}
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
+		baseURL, config.Username, goalSlug)
 
 	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
 		config.AuthToken, timestamp, value, comment)
@@ -270,8 +282,12 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 
 // FetchGoalWithDatapoints fetches goal details including recent datapoints
 func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
-		config.Username, goalSlug, config.AuthToken)
+	baseURL := config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://www.beeminder.com"
+	}
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		baseURL, config.Username, goalSlug, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -294,8 +310,12 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 // CreateGoal creates a new goal for the user
 // Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate
 func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
-	apiURL := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json",
-		config.Username)
+	baseURL := config.BaseURL
+	if baseURL == "" {
+		baseURL = "https://www.beeminder.com"
+	}
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals.json",
+		baseURL, config.Username)
 
 	data := url.Values{}
 	data.Set("auth_token", config.AuthToken)
