@@ -132,11 +132,11 @@ func (m reviewModel) View() string {
 		Padding(0, 2)
 
 	details := ""
-	details += fmt.Sprintf("Title:         %s\n", goal.Title)
-	details += fmt.Sprintf("Rate:          %s\n", goal.Limsum)
-	details += fmt.Sprintf("Current Value: %s\n", goal.Baremin)
-	details += fmt.Sprintf("Due:           %s (%d day buffer)\n", FormatDueDate(goal.Losedate), goal.Safebuf)
-	details += fmt.Sprintf("Pledge:        $%.2f\n", goal.Pledge)
+	details += fmt.Sprintf("Title:       %s\n", goal.Title)
+	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
+	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
+	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
+	details += fmt.Sprintf("Autoratchet: %.0f\n", goal.Autoratchet)
 
 	view += detailStyle.Render(details) + "\n"
 

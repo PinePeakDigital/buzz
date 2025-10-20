@@ -12,14 +12,16 @@ import (
 
 // Goal represents a Beeminder goal with relevant fields
 type Goal struct {
-	Slug       string      `json:"slug"`
-	Title      string      `json:"title"`
-	Losedate   int64       `json:"losedate"`
-	Pledge     float64     `json:"pledge"`
-	Safebuf    int         `json:"safebuf"`
-	Limsum     string      `json:"limsum"`
-	Baremin    string      `json:"baremin"`
-	Datapoints []Datapoint `json:"datapoints,omitempty"`
+	Slug        string      `json:"slug"`
+	Title       string      `json:"title"`
+	Losedate    int64       `json:"losedate"`
+	Pledge      float64     `json:"pledge"`
+	Safebuf     int         `json:"safebuf"`
+	Limsum      string      `json:"limsum"`
+	Baremin     string      `json:"baremin"`
+	Autodata    string      `json:"autodata"`
+	Autoratchet float64     `json:"autoratchet"`
+	Datapoints  []Datapoint `json:"datapoints,omitempty"`
 }
 
 // Datapoint represents a Beeminder datapoint
