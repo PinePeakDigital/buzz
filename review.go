@@ -50,6 +50,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.current < len(m.goals)-1 {
 				m.current++
 			}
+			m.err = ""
 			return m, nil
 
 		case "left", "h", "p", "k":
@@ -57,6 +58,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.current > 0 {
 				m.current--
 			}
+			m.err = ""
 			return m, nil
 
 		case "o", "enter":
@@ -108,7 +110,7 @@ func (m reviewModel) View() string {
 	details += fmt.Sprintf("Rate:          %s\n", goal.Limsum)
 	details += fmt.Sprintf("Current Value: %s\n", goal.Baremin)
 	details += fmt.Sprintf("Buffer:        %d days\n", goal.Safebuf)
-	details += fmt.Sprintf("Pledge:        $%.0f\n", goal.Pledge)
+	details += fmt.Sprintf("Pledge:        $%.2f\n", goal.Pledge)
 	details += fmt.Sprintf("Due:           %s\n", FormatDueDate(goal.Losedate))
 
 	// Color the details based on buffer
@@ -161,7 +163,7 @@ func openBrowser(config *Config, goalSlug string) error {
 	case "linux":
 		cmd = exec.Command("xdg-open", goalURL)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", goalURL)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", goalURL)
 	default:
 		return fmt.Errorf("unsupported platform")
 	}

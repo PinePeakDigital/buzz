@@ -566,20 +566,20 @@ func handleRefreshCommand() {
 func handleReviewCommand() {
 	// Load config
 	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
 		os.Exit(1)
 	}
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Fetch goals
 	goals, err := FetchGoals(config)
 	if err != nil {
-		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -594,7 +594,7 @@ func handleReviewCommand() {
 	// Launch the interactive review TUI
 	p := tea.NewProgram(initialReviewModel(goals, config), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
