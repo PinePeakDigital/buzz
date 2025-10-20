@@ -117,6 +117,24 @@ This command is analogous to pressing the refresh button on a goal's page in the
 
 **Note:** This is an asynchronous operation. The command returns immediately after the goal is queued for refresh. It may take a few moments for Beeminder to actually fetch the new data.
 
+**buzz review** - Interactive review of all goals:
+
+```bash
+buzz review
+```
+
+This launches an interactive interface that displays one goal at a time, allowing you to review all your goals in detail. The goals are sorted alphabetically by slug.
+
+**Features:**
+- View detailed information about each goal (slug, rate, current value, buffer, pledge, due date)
+- Navigate between goals with keyboard shortcuts:
+  - **Next goal:** `→`, `l`, `n`, or `j`
+  - **Previous goal:** `←`, `h`, `p`, or `k`
+  - **Open in browser:** `o` or `Enter`
+  - **Quit:** `q` or `Esc`
+- See your progress through the list with a goal counter (e.g., "Goal 1 of 10")
+- Goals are color-coded based on urgency (same as the main TUI)
+
 Running `buzz` without arguments launches the interactive TUI.
 
 ### Navigation

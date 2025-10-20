@@ -13,9 +13,9 @@ import (
 type reviewModel struct {
 	goals   []Goal
 	config  *Config
-	current int    // current goal index
-	width   int    // terminal width
-	height  int    // terminal height
+	current int // current goal index
+	width   int // terminal width
+	height  int // terminal height
 }
 
 // initialReviewModel creates a new review model
