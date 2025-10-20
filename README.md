@@ -104,6 +104,19 @@ The comment parameter is optional and defaults to "Added via buzz" if not provid
 
 **Note:** When you run `buzz add` while the TUI is running in another terminal, the TUI will automatically refresh within 1 second to show the new datapoint.
 
+**buzz refresh** - Refresh autodata for a goal:
+
+```bash
+buzz refresh <goalslug>
+
+# Example:
+buzz refresh fitbit    # Forces Beeminder to fetch latest data from Fitbit
+```
+
+This command is analogous to pressing the refresh button on a goal's page in the Beeminder web interface. It forces Beeminder to refetch autodata for goals with automatic data sources (like Fitbit, GitHub, etc.) and refreshes the graph image. This is useful when you want to immediately update a goal's data instead of waiting for Beeminder's automatic sync.
+
+**Note:** This is an asynchronous operation. The command returns immediately after the goal is queued for refresh. It may take a few moments for Beeminder to actually fetch the new data.
+
 Running `buzz` without arguments launches the interactive TUI.
 
 ### Navigation

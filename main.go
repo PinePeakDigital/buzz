@@ -221,6 +221,7 @@ func printHelp() {
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
+	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("OPTIONS:")
@@ -242,12 +243,15 @@ func main() {
 		case "add":
 			handleAddCommand()
 			return
+		case "refresh":
+			handleRefreshCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, add, help")
+			fmt.Println("Available commands: next, today, add, refresh, help")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -504,4 +508,41 @@ func handleAddCommand() {
 	}
 
 	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
+}
+
+// handleRefreshCommand refreshes autodata for a goal
+func handleRefreshCommand() {
+	// Check arguments: buzz refresh <goalslug>
+	if len(os.Args) < 3 {
+		fmt.Println("Error: Missing required argument")
+		fmt.Println("Usage: buzz refresh <goalslug>")
+		os.Exit(1)
+	}
+
+	goalSlug := os.Args[2]
+
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Refresh the goal
+	queued, err := RefreshGoal(config, goalSlug)
+	if err != nil {
+		fmt.Printf("Error: Failed to refresh goal: %v\n", err)
+		os.Exit(1)
+	}
+
+	if queued {
+		fmt.Printf("Successfully queued refresh for goal: %s\n", goalSlug)
+	} else {
+		fmt.Printf("Goal %s was not queued for refresh\n", goalSlug)
+	}
 }

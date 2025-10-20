@@ -577,3 +577,93 @@ func TestIsDueToday(t *testing.T) {
 		})
 	}
 }
+
+// TestRefreshGoalWithMockServer tests RefreshGoal function with a mock HTTP server
+func TestRefreshGoalWithMockServer(t *testing.T) {
+	// Test case 1: successful refresh (returns true)
+	t.Run("successful refresh", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Verify it's a GET request
+			if r.Method != http.MethodGet {
+				t.Errorf("Expected GET request, got %s", r.Method)
+			}
+
+			// Verify the URL path
+			if !strings.Contains(r.URL.Path, "/refresh_graph.json") {
+				t.Errorf("Unexpected URL path: %s", r.URL.Path)
+			}
+
+			// Verify the URL contains the expected username and goal slug
+			expectedPath := "/api/v1/users/testuser/goals/testgoal/refresh_graph.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+
+			// Return true to indicate goal was queued
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(true)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		queued, err := RefreshGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("RefreshGoal failed: %v", err)
+		}
+		if !queued {
+			t.Error("Expected queued=true, got false")
+		}
+	})
+
+	// Test case 2: unsuccessful refresh (returns false)
+	t.Run("unsuccessful refresh", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Return false to indicate goal was not queued
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(false)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		queued, err := RefreshGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("RefreshGoal failed: %v", err)
+		}
+		if queued {
+			t.Error("Expected queued=false, got true")
+		}
+	})
+
+	// Test case 3: API error handling
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Return a non-200 status code
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		_, err := RefreshGoal(config, "testgoal")
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if !strings.Contains(err.Error(), "API returned status 500") {
+			t.Errorf("Expected error message about status 500, got: %v", err)
+		}
+	})
+}

@@ -31,10 +31,19 @@ type Datapoint struct {
 	Comment   string  `json:"comment"`
 }
 
+// getBaseURL returns the configured base URL or the default Beeminder URL
+func getBaseURL(config *Config) string {
+	if config.BaseURL == "" {
+		return "https://www.beeminder.com"
+	}
+	return config.BaseURL
+}
+
 // FetchGoals fetches the user's goals from Beeminder API
 func FetchGoals(config *Config) ([]Goal, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json?auth_token=%s",
-		config.Username, config.AuthToken)
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals.json?auth_token=%s",
+		baseURL, config.Username, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -218,8 +227,9 @@ func FormatDueDateAt(losedate int64, now time.Time) string {
 
 // GetLastDatapointValue fetches the last datapoint value for a goal
 func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
-		config.Username, goalSlug, config.AuthToken)
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
+		baseURL, config.Username, goalSlug, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -248,8 +258,9 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 
 // CreateDatapoint submits a new datapoint to a Beeminder goal
 func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s/datapoints.json",
-		config.Username, goalSlug)
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
+		baseURL, config.Username, goalSlug)
 
 	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
 		config.AuthToken, timestamp, value, comment)
@@ -270,8 +281,9 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 
 // FetchGoalWithDatapoints fetches goal details including recent datapoints
 func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
-	url := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
-		config.Username, goalSlug, config.AuthToken)
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		baseURL, config.Username, goalSlug, config.AuthToken)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -294,8 +306,9 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 // CreateGoal creates a new goal for the user
 // Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate
 func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
-	apiURL := fmt.Sprintf("https://www.beeminder.com/api/v1/users/%s/goals.json",
-		config.Username)
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals.json",
+		baseURL, config.Username)
 
 	data := url.Values{}
 	data.Set("auth_token", config.AuthToken)
@@ -324,4 +337,29 @@ func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval
 	}
 
 	return &goal, nil
+}
+
+// RefreshGoal forces a fetch of autodata and graph refresh for a goal
+// Returns true if the goal was queued for refresh, false if not
+func RefreshGoal(config *Config, goalSlug string) (bool, error) {
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
+		baseURL, config.Username, goalSlug, config.AuthToken)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, fmt.Errorf("failed to refresh goal: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result bool
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, fmt.Errorf("failed to decode refresh result: %w", err)
+	}
+
+	return result, nil
 }
