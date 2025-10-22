@@ -39,6 +39,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.appModel.width = msg.Width
 		m.appModel.height = msg.Height
+		// Re-clamp scroll position to keep cursor visible after resize
+		if m.state == "app" {
+			displayGoals := m.appModel.getDisplayGoals()
+			updateScrollForCursor(&m, len(displayGoals))
+		}
 	}
 
 	if m.state == "auth" {

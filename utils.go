@@ -243,3 +243,59 @@ func timeToDecimalHours(timeStr string) (float64, bool) {
 
 	return decimalHours, true
 }
+
+// ensureRowVisible adjusts the scroll position to keep the selected row visible
+// within the viewport. It implements minimal scrolling to avoid large jumps.
+//
+// Parameters:
+//   - selectedRow: the row index of the currently selected cell (0-based)
+//   - firstRow: the current first visible row (scrollRow)
+//   - visibleRows: the number of rows that fit in the viewport
+//   - totalRows: the total number of rows in the grid
+//
+// Returns: the adjusted firstRow (scrollRow) value to keep selectedRow visible
+func ensureRowVisible(selectedRow, firstRow, visibleRows, totalRows int) int {
+	// Guard against degenerate cases
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	// Move window up or down only as needed
+	if selectedRow < firstRow {
+		// Selection is above viewport - scroll up to show it
+		firstRow = selectedRow
+	} else if selectedRow > firstRow+visibleRows-1 {
+		// Selection is below viewport - scroll down to show it at the bottom
+		firstRow = selectedRow - visibleRows + 1
+	}
+
+	// Clamp to valid range
+	maxFirst := 0
+	if totalRows > visibleRows {
+		maxFirst = totalRows - visibleRows
+	}
+	if firstRow < 0 {
+		firstRow = 0
+	}
+	if firstRow > maxFirst {
+		firstRow = maxFirst
+	}
+
+	return firstRow
+}
+
+// updateScrollForCursor adjusts scrollRow to keep the cursor visible after navigation
+// This function should be called after cursor changes from arrow key navigation
+func updateScrollForCursor(m *model, displayLen int) {
+	cols := calculateColumns(m.appModel.width)
+	if cols < 1 {
+		cols = 1
+	}
+	totalRows := (displayLen + cols - 1) / cols
+	visibleRows := max(1, (m.appModel.height-4)/4) // Must match grid.go calculation
+	selRow := 0
+	if cols > 0 {
+		selRow = m.appModel.cursor / cols
+	}
+	m.appModel.scrollRow = ensureRowVisible(selRow, m.appModel.scrollRow, visibleRows, totalRows)
+}
