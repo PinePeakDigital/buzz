@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -606,7 +607,7 @@ func handleViewCommand() {
 	
 	// Generate and display goal URL
 	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, config.Username, goalSlug)
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
 	fmt.Printf("URL:         %s\n", goalURL)
 }
 
