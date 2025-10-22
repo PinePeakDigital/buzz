@@ -1040,3 +1040,251 @@ func TestNavigationTimeout(t *testing.T) {
 		}
 	})
 }
+
+// TestEnsureRowVisible tests the ensureRowVisible helper function
+func TestEnsureRowVisible(t *testing.T) {
+	tests := []struct {
+		name        string
+		selectedRow int
+		firstRow    int
+		visibleRows int
+		totalRows   int
+		expectedRow int
+		description string
+	}{
+		{
+			name:        "selection within viewport - no scroll",
+			selectedRow: 2,
+			firstRow:    0,
+			visibleRows: 5,
+			totalRows:   10,
+			expectedRow: 0,
+			description: "When selection is already visible, no scroll needed",
+		},
+		{
+			name:        "selection above viewport - scroll up",
+			selectedRow: 1,
+			firstRow:    3,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 1,
+			description: "When selection is above viewport, scroll up to show it",
+		},
+		{
+			name:        "selection below viewport - scroll down",
+			selectedRow: 5,
+			firstRow:    0,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 3,
+			description: "When selection is below viewport, scroll down to show it at bottom",
+		},
+		{
+			name:        "clamp at top",
+			selectedRow: 0,
+			firstRow:    -1,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 0,
+			description: "scrollRow should never be negative",
+		},
+		{
+			name:        "clamp at bottom",
+			selectedRow: 9,
+			firstRow:    0,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 7,
+			description: "scrollRow should not exceed totalRows - visibleRows",
+		},
+		{
+			name:        "all rows fit in viewport",
+			selectedRow: 2,
+			firstRow:    0,
+			visibleRows: 10,
+			totalRows:   5,
+			expectedRow: 0,
+			description: "When all rows fit, scrollRow should be 0",
+		},
+		{
+			name:        "tiny viewport (1 row)",
+			selectedRow: 5,
+			firstRow:    0,
+			visibleRows: 1,
+			totalRows:   10,
+			expectedRow: 5,
+			description: "With 1 visible row, scrollRow should equal selectedRow",
+		},
+		{
+			name:        "guard against zero visibleRows",
+			selectedRow: 2,
+			firstRow:    0,
+			visibleRows: 0,
+			totalRows:   10,
+			expectedRow: 2,
+			description: "visibleRows < 1 should be treated as 1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ensureRowVisible(tt.selectedRow, tt.firstRow, tt.visibleRows, tt.totalRows)
+			if result != tt.expectedRow {
+				t.Errorf("ensureRowVisible(%d, %d, %d, %d) = %d, want %d\n%s",
+					tt.selectedRow, tt.firstRow, tt.visibleRows, tt.totalRows,
+					result, tt.expectedRow, tt.description)
+			}
+		})
+	}
+}
+
+// TestScrollFollowsNavigation tests that navigation handlers update scrollRow appropriately
+func TestScrollFollowsNavigation(t *testing.T) {
+	// Setup: Create a grid with 10 goals, 2 columns, height allowing 3 visible rows
+	// With 2 cols and 10 goals, we have 5 total rows
+	// With height=24, visibleRows = max(1, (24-4)/4) = 5 rows visible
+	// So all rows fit - no scrolling should happen in this case
+
+	// Let's test with a taller grid that requires scrolling:
+	// 10 goals, 2 columns = 5 rows total
+	// height=16 -> visibleRows = max(1, (16-4)/4) = 3 rows visible
+	// So rows 0,1,2 are visible initially, rows 3,4 need scrolling
+
+	t.Run("down navigation scrolls viewport when moving past bottom edge", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+					{Slug: "goal5", Title: "Goal 5", Losedate: 1234567894},
+					{Slug: "goal6", Title: "Goal 6", Losedate: 1234567895},
+					{Slug: "goal7", Title: "Goal 7", Losedate: 1234567896},
+					{Slug: "goal8", Title: "Goal 8", Losedate: 1234567897},
+					{Slug: "goal9", Title: "Goal 9", Losedate: 1234567898},
+					{Slug: "goal10", Title: "Goal 10", Losedate: 1234567899},
+				},
+				cursor:    4, // Row 2 (0-indexed), column 0
+				scrollRow: 0,
+				width:     40, // 2 columns
+				height:    16, // 3 visible rows
+			},
+		}
+
+		// Navigate down from row 2 to row 3 (cursor 4 -> 6)
+		result, _ := handleNavigationDown(m)
+		resultModel := result.(model)
+
+		// Cursor should move down by 2 (1 full row)
+		if resultModel.appModel.cursor != 6 {
+			t.Errorf("cursor should be 6, got %d", resultModel.appModel.cursor)
+		}
+
+		// ScrollRow should adjust to keep row 3 visible
+		// Row 3 is outside viewport [0,2], so scrollRow should move to 1
+		// making viewport [1,3] which includes row 3
+		if resultModel.appModel.scrollRow != 1 {
+			t.Errorf("scrollRow should be 1 to show row 3, got %d", resultModel.appModel.scrollRow)
+		}
+	})
+
+	t.Run("up navigation scrolls viewport when moving past top edge", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+					{Slug: "goal5", Title: "Goal 5", Losedate: 1234567894},
+					{Slug: "goal6", Title: "Goal 6", Losedate: 1234567895},
+					{Slug: "goal7", Title: "Goal 7", Losedate: 1234567896},
+					{Slug: "goal8", Title: "Goal 8", Losedate: 1234567897},
+				},
+				cursor:    4,  // Row 2, column 0
+				scrollRow: 2,  // Viewport shows rows [2,4]
+				width:     40, // 2 columns
+				height:    16, // 3 visible rows
+			},
+		}
+
+		// Navigate up from row 2 to row 1 (cursor 4 -> 2)
+		result, _ := handleNavigationUp(m)
+		resultModel := result.(model)
+
+		// Cursor should move up by 2 (1 full row)
+		if resultModel.appModel.cursor != 2 {
+			t.Errorf("cursor should be 2, got %d", resultModel.appModel.cursor)
+		}
+
+		// ScrollRow should adjust to keep row 1 visible
+		// Row 1 is outside viewport [2,4], so scrollRow should move to 1
+		// making viewport [1,3] which includes row 1
+		if resultModel.appModel.scrollRow != 1 {
+			t.Errorf("scrollRow should be 1 to show row 1, got %d", resultModel.appModel.scrollRow)
+		}
+	})
+
+	t.Run("scrollRow clamps to valid range at boundaries", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+				},
+				cursor:    0, // First goal
+				scrollRow: 0,
+				width:     40, // 2 columns
+				height:    16, // 3 visible rows
+			},
+		}
+
+		// Try to navigate up from the first row - cursor shouldn't move
+		result, _ := handleNavigationUp(m)
+		resultModel := result.(model)
+
+		if resultModel.appModel.cursor != 0 {
+			t.Errorf("cursor should stay at 0, got %d", resultModel.appModel.cursor)
+		}
+
+		if resultModel.appModel.scrollRow != 0 {
+			t.Errorf("scrollRow should stay at 0, got %d", resultModel.appModel.scrollRow)
+		}
+	})
+
+	t.Run("navigation within visible viewport does not scroll", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+					{Slug: "goal5", Title: "Goal 5", Losedate: 1234567894},
+					{Slug: "goal6", Title: "Goal 6", Losedate: 1234567895},
+				},
+				cursor:    0, // Row 0, col 0
+				scrollRow: 0,
+				width:     40, // 2 columns
+				height:    16, // 3 visible rows
+			},
+		}
+
+		// Navigate down to row 1 (cursor 0 -> 2)
+		result, _ := handleNavigationDown(m)
+		resultModel := result.(model)
+
+		// Cursor should move
+		if resultModel.appModel.cursor != 2 {
+			t.Errorf("cursor should be 2, got %d", resultModel.appModel.cursor)
+		}
+
+		// ScrollRow should not change since row 1 is still visible in [0,2]
+		if resultModel.appModel.scrollRow != 0 {
+			t.Errorf("scrollRow should stay at 0, got %d", resultModel.appModel.scrollRow)
+		}
+	})
+}

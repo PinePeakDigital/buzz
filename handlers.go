@@ -556,6 +556,8 @@ func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
 			if newCursor >= 0 {
 				m.appModel.cursor = newCursor
 			}
+			// Keep selection visible after navigation
+			updateScrollForCursor(&m, len(displayGoals))
 			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
@@ -574,6 +576,8 @@ func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
 			if newCursor < len(displayGoals) {
 				m.appModel.cursor = newCursor
 			}
+			// Keep selection visible after navigation
+			updateScrollForCursor(&m, len(displayGoals))
 			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
@@ -600,6 +604,8 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 			if currentCol > 0 {
 				m.appModel.cursor--
 			}
+			// Keep selection visible after navigation (future-proof if rows change)
+			updateScrollForCursor(&m, len(displayGoals))
 			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
@@ -626,6 +632,8 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 			if currentCol < cols-1 && m.appModel.cursor+1 < len(displayGoals) {
 				m.appModel.cursor++
 			}
+			// Keep selection visible after navigation (future-proof if rows change)
+			updateScrollForCursor(&m, len(displayGoals))
 			return m, navigationTimeoutCmd(navigationTimeout)
 		}
 	}
