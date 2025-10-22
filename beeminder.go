@@ -288,6 +288,34 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	return nil
 }
 
+// FetchGoal fetches a single goal by slug
+func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch goal: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("goal not found: %s", goalSlug)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var goal Goal
+	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
+		return nil, fmt.Errorf("failed to decode goal: %w", err)
+	}
+
+	return &goal, nil
+}
+
 // FetchGoalWithDatapoints fetches goal details including recent datapoints
 func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	baseURL := getBaseURL(config)
