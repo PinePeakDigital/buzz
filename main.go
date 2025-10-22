@@ -225,6 +225,7 @@ func printHelp() {
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
+	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
@@ -255,6 +256,9 @@ func main() {
 		case "refresh":
 			handleRefreshCommand()
 			return
+		case "view":
+			handleViewCommand()
+			return
 		case "review":
 			handleReviewCommand()
 			return
@@ -266,7 +270,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, add, refresh, review, help, version")
+			fmt.Println("Available commands: next, today, add, refresh, view, review, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -560,6 +564,50 @@ func handleRefreshCommand() {
 	} else {
 		fmt.Printf("Goal %s was not queued for refresh\n", goalSlug)
 	}
+}
+
+// handleViewCommand displays detailed information about a specific goal
+func handleViewCommand() {
+	// Check arguments: buzz view <goalslug>
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
+		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug>")
+		os.Exit(1)
+	}
+
+	goalSlug := os.Args[2]
+
+	// Load config
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch the goal
+	goal, err := FetchGoal(config, goalSlug)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display goal information
+	fmt.Printf("Goal: %s\n", goal.Slug)
+	fmt.Printf("Title:       %s\n", goal.Title)
+	fmt.Printf("Limsum:      %s\n", goal.Limsum)
+	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
+	fmt.Printf("Autodata:    %s\n", goal.Autodata)
+	fmt.Printf("Autoratchet: %.0f\n", goal.Autoratchet)
+	
+	// Generate and display goal URL
+	baseURL := getBaseURL(config)
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, config.Username, goalSlug)
+	fmt.Printf("URL:         %s\n", goalURL)
 }
 
 // handleReviewCommand launches an interactive review of all goals

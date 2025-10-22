@@ -578,6 +578,136 @@ func TestIsDueToday(t *testing.T) {
 	}
 }
 
+// TestFetchGoalWithMockServer tests FetchGoal function with a mock HTTP server
+func TestFetchGoalWithMockServer(t *testing.T) {
+	// Test case 1: successful fetch
+	t.Run("successful fetch", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Verify it's a GET request
+			if r.Method != http.MethodGet {
+				t.Errorf("Expected GET request, got %s", r.Method)
+			}
+
+			// Verify the URL path
+			expectedPath := "/api/v1/users/testuser/goals/testgoal.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+
+			// Return a mock goal response
+			goal := Goal{
+				Slug:        "testgoal",
+				Title:       "Test Goal",
+				Losedate:    1234567890,
+				Pledge:      5.0,
+				Safebuf:     3,
+				Limsum:      "+2 within 1 day",
+				Baremin:     "+1 in 3 days",
+				Autodata:    "api/gmail",
+				Autoratchet: 0,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := FetchGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("FetchGoal failed: %v", err)
+		}
+		if goal.Slug != "testgoal" {
+			t.Errorf("Expected slug 'testgoal', got %s", goal.Slug)
+		}
+		if goal.Title != "Test Goal" {
+			t.Errorf("Expected title 'Test Goal', got %s", goal.Title)
+		}
+	})
+
+	// Test case 2: goal not found (404)
+	t.Run("goal not found", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		_, err := FetchGoal(config, "nonexistent")
+		if err == nil {
+			t.Error("Expected error for 404 status, got nil")
+		}
+		if !strings.Contains(err.Error(), "goal not found") {
+			t.Errorf("Expected 'goal not found' error message, got: %v", err)
+		}
+	})
+
+	// Test case 3: API error handling
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		_, err := FetchGoal(config, "testgoal")
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if !strings.Contains(err.Error(), "API returned status 500") {
+			t.Errorf("Expected error message about status 500, got: %v", err)
+		}
+	})
+
+	// Test case 4: URL encoding for special characters in goal slug
+	t.Run("URL encoding", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// HTTP server automatically decodes the URL path,
+			// so we verify the decoded path contains the space
+			// This confirms url.PathEscape was used correctly
+			if !strings.Contains(r.URL.Path, "test goal") {
+				t.Errorf("Expected path to contain 'test goal', got %s", r.URL.Path)
+			}
+
+			goal := Goal{
+				Slug:  "test goal",
+				Title: "Test Goal",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := FetchGoal(config, "test goal")
+		if err != nil {
+			t.Fatalf("FetchGoal failed: %v", err)
+		}
+		if goal.Slug != "test goal" {
+			t.Errorf("Expected slug 'test goal', got %s", goal.Slug)
+		}
+	})
+}
+
 // TestRefreshGoalWithMockServer tests RefreshGoal function with a mock HTTP server
 func TestRefreshGoalWithMockServer(t *testing.T) {
 	// Test case 1: successful refresh (returns true)
