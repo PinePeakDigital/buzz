@@ -604,7 +604,7 @@ func handleViewCommand() {
 	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
 	fmt.Printf("Autodata:    %s\n", goal.Autodata)
 	fmt.Printf("Autoratchet: %.0f\n", goal.Autoratchet)
-	
+
 	// Generate and display goal URL
 	baseURL := getBaseURL(config)
 	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
