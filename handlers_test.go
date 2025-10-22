@@ -1044,85 +1044,85 @@ func TestNavigationTimeout(t *testing.T) {
 // TestEnsureRowVisible tests the ensureRowVisible helper function
 func TestEnsureRowVisible(t *testing.T) {
 	tests := []struct {
-		name         string
-		selectedRow  int
-		firstRow     int
-		visibleRows  int
-		totalRows    int
-		expectedRow  int
-		description  string
+		name        string
+		selectedRow int
+		firstRow    int
+		visibleRows int
+		totalRows   int
+		expectedRow int
+		description string
 	}{
 		{
-			name:         "selection within viewport - no scroll",
-			selectedRow:  2,
-			firstRow:     0,
-			visibleRows:  5,
-			totalRows:    10,
-			expectedRow:  0,
-			description:  "When selection is already visible, no scroll needed",
+			name:        "selection within viewport - no scroll",
+			selectedRow: 2,
+			firstRow:    0,
+			visibleRows: 5,
+			totalRows:   10,
+			expectedRow: 0,
+			description: "When selection is already visible, no scroll needed",
 		},
 		{
-			name:         "selection above viewport - scroll up",
-			selectedRow:  1,
-			firstRow:     3,
-			visibleRows:  3,
-			totalRows:    10,
-			expectedRow:  1,
-			description:  "When selection is above viewport, scroll up to show it",
+			name:        "selection above viewport - scroll up",
+			selectedRow: 1,
+			firstRow:    3,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 1,
+			description: "When selection is above viewport, scroll up to show it",
 		},
 		{
-			name:         "selection below viewport - scroll down",
-			selectedRow:  5,
-			firstRow:     0,
-			visibleRows:  3,
-			totalRows:    10,
-			expectedRow:  3,
-			description:  "When selection is below viewport, scroll down to show it at bottom",
+			name:        "selection below viewport - scroll down",
+			selectedRow: 5,
+			firstRow:    0,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 3,
+			description: "When selection is below viewport, scroll down to show it at bottom",
 		},
 		{
-			name:         "clamp at top",
-			selectedRow:  0,
-			firstRow:     -1,
-			visibleRows:  3,
-			totalRows:    10,
-			expectedRow:  0,
-			description:  "scrollRow should never be negative",
+			name:        "clamp at top",
+			selectedRow: 0,
+			firstRow:    -1,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 0,
+			description: "scrollRow should never be negative",
 		},
 		{
-			name:         "clamp at bottom",
-			selectedRow:  9,
-			firstRow:     0,
-			visibleRows:  3,
-			totalRows:    10,
-			expectedRow:  7,
-			description:  "scrollRow should not exceed totalRows - visibleRows",
+			name:        "clamp at bottom",
+			selectedRow: 9,
+			firstRow:    0,
+			visibleRows: 3,
+			totalRows:   10,
+			expectedRow: 7,
+			description: "scrollRow should not exceed totalRows - visibleRows",
 		},
 		{
-			name:         "all rows fit in viewport",
-			selectedRow:  2,
-			firstRow:     0,
-			visibleRows:  10,
-			totalRows:    5,
-			expectedRow:  0,
-			description:  "When all rows fit, scrollRow should be 0",
+			name:        "all rows fit in viewport",
+			selectedRow: 2,
+			firstRow:    0,
+			visibleRows: 10,
+			totalRows:   5,
+			expectedRow: 0,
+			description: "When all rows fit, scrollRow should be 0",
 		},
 		{
-			name:         "tiny viewport (1 row)",
-			selectedRow:  5,
-			firstRow:     0,
-			visibleRows:  1,
-			totalRows:    10,
-			expectedRow:  5,
-			description:  "With 1 visible row, scrollRow should equal selectedRow",
+			name:        "tiny viewport (1 row)",
+			selectedRow: 5,
+			firstRow:    0,
+			visibleRows: 1,
+			totalRows:   10,
+			expectedRow: 5,
+			description: "With 1 visible row, scrollRow should equal selectedRow",
 		},
 		{
-			name:         "guard against zero visibleRows",
-			selectedRow:  2,
-			firstRow:     0,
-			visibleRows:  0,
-			totalRows:    10,
-			expectedRow:  2,
-			description:  "visibleRows < 1 should be treated as 1",
+			name:        "guard against zero visibleRows",
+			selectedRow: 2,
+			firstRow:    0,
+			visibleRows: 0,
+			totalRows:   10,
+			expectedRow: 2,
+			description: "visibleRows < 1 should be treated as 1",
 		},
 	}
 
@@ -1202,8 +1202,8 @@ func TestScrollFollowsNavigation(t *testing.T) {
 					{Slug: "goal7", Title: "Goal 7", Losedate: 1234567896},
 					{Slug: "goal8", Title: "Goal 8", Losedate: 1234567897},
 				},
-				cursor:    4, // Row 2, column 0
-				scrollRow: 2, // Viewport shows rows [2,4]
+				cursor:    4,  // Row 2, column 0
+				scrollRow: 2,  // Viewport shows rows [2,4]
 				width:     40, // 2 columns
 				height:    16, // 3 visible rows
 			},
