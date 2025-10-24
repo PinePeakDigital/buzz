@@ -797,3 +797,196 @@ func TestRefreshGoalWithMockServer(t *testing.T) {
 		}
 	})
 }
+
+// TestCreateChargeWithMockServer tests CreateCharge function with a mock HTTP server
+func TestCreateChargeWithMockServer(t *testing.T) {
+	// Test case 1: successful charge creation
+	t.Run("successful charge", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Verify it's a POST request
+			if r.Method != http.MethodPost {
+				t.Errorf("Expected POST request, got %s", r.Method)
+			}
+
+			// Verify the URL path
+			expectedPath := "/api/v1/charges.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+
+			// Parse the form data
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+
+			// Verify required parameters
+			if r.FormValue("user_id") != "testuser" {
+				t.Errorf("Expected user_id 'testuser', got %s", r.FormValue("user_id"))
+			}
+			if r.FormValue("amount") != "10.00" {
+				t.Errorf("Expected amount '10.00', got %s", r.FormValue("amount"))
+			}
+			if r.FormValue("note") != "Test charge" {
+				t.Errorf("Expected note 'Test charge', got %s", r.FormValue("note"))
+			}
+			if r.FormValue("auth_token") != "testtoken" {
+				t.Errorf("Expected auth_token 'testtoken', got %s", r.FormValue("auth_token"))
+			}
+			if r.FormValue("dryrun") != "" {
+				t.Errorf("Expected dryrun to be empty, got %s", r.FormValue("dryrun"))
+			}
+
+			// Return a mock charge response
+			charge := map[string]interface{}{
+				"id":       "charge123",
+				"amount":   10.00,
+				"note":     "Test charge",
+				"username": "testuser",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(charge)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		err := CreateCharge(config, 10.00, "Test charge", false)
+		if err != nil {
+			t.Fatalf("CreateCharge failed: %v", err)
+		}
+	})
+
+	// Test case 2: successful charge with dryrun
+	t.Run("successful charge with dryrun", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Parse the form data
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+
+			// Verify dryrun parameter is set
+			if r.FormValue("dryrun") != "true" {
+				t.Errorf("Expected dryrun 'true', got %s", r.FormValue("dryrun"))
+			}
+
+			// Return a mock charge response
+			charge := map[string]interface{}{
+				"id":       "charge123",
+				"amount":   5.00,
+				"note":     "Test charge with dryrun",
+				"username": "testuser",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(charge)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		err := CreateCharge(config, 5.00, "Test charge with dryrun", true)
+		if err != nil {
+			t.Fatalf("CreateCharge failed: %v", err)
+		}
+	})
+
+	// Test case 3: API error handling
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		err := CreateCharge(config, 10.00, "Test charge", false)
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if !strings.Contains(err.Error(), "API returned status 500") {
+			t.Errorf("Expected error message about status 500, got: %v", err)
+		}
+	})
+
+	// Test case 4: URL encoding for special characters in note
+	t.Run("URL encoding", func(t *testing.T) {
+		specialNote := "Test & special <characters>"
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+
+			// Verify the note was properly decoded
+			if r.FormValue("note") != specialNote {
+				t.Errorf("Expected note %q, got %q", specialNote, r.FormValue("note"))
+			}
+
+			charge := map[string]interface{}{
+				"id":       "charge123",
+				"amount":   10.00,
+				"note":     specialNote,
+				"username": "testuser",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(charge)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		err := CreateCharge(config, 10.00, specialNote, false)
+		if err != nil {
+			t.Fatalf("CreateCharge failed: %v", err)
+		}
+	})
+
+	// Test case 5: amount formatting
+	t.Run("amount formatting", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+
+			// Verify amount is formatted to 2 decimal places
+			if r.FormValue("amount") != "10.50" {
+				t.Errorf("Expected amount '10.50', got %s", r.FormValue("amount"))
+			}
+
+			charge := map[string]interface{}{
+				"id":       "charge123",
+				"amount":   10.50,
+				"note":     "Test",
+				"username": "testuser",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(charge)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		err := CreateCharge(config, 10.5, "Test", false)
+		if err != nil {
+			t.Fatalf("CreateCharge failed: %v", err)
+		}
+	})
+}
