@@ -916,9 +916,12 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		_, err := CreateCharge(config, 10.00, "Test charge", false)
+		ch, err := CreateCharge(config, 10.00, "Test charge", false)
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
+		}
+		if ch != nil {
+			t.Errorf("Expected nil charge on error, got: %+v", ch)
 		}
 		if !strings.Contains(err.Error(), "API returned status 500") {
 			t.Errorf("Expected error message about status 500, got: %v", err)
