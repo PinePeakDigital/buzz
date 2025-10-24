@@ -233,6 +233,8 @@ func printHelp() {
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz review                       Interactive review of all goals")
+	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
+	fmt.Println("                                    Create a charge for the authenticated user")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("OPTIONS:")
@@ -268,6 +270,9 @@ func main() {
 		case "review":
 			handleReviewCommand()
 			return
+		case "charge":
+			handleChargeCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -276,7 +281,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, add, refresh, view, review, help, version")
+			fmt.Println("Available commands: next, today, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -650,5 +655,62 @@ func handleReviewCommand() {
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// handleChargeCommand creates a charge for the authenticated user
+func handleChargeCommand() {
+	// Check arguments: buzz charge <amount> <note> [--dryrun]
+	if len(os.Args) < 4 {
+		fmt.Fprintln(os.Stderr, "Error: Missing required arguments")
+		fmt.Fprintln(os.Stderr, "Usage: buzz charge <amount> <note> [--dryrun]")
+		os.Exit(1)
+	}
+
+	amountStr := os.Args[2]
+	note := os.Args[3]
+
+	// Parse optional --dryrun flag
+	dryrun := false
+	if len(os.Args) >= 5 && os.Args[4] == "--dryrun" {
+		dryrun = true
+	}
+
+	// Validate amount is a number
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Amount must be a valid number, got: %s\n", amountStr)
+		os.Exit(1)
+	}
+
+	// Validate amount is >= 1.00
+	if amount < 1.00 {
+		fmt.Fprintf(os.Stderr, "Error: Amount must be at least 1.00, got: %.2f\n", amount)
+		os.Exit(1)
+	}
+
+	// Load config
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create the charge
+	err = CreateCharge(config, amount, note, dryrun)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create charge: %v\n", err)
+		os.Exit(1)
+	}
+
+	if dryrun {
+		fmt.Printf("Dry run: Would charge $%.2f with note: \"%s\"\n", amount, note)
+	} else {
+		fmt.Printf("Successfully created charge: $%.2f with note: \"%s\"\n", amount, note)
 	}
 }

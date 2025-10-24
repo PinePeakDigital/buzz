@@ -288,6 +288,34 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	return nil
 }
 
+// CreateCharge creates a new charge for the authenticated user
+func CreateCharge(config *Config, amount float64, note string, dryrun bool) error {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/charges.json", baseURL)
+
+	data := url.Values{}
+	data.Set("auth_token", config.AuthToken)
+	data.Set("user_id", config.Username)
+	data.Set("amount", fmt.Sprintf("%.2f", amount))
+	data.Set("note", note)
+	if dryrun {
+		data.Set("dryrun", "true")
+	}
+
+	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
+		strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create charge: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 // FetchGoal fetches a single goal by slug
 func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
 	baseURL := getBaseURL(config)
