@@ -660,20 +660,30 @@ func handleReviewCommand() {
 
 // handleChargeCommand creates a charge for the authenticated user
 func handleChargeCommand() {
-	// Check arguments: buzz charge <amount> <note> [--dryrun]
+	// Usage: buzz charge <amount> <note> [--dryrun]
 	if len(os.Args) < 4 {
 		fmt.Fprintln(os.Stderr, "Error: Missing required arguments")
 		fmt.Fprintln(os.Stderr, "Usage: buzz charge <amount> <note> [--dryrun]")
 		os.Exit(1)
 	}
 
-	amountStr := os.Args[2]
-	note := os.Args[3]
-
-	// Parse optional --dryrun flag
+	args := os.Args[2:]
+	amountStr := args[0]
+	// Collect note parts and allow --dryrun anywhere after amount
 	dryrun := false
-	if len(os.Args) >= 5 && os.Args[4] == "--dryrun" {
-		dryrun = true
+	var noteParts []string
+	for _, a := range args[1:] {
+		if a == "--dryrun" {
+			dryrun = true
+			continue
+		}
+		noteParts = append(noteParts, a)
+	}
+	note := strings.Join(noteParts, " ")
+	if strings.TrimSpace(note) == "" {
+		fmt.Fprintln(os.Stderr, "Error: Note is required")
+		fmt.Fprintln(os.Stderr, "Usage: buzz charge <amount> <note> [--dryrun]")
+		os.Exit(1)
 	}
 
 	// Validate amount is a number
@@ -701,16 +711,16 @@ func handleChargeCommand() {
 		os.Exit(1)
 	}
 
-	// Create the charge
-	err = CreateCharge(config, amount, note, dryrun)
+	// Create the charge (API returns the created/dry-run charge)
+	ch, err := CreateCharge(config, amount, note, dryrun)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to create charge: %v\n", err)
 		os.Exit(1)
 	}
 
 	if dryrun {
-		fmt.Printf("Dry run: Would charge $%.2f with note: \"%s\"\n", amount, note)
+		fmt.Printf("Dry run: Would charge $%.2f with note: %q for %s\n", ch.Amount, ch.Note, ch.Username)
 	} else {
-		fmt.Printf("Successfully created charge: $%.2f with note: \"%s\"\n", amount, note)
+		fmt.Printf("Successfully created charge %s: $%.2f with note: %q for %s\n", ch.ID, ch.Amount, ch.Note, ch.Username)
 	}
 }

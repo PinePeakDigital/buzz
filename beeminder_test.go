@@ -854,9 +854,12 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		err := CreateCharge(config, 10.00, "Test charge", false)
+		ch, err := CreateCharge(config, 10.00, "Test charge", false)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
+		}
+		if ch == nil || ch.ID != "charge123" || ch.Username != "testuser" || ch.Amount != 10.00 {
+			t.Fatalf("Unexpected charge: %+v", ch)
 		}
 	})
 
@@ -891,9 +894,12 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		err := CreateCharge(config, 5.00, "Test charge with dryrun", true)
+		ch, err := CreateCharge(config, 5.00, "Test charge with dryrun", true)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
+		}
+		if ch == nil || ch.ID != "charge123" || ch.Amount != 5.00 {
+			t.Fatalf("Unexpected charge: %+v", ch)
 		}
 	})
 
@@ -910,7 +916,7 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		err := CreateCharge(config, 10.00, "Test charge", false)
+		_, err := CreateCharge(config, 10.00, "Test charge", false)
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
@@ -949,9 +955,12 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		err := CreateCharge(config, 10.00, specialNote, false)
+		ch, err := CreateCharge(config, 10.00, specialNote, false)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
+		}
+		if ch == nil || ch.Note != specialNote {
+			t.Fatalf("Unexpected charge: %+v", ch)
 		}
 	})
 
@@ -984,9 +993,12 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		err := CreateCharge(config, 10.5, "Test", false)
+		ch, err := CreateCharge(config, 10.5, "Test", false)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
+		}
+		if ch == nil || ch.Amount != 10.50 {
+			t.Fatalf("Unexpected charge: %+v", ch)
 		}
 	})
 }

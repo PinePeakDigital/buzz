@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -31,6 +32,14 @@ type Datapoint struct {
 	Daystamp  string  `json:"daystamp"`
 	Value     float64 `json:"value"`
 	Comment   string  `json:"comment"`
+}
+
+// Charge represents a Beeminder charge response
+type Charge struct {
+	ID       string  `json:"id"`
+	Amount   float64 `json:"amount"`
+	Note     string  `json:"note"`
+	Username string  `json:"username"`
 }
 
 // getBaseURL returns the configured base URL or the default Beeminder URL
@@ -288,8 +297,8 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	return nil
 }
 
-// CreateCharge creates a new charge for the authenticated user
-func CreateCharge(config *Config, amount float64, note string, dryrun bool) error {
+// CreateCharge creates a new charge for the authenticated user and returns it
+func CreateCharge(config *Config, amount float64, note string, dryrun bool) (*Charge, error) {
 	baseURL := getBaseURL(config)
 	apiURL := fmt.Sprintf("%s/api/v1/charges.json", baseURL)
 
@@ -305,15 +314,20 @@ func CreateCharge(config *Config, amount float64, note string, dryrun bool) erro
 	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
 		strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create charge: %w", err)
+		return nil, fmt.Errorf("failed to create charge: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	return nil
+	var ch Charge
+	if err := json.NewDecoder(resp.Body).Decode(&ch); err != nil {
+		return nil, fmt.Errorf("failed to decode charge: %w", err)
+	}
+	return &ch, nil
 }
 
 // FetchGoal fetches a single goal by slug
