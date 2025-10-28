@@ -185,7 +185,8 @@ func TestReviewModelView(t *testing.T) {
 }
 
 func TestReviewModelViewDeadlineFormat(t *testing.T) {
-	// Use a known timestamp: 2009-02-13 23:31:30 UTC
+	// Use a known timestamp: 1234567890
+	// This is Feb 13, 2009 in local timezone (exact time depends on system timezone)
 	goals := []Goal{
 		{
 			Slug:     "testgoal",
@@ -207,7 +208,8 @@ func TestReviewModelViewDeadlineFormat(t *testing.T) {
 	view := m.View()
 
 	// Check that deadline is formatted correctly
-	// The exact timezone display may vary by system, but should contain the date
+	// Time displayed is in local system timezone, so we only check date components
+	// that should be consistent across timezones
 	if !strings.Contains(view, "2009") {
 		t.Error("Expected view to contain year '2009' from deadline")
 	}
