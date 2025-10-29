@@ -177,6 +177,46 @@ func TestReviewModelView(t *testing.T) {
 	if !strings.Contains(view, "testgoal") {
 		t.Error("Expected view to contain goal slug")
 	}
+
+	// Check for deadline display
+	if !strings.Contains(view, "Deadline:") {
+		t.Error("Expected view to contain 'Deadline:' label")
+	}
+}
+
+func TestReviewModelViewDeadlineFormat(t *testing.T) {
+	// Use a known timestamp: 1234567890
+	// This is Feb 13, 2009 in local timezone (exact time depends on system timezone)
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that deadline is formatted correctly
+	// Time displayed is in local system timezone, so we only check date components
+	// that should be consistent across timezones
+	if !strings.Contains(view, "2009") {
+		t.Error("Expected view to contain year '2009' from deadline")
+	}
+
+	if !strings.Contains(view, "Feb") {
+		t.Error("Expected view to contain month 'Feb' from deadline")
+	}
 }
 
 func TestReviewModelEmptyGoals(t *testing.T) {

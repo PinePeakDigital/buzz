@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -134,6 +135,8 @@ func (m reviewModel) View() string {
 	details := ""
 	details += fmt.Sprintf("Title:       %s\n", goal.Title)
 	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
+	deadlineTime := time.Unix(goal.Losedate, 0)
+	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
 	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
 	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
 	details += fmt.Sprintf("Autoratchet: %.0f\n", goal.Autoratchet)
