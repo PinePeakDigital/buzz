@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -232,5 +233,90 @@ func TestReviewModelEmptyGoals(t *testing.T) {
 	expectedMessage := "No goals to review"
 	if !strings.Contains(view, expectedMessage) {
 		t.Errorf("Expected view to contain '%s'", expectedMessage)
+	}
+}
+
+func TestFormatRate(t *testing.T) {
+	tests := []struct {
+		rate     float64
+		runits   string
+		expected string
+	}{
+		{1.0, "d", "1/day"},
+		{2.5, "w", "2.5/week"},
+		{7.0, "d", "7/day"},
+		{0.5, "w", "0.5/week"},
+		{10.0, "h", "10/hour"},
+		{1.0, "m", "1/month"},
+		{3.0, "y", "3/year"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("rate=%v,runits=%s", tt.rate, tt.runits), func(t *testing.T) {
+			result := formatRate(tt.rate, tt.runits)
+			if result != tt.expected {
+				t.Errorf("formatRate(%v, %s) = %s; want %s", tt.rate, tt.runits, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestReviewModelViewWithRate(t *testing.T) {
+	rate := 2.0
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &rate,
+			Runits:   "d",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the rate
+	expectedRate := "Rate:        2/day"
+	if !strings.Contains(view, expectedRate) {
+		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedRate, view)
+	}
+}
+
+func TestReviewModelViewWithoutRate(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     nil, // No rate
+			Runits:   "",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view doesn't contain "Rate:" when rate is nil
+	if strings.Contains(view, "Rate:") {
+		t.Errorf("Expected view to not contain 'Rate:' when rate is nil, but got:\n%s", view)
 	}
 }

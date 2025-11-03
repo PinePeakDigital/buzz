@@ -22,6 +22,8 @@ type Goal struct {
 	Baremin     string      `json:"baremin"`
 	Autodata    string      `json:"autodata"`
 	Autoratchet float64     `json:"autoratchet"`
+	Rate        *float64    `json:"rate"` // Pointer to handle null values from API
+	Runits      string      `json:"runits"`
 	Datapoints  []Datapoint `json:"datapoints,omitempty"`
 }
 
