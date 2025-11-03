@@ -138,6 +138,13 @@ func (m reviewModel) View() string {
 	deadlineTime := time.Unix(goal.Losedate, 0)
 	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
 	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
+
+	// Display current rate (n / unit)
+	if goal.Rate != nil && goal.Runits != "" {
+		rateStr := formatRate(*goal.Rate, goal.Runits)
+		details += fmt.Sprintf("Rate:        %s\n", rateStr)
+	}
+
 	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
 	details += fmt.Sprintf("Autoratchet: %.0f\n", goal.Autoratchet)
 
@@ -180,4 +187,24 @@ func openBrowser(config *Config, goalSlug string) error {
 	}
 
 	return cmd.Start()
+}
+
+// formatRate formats the rate with the appropriate time unit
+func formatRate(rate float64, runits string) string {
+	unitName := ""
+	switch runits {
+	case "y":
+		unitName = "year"
+	case "m":
+		unitName = "month"
+	case "w":
+		unitName = "week"
+	case "d":
+		unitName = "day"
+	case "h":
+		unitName = "hour"
+	default:
+		unitName = runits
+	}
+	return fmt.Sprintf("%.2g/%s", rate, unitName)
 }
