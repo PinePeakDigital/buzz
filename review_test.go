@@ -254,6 +254,11 @@ func TestFormatRate(t *testing.T) {
 		{2.0, "w", "hours", "2 hours / week"},
 		{1.0, "d", "pages", "1 pages / day"},
 		{3.5, "d", "workouts", "3.5 workouts / day"},
+		// Large rates that should not use scientific notation
+		{9800.0, "d", "", "9800/day"},
+		{12345.0, "w", "", "12345/week"},
+		{100000.0, "y", "", "100000/year"},
+		{9800.0, "d", "steps", "9800 steps / day"},
 	}
 
 	for _, tt := range tests {

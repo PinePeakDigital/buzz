@@ -212,7 +212,7 @@ func formatRate(rate float64, runits, gunits string) string {
 	}
 
 	if gunits != "" {
-		return fmt.Sprintf("%.2g %s / %s", rate, gunits, unitName)
+		return fmt.Sprintf("%g %s / %s", rate, gunits, unitName)
 	}
-	return fmt.Sprintf("%.2g/%s", rate, unitName)
+	return fmt.Sprintf("%g/%s", rate, unitName)
 }
