@@ -415,3 +415,65 @@ func TestReviewModelViewWithoutAutoratchet(t *testing.T) {
 		t.Errorf("Expected view to not contain 'Autoratchet:' when autoratchet is nil, but got:\n%s", view)
 	}
 }
+
+func TestFormatDueTime(t *testing.T) {
+	tests := []struct {
+		name           string
+		deadlineOffset int
+		expected       string
+	}{
+		{"midnight", 0, "12:00 AM"},
+		{"3am", 3 * 3600, "3:00 AM"},
+		{"9am", 9 * 3600, "9:00 AM"},
+		{"noon", 12 * 3600, "12:00 PM"},
+		{"3pm", 15 * 3600, "3:00 PM"},
+		{"6pm", 18 * 3600, "6:00 PM"},
+		{"9pm", 21 * 3600, "9:00 PM"},
+		{"11:30pm", 23*3600 + 30*60, "11:30 PM"},
+		{"6am (with minutes)", 6*3600 + 30*60, "6:30 AM"},
+		{"before midnight (-1 hour)", -1 * 3600, "11:00 PM"},
+		{"before midnight (-30 min)", -30 * 60, "11:30 PM"},
+		{"before midnight (-6 hours)", -6 * 3600, "6:00 PM"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatDueTime(tt.deadlineOffset)
+			if result != tt.expected {
+				t.Errorf("formatDueTime(%d) = %s; want %s", tt.deadlineOffset, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestReviewModelViewWithDueTime(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Deadline: 15 * 3600, // 3pm
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the due time
+	if !strings.Contains(view, "Due time:") {
+		t.Error("Expected view to contain 'Due time:' label")
+	}
+
+	if !strings.Contains(view, "3:00 PM") {
+		t.Errorf("Expected view to contain '3:00 PM', but got:\n%s", view)
+	}
+}

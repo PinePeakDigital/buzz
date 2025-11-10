@@ -24,7 +24,8 @@ type Goal struct {
 	Autoratchet *float64    `json:"autoratchet"` // Pointer to handle null values from API
 	Rate        *float64    `json:"rate"`        // Pointer to handle null values from API
 	Runits      string      `json:"runits"`
-	Gunits      string      `json:"gunits"` // Goal units, like "hours" or "pushups" or "pages"
+	Gunits      string      `json:"gunits"`   // Goal units, like "hours" or "pushups" or "pages"
+	Deadline    int         `json:"deadline"` // Seconds by which deadline differs from midnight
 	Datapoints  []Datapoint `json:"datapoints,omitempty"`
 }
 
