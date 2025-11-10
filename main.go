@@ -613,7 +613,11 @@ func handleViewCommand() {
 	fmt.Printf("Limsum:      %s\n", goal.Limsum)
 	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
 	fmt.Printf("Autodata:    %s\n", goal.Autodata)
-	fmt.Printf("Autoratchet: %.0f\n", goal.Autoratchet)
+
+	// Only display autoratchet if it's enabled (non-zero)
+	if goal.Autoratchet != 0 {
+		fmt.Printf("Autoratchet: %.0f\n", goal.Autoratchet)
+	}
 
 	// Generate and display goal URL
 	baseURL := getBaseURL(config)
