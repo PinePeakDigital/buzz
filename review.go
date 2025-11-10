@@ -141,7 +141,7 @@ func (m reviewModel) View() string {
 
 	// Display current rate (n / unit)
 	if goal.Rate != nil && goal.Runits != "" {
-		rateStr := formatRate(*goal.Rate, goal.Runits)
+		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
 		details += fmt.Sprintf("Rate:        %s\n", rateStr)
 	}
 
@@ -193,8 +193,8 @@ func openBrowser(config *Config, goalSlug string) error {
 	return cmd.Start()
 }
 
-// formatRate formats the rate with the appropriate time unit
-func formatRate(rate float64, runits string) string {
+// formatRate formats the rate with the appropriate time unit and goal units
+func formatRate(rate float64, runits, gunits string) string {
 	unitName := ""
 	switch runits {
 	case "y":
@@ -209,6 +209,10 @@ func formatRate(rate float64, runits string) string {
 		unitName = "hour"
 	default:
 		unitName = runits
+	}
+
+	if gunits != "" {
+		return fmt.Sprintf("%.2g %s / %s", rate, gunits, unitName)
 	}
 	return fmt.Sprintf("%.2g/%s", rate, unitName)
 }

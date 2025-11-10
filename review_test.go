@@ -240,22 +240,27 @@ func TestFormatRate(t *testing.T) {
 	tests := []struct {
 		rate     float64
 		runits   string
+		gunits   string
 		expected string
 	}{
-		{1.0, "d", "1/day"},
-		{2.5, "w", "2.5/week"},
-		{7.0, "d", "7/day"},
-		{0.5, "w", "0.5/week"},
-		{10.0, "h", "10/hour"},
-		{1.0, "m", "1/month"},
-		{3.0, "y", "3/year"},
+		{1.0, "d", "", "1/day"},
+		{2.5, "w", "", "2.5/week"},
+		{7.0, "d", "", "7/day"},
+		{0.5, "w", "", "0.5/week"},
+		{10.0, "h", "", "10/hour"},
+		{1.0, "m", "", "1/month"},
+		{3.0, "y", "", "3/year"},
+		{5.0, "d", "pushups", "5 pushups / day"},
+		{2.0, "w", "hours", "2 hours / week"},
+		{1.0, "d", "pages", "1 pages / day"},
+		{3.5, "d", "workouts", "3.5 workouts / day"},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("rate=%v,runits=%s", tt.rate, tt.runits), func(t *testing.T) {
-			result := formatRate(tt.rate, tt.runits)
+		t.Run(fmt.Sprintf("rate=%v,runits=%s,gunits=%s", tt.rate, tt.runits, tt.gunits), func(t *testing.T) {
+			result := formatRate(tt.rate, tt.runits, tt.gunits)
 			if result != tt.expected {
-				t.Errorf("formatRate(%v, %s) = %s; want %s", tt.rate, tt.runits, result, tt.expected)
+				t.Errorf("formatRate(%v, %s, %s) = %s; want %s", tt.rate, tt.runits, tt.gunits, result, tt.expected)
 			}
 		})
 	}
@@ -285,8 +290,40 @@ func TestReviewModelViewWithRate(t *testing.T) {
 	m := initialReviewModel(goals, config)
 	view := m.View()
 
-	// Check that the view contains the rate
+	// Check that the view contains the rate (without gunits)
 	expectedRate := "Rate:        2/day"
+	if !strings.Contains(view, expectedRate) {
+		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedRate, view)
+	}
+}
+
+func TestReviewModelViewWithRateAndGunits(t *testing.T) {
+	rate := 5.0
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &rate,
+			Runits:   "d",
+			Gunits:   "pushups",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the rate with gunits
+	expectedRate := "Rate:        5 pushups / day"
 	if !strings.Contains(view, expectedRate) {
 		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedRate, view)
 	}
