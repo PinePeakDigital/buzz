@@ -21,8 +21,8 @@ type Goal struct {
 	Limsum      string      `json:"limsum"`
 	Baremin     string      `json:"baremin"`
 	Autodata    string      `json:"autodata"`
-	Autoratchet float64     `json:"autoratchet"`
-	Rate        *float64    `json:"rate"` // Pointer to handle null values from API
+	Autoratchet *float64    `json:"autoratchet"` // Pointer to handle null values from API
+	Rate        *float64    `json:"rate"`        // Pointer to handle null values from API
 	Runits      string      `json:"runits"`
 	Gunits      string      `json:"gunits"` // Goal units, like "hours" or "pushups" or "pages"
 	Datapoints  []Datapoint `json:"datapoints,omitempty"`

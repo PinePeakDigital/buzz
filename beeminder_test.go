@@ -604,7 +604,7 @@ func TestFetchGoalWithMockServer(t *testing.T) {
 				Limsum:      "+2 within 1 day",
 				Baremin:     "+1 in 3 days",
 				Autodata:    "api/gmail",
-				Autoratchet: 0,
+				Autoratchet: nil, // nil when disabled
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(goal)
