@@ -137,6 +137,7 @@ func (m reviewModel) View() string {
 	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
 	deadlineTime := time.Unix(goal.Losedate, 0)
 	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
+	details += fmt.Sprintf("Due time:    %s\n", formatDueTime(goal.Deadline))
 	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
 
 	// Display current rate (n / unit)
@@ -215,4 +216,25 @@ func formatRate(rate float64, runits, gunits string) string {
 		return fmt.Sprintf("%.2g %s / %s", rate, gunits, unitName)
 	}
 	return fmt.Sprintf("%.2g/%s", rate, unitName)
+}
+
+// formatDueTime formats the deadline offset (seconds from midnight) as a time string
+// Negative offset means before midnight, positive means after midnight
+func formatDueTime(deadlineOffset int) string {
+	// Calculate hours and minutes from seconds
+	hours := deadlineOffset / 3600
+	minutes := (deadlineOffset % 3600) / 60
+
+	// Handle negative offsets (before midnight)
+	if deadlineOffset < 0 {
+		hours = 24 + hours // Convert to hours before midnight
+		if minutes != 0 {
+			minutes = 60 + minutes
+			hours--
+		}
+	}
+
+	// Create a time at the specified hour and minute
+	t := time.Date(0, 1, 1, hours, minutes, 0, 0, time.UTC)
+	return t.Format("3:04 PM")
 }
