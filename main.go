@@ -613,7 +613,7 @@ func handleViewCommand() {
 	fmt.Printf("Limsum:      %s\n", goal.Limsum)
 	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
 	fmt.Printf("Autodata:    %s\n", goal.Autodata)
-	
+
 	// Display autoratchet only if set (not nil)
 	if goal.Autoratchet != nil {
 		fmt.Printf("Autoratchet: %.0f\n", *goal.Autoratchet)
