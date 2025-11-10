@@ -146,7 +146,11 @@ func (m reviewModel) View() string {
 	}
 
 	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
-	details += fmt.Sprintf("Autoratchet: %.0f\n", goal.Autoratchet)
+	
+	// Display autoratchet only if set (not nil)
+	if goal.Autoratchet != nil {
+		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
+	}
 
 	view += detailStyle.Render(details) + "\n"
 

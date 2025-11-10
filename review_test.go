@@ -320,3 +320,61 @@ func TestReviewModelViewWithoutRate(t *testing.T) {
 		t.Errorf("Expected view to not contain 'Rate:' when rate is nil, but got:\n%s", view)
 	}
 }
+
+func TestReviewModelViewWithAutoratchet(t *testing.T) {
+	autoratchet := 7.0
+	goals := []Goal{
+		{
+			Slug:        "testgoal",
+			Title:       "Test Goal",
+			Safebuf:     5,
+			Pledge:      10.0,
+			Losedate:    1234567890,
+			Limsum:      "+1 in 2 days",
+			Baremin:     "+2 in 1 day",
+			Autoratchet: &autoratchet,
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the autoratchet value
+	expectedAutoratchet := "Autoratchet: 7"
+	if !strings.Contains(view, expectedAutoratchet) {
+		t.Errorf("Expected view to contain '%s' when autoratchet is set, but got:\n%s", expectedAutoratchet, view)
+	}
+}
+
+func TestReviewModelViewWithoutAutoratchet(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:        "testgoal",
+			Title:       "Test Goal",
+			Safebuf:     5,
+			Pledge:      10.0,
+			Losedate:    1234567890,
+			Limsum:      "+1 in 2 days",
+			Baremin:     "+2 in 1 day",
+			Autoratchet: nil, // No autoratchet (disabled)
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view doesn't contain "Autoratchet:" when autoratchet is nil
+	if strings.Contains(view, "Autoratchet:") {
+		t.Errorf("Expected view to not contain 'Autoratchet:' when autoratchet is nil, but got:\n%s", view)
+	}
+}
