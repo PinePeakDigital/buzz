@@ -232,6 +232,7 @@ func printHelp() {
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
+	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
@@ -579,14 +580,29 @@ func handleRefreshCommand() {
 
 // handleViewCommand displays detailed information about a specific goal
 func handleViewCommand() {
-	// Check arguments: buzz view <goalslug>
-	if len(os.Args) < 3 {
+	// Parse flags for the view command
+	viewFlags := flag.NewFlagSet("view", flag.ContinueOnError)
+	web := viewFlags.Bool("web", false, "Open the goal in the browser")
+	if err := viewFlags.Parse(os.Args[2:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			// Help was requested; print usage and exit 0
+			fmt.Println("Usage: buzz view <goalslug> [--web]")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web]")
+		os.Exit(2)
+	}
+
+	// Get goal slug from remaining arguments
+	args := viewFlags.Args()
+	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
-		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug>")
+		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web]")
 		os.Exit(1)
 	}
 
-	goalSlug := os.Args[2]
+	goalSlug := args[0]
 
 	// Load config
 	if !ConfigExists() {
@@ -598,6 +614,15 @@ func handleViewCommand() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
 		os.Exit(1)
+	}
+
+	// If --web flag is present, open in browser and exit
+	if *web {
+		if err := openBrowser(config, goalSlug); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to open browser: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Fetch the goal
