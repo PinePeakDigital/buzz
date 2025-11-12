@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -61,6 +62,24 @@ func TestCompareVersions(t *testing.T) {
 			name:           "major version bump",
 			currentVersion: "v0.30.0",
 			newVersion:     "v1.0.0",
+			expected:       true,
+		},
+		{
+			name:           "double digit minor version",
+			currentVersion: "0.9.0",
+			newVersion:     "0.10.0",
+			expected:       true,
+		},
+		{
+			name:           "triple digit minor version",
+			currentVersion: "0.2.0",
+			newVersion:     "0.100.0",
+			expected:       true,
+		},
+		{
+			name:           "double digit patch version",
+			currentVersion: "0.30.9",
+			newVersion:     "0.30.10",
 			expected:       true,
 		},
 	}
@@ -320,25 +339,9 @@ func TestGetUpdateMessageWithUpdate(t *testing.T) {
 	}
 
 	// Verify message contains version information
-	if !contains(msg, "v0.31.0") {
+	if !strings.Contains(msg, "v0.31.0") {
 		t.Errorf("Expected message to contain version v0.31.0, got: %s", msg)
 	}
-}
-
-// Helper function to check if string contains substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-			containsMiddle(s, substr)))
-}
-
-func containsMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestVersionCacheJSON(t *testing.T) {

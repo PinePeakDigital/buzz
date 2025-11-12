@@ -130,9 +130,36 @@ func compareVersions(currentVersion, newVersion string) bool {
 		return false
 	}
 
-	// Simple string comparison for semantic versions
-	// This works for most cases (v0.30.1 vs v0.31.0)
-	return newVersion > currentVersion
+	// Proper semantic version comparison
+	return isNewerSemver(currentVersion, newVersion)
+}
+
+// isNewerSemver returns true if newVersion > currentVersion according to semantic versioning
+func isNewerSemver(currentVersion, newVersion string) bool {
+	parse := func(v string) (major, minor, patch int) {
+		parts := strings.Split(v, ".")
+		if len(parts) < 2 {
+			return 0, 0, 0
+		}
+		// Parse major
+		fmt.Sscanf(parts[0], "%d", &major)
+		// Parse minor
+		fmt.Sscanf(parts[1], "%d", &minor)
+		// Parse patch (optional)
+		if len(parts) > 2 {
+			fmt.Sscanf(parts[2], "%d", &patch)
+		}
+		return
+	}
+	maj1, min1, pat1 := parse(currentVersion)
+	maj2, min2, pat2 := parse(newVersion)
+	if maj2 != maj1 {
+		return maj2 > maj1
+	}
+	if min2 != min1 {
+		return min2 > min1
+	}
+	return pat2 > pat1
 }
 
 // checkForUpdates checks if a new version is available
