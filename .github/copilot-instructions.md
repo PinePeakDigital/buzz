@@ -47,6 +47,43 @@ ci: add linting to workflow
 - A commit-msg hook enforces this format, so all commits must comply
 - See `DEVELOPMENT.md` for more details on our git workflow
 
+## Pull Request Title Format
+
+Pull request titles should follow the same [Conventional Commits](https://www.conventionalcommits.org/) format as commit messages. This ensures consistency across the project and makes it easier to understand the purpose of each PR at a glance.
+
+### Format
+
+```
+type(scope): description
+```
+
+### Guidelines
+
+- Use the same commit types as listed above (`feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`, `build`, `revert`)
+- The scope is optional but recommended for clarity
+- Keep the description concise but descriptive
+- Use lowercase and imperative mood (e.g., "add" not "adds" or "added")
+- Don't end with a period
+
+### Examples
+
+Good PR titles:
+```
+feat: add goal archiving feature
+fix(grid): prevent crash on empty goal list
+docs: update authentication setup guide
+refactor(beeminder): simplify API error handling
+test: add integration tests for goal creation
+chore: update dependencies to latest versions
+```
+
+Bad PR titles:
+```
+Added new feature (not imperative mood, no type)
+Fix bug. (ends with period, missing scope/description)
+Updates (too vague, not descriptive)
+```
+
 ## Accessing CodeRabbit PR Feedback
 
 When working on a PR branch, you can access all CodeRabbit feedback using the GitHub MCP tools available to Copilot. The GitHub MCP provides authenticated access to GitHub's API without requiring token configuration.
