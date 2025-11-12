@@ -246,6 +246,9 @@ func printHelp() {
 
 func printVersion() {
 	fmt.Printf("buzz version %s\n", version)
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
 
 func main() {
@@ -372,6 +375,10 @@ func displayNextGoal() error {
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+	
 	return nil
 }
 
@@ -473,6 +480,9 @@ func handleTodayCommand() {
 		timeframe := FormatDueDate(goal.Losedate)
 		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
 	}
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
 
 // handleAddCommand adds a datapoint to a goal without opening the TUI
@@ -538,6 +548,9 @@ func handleAddCommand() {
 	}
 
 	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
 
 // handleRefreshCommand refreshes autodata for a goal
@@ -575,6 +588,9 @@ func handleRefreshCommand() {
 	} else {
 		fmt.Printf("Goal %s was not queued for refresh\n", goalSlug)
 	}
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
 
 // handleViewCommand displays detailed information about a specific goal
@@ -623,6 +639,9 @@ func handleViewCommand() {
 	baseURL := getBaseURL(config)
 	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
 	fmt.Printf("URL:         %s\n", goalURL)
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
 
 // handleReviewCommand launches an interactive review of all goals
@@ -727,4 +746,7 @@ func handleChargeCommand() {
 	} else {
 		fmt.Printf("Successfully created charge %s: $%.2f with note: %q for %s\n", ch.ID, ch.Amount, ch.Note, ch.Username)
 	}
+	
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
