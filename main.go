@@ -246,7 +246,7 @@ func printHelp() {
 
 func printVersion() {
 	fmt.Printf("buzz version %s\n", version)
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }
@@ -375,10 +375,10 @@ func displayNextGoal() error {
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
-	
+
 	return nil
 }
 
@@ -480,7 +480,7 @@ func handleTodayCommand() {
 		timeframe := FormatDueDate(goal.Losedate)
 		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
 	}
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }
@@ -548,7 +548,7 @@ func handleAddCommand() {
 	}
 
 	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }
@@ -588,7 +588,7 @@ func handleRefreshCommand() {
 	} else {
 		fmt.Printf("Goal %s was not queued for refresh\n", goalSlug)
 	}
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }
@@ -639,7 +639,7 @@ func handleViewCommand() {
 	baseURL := getBaseURL(config)
 	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
 	fmt.Printf("URL:         %s\n", goalURL)
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }
@@ -746,7 +746,7 @@ func handleChargeCommand() {
 	} else {
 		fmt.Printf("Successfully created charge %s: $%.2f with note: %q for %s\n", ch.ID, ch.Amount, ch.Note, ch.Username)
 	}
-	
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }

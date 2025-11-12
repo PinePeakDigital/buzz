@@ -24,9 +24,9 @@ type Release struct {
 
 // VersionCache stores the last update check
 type VersionCache struct {
-	LastCheck      time.Time `json:"last_check"`
-	LatestVersion  string    `json:"latest_version"`
-	UpdateAvailable bool     `json:"update_available"`
+	LastCheck       time.Time `json:"last_check"`
+	LatestVersion   string    `json:"latest_version"`
+	UpdateAvailable bool      `json:"update_available"`
 }
 
 // getVersionCachePath returns the path to the version cache file
