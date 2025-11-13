@@ -42,6 +42,13 @@ func TestViewCommandFlagParsing(t *testing.T) {
 			wantSlug: "",
 			wantErr:  true,
 		},
+		{
+			name:     "with --web flag after slug",
+			args:     []string{"mygoal", "--web"},
+			wantWeb:  true,
+			wantSlug: "mygoal",
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -64,20 +71,32 @@ func TestViewCommandFlagParsing(t *testing.T) {
 			// Get remaining args (goal slug)
 			args := viewFlags.Args()
 
+			// Check if --web flag appears after the goal slug (handle both positions)
+			webFlag := *web
+			var filteredArgs []string
+
+			for _, arg := range args {
+				if arg == "--web" {
+					webFlag = true
+				} else {
+					filteredArgs = append(filteredArgs, arg)
+				}
+			}
+
 			// Check if we got a slug when we should
-			if tt.wantErr && len(args) == 0 {
+			if tt.wantErr && len(filteredArgs) == 0 {
 				// Expected error case (no slug provided)
 				return
 			}
 
 			// Check web flag value
-			if *web != tt.wantWeb {
-				t.Errorf("web flag = %v, want %v", *web, tt.wantWeb)
+			if webFlag != tt.wantWeb {
+				t.Errorf("web flag = %v, want %v", webFlag, tt.wantWeb)
 			}
 
 			// Check goal slug
-			if len(args) > 0 {
-				gotSlug := args[0]
+			if len(filteredArgs) > 0 {
+				gotSlug := filteredArgs[0]
 				if gotSlug != tt.wantSlug {
 					t.Errorf("goal slug = %v, want %v", gotSlug, tt.wantSlug)
 				}
