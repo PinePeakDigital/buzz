@@ -596,13 +596,27 @@ func handleViewCommand() {
 
 	// Get goal slug from remaining arguments
 	args := viewFlags.Args()
-	if len(args) < 1 {
+
+	// Check if --web flag appears after the goal slug (handle both positions)
+	webFlag := *web
+	var goalSlug string
+	var filteredArgs []string
+
+	for _, arg := range args {
+		if arg == "--web" {
+			webFlag = true
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	if len(filteredArgs) < 1 {
 		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
 		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web]")
 		os.Exit(1)
 	}
 
-	goalSlug := args[0]
+	goalSlug = filteredArgs[0]
 
 	// Load config
 	if !ConfigExists() {
@@ -617,7 +631,7 @@ func handleViewCommand() {
 	}
 
 	// If --web flag is present, open in browser and exit
-	if *web {
+	if webFlag {
 		if err := openBrowser(config, goalSlug); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to open browser: %v\n", err)
 			os.Exit(1)
