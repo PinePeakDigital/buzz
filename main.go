@@ -596,12 +596,12 @@ func handleViewCommand() {
 
 	// Get goal slug from remaining arguments
 	args := viewFlags.Args()
-	
+
 	// Check if --web flag appears after the goal slug (handle both positions)
 	webFlag := *web
 	var goalSlug string
 	var filteredArgs []string
-	
+
 	for _, arg := range args {
 		if arg == "--web" {
 			webFlag = true
@@ -609,7 +609,7 @@ func handleViewCommand() {
 			filteredArgs = append(filteredArgs, arg)
 		}
 	}
-	
+
 	if len(filteredArgs) < 1 {
 		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
 		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web]")
