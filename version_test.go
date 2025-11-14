@@ -51,7 +51,7 @@ func TestPrintVersionFormat(t *testing.T) {
 
 			expected := fmt.Sprintf("buzz version %s\n", testVersion)
 			output := buf.String()
-			
+
 			// Check that the output starts with the expected version line
 			// It may include update notification message after the version line
 			if len(output) < len(expected) || output[:len(expected)] != expected {
