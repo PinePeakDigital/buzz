@@ -50,8 +50,12 @@ func TestPrintVersionFormat(t *testing.T) {
 			io.Copy(&buf, r)
 
 			expected := fmt.Sprintf("buzz version %s\n", testVersion)
-			if buf.String() != expected {
-				t.Errorf("expected %q, got %q", expected, buf.String())
+			output := buf.String()
+
+			// Check that the output starts with the expected version line
+			// It may include update notification message after the version line
+			if len(output) < len(expected) || output[:len(expected)] != expected {
+				t.Errorf("expected output to start with %q, got %q", expected, output)
 			}
 		})
 	}
