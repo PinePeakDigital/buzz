@@ -1005,3 +1005,60 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 		}
 	})
 }
+
+// TestGoalFineprintField tests that the Fineprint field is properly parsed from API responses
+func TestGoalFineprintField(t *testing.T) {
+	t.Run("goal with fineprint", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			goal := Goal{
+				Slug:      "testgoal",
+				Title:     "Test Goal",
+				Fineprint: "I commit to doing this specific thing",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := FetchGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("FetchGoal failed: %v", err)
+		}
+		if goal.Fineprint != "I commit to doing this specific thing" {
+			t.Errorf("Expected fineprint 'I commit to doing this specific thing', got '%s'", goal.Fineprint)
+		}
+	})
+
+	t.Run("goal without fineprint", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			goal := Goal{
+				Slug:      "testgoal",
+				Title:     "Test Goal",
+				Fineprint: "",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := FetchGoal(config, "testgoal")
+		if err != nil {
+			t.Fatalf("FetchGoal failed: %v", err)
+		}
+		if goal.Fineprint != "" {
+			t.Errorf("Expected empty fineprint, got '%s'", goal.Fineprint)
+		}
+	})
+}

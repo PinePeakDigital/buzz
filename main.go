@@ -665,6 +665,12 @@ func handleViewCommand() {
 	// Display goal information
 	fmt.Printf("Goal: %s\n", goal.Slug)
 	fmt.Printf("Title:       %s\n", goal.Title)
+
+	// Display fine print if it exists
+	if goal.Fineprint != "" {
+		fmt.Printf("Fine print:  %s\n", goal.Fineprint)
+	}
+
 	fmt.Printf("Limsum:      %s\n", goal.Limsum)
 	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
 	fmt.Printf("Autodata:    %s\n", goal.Autodata)
