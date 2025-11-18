@@ -113,6 +113,7 @@ func TestVersionCacheSaveAndLoad(t *testing.T) {
 		LastCheck:       time.Now(),
 		LatestVersion:   "v0.31.0",
 		UpdateAvailable: true,
+		CurrentVersion:  "v0.30.0",
 	}
 
 	// Save the cache
@@ -222,6 +223,7 @@ func TestCheckForUpdatesWithFreshCache(t *testing.T) {
 		LastCheck:       time.Now(),
 		LatestVersion:   "v0.31.0",
 		UpdateAvailable: true,
+		CurrentVersion:  version,
 	}
 
 	err = saveVersionCache(freshCache)
@@ -293,6 +295,7 @@ func TestGetUpdateMessageNoUpdate(t *testing.T) {
 		LastCheck:       time.Now(),
 		LatestVersion:   "v0.30.0",
 		UpdateAvailable: false,
+		CurrentVersion:  version,
 	}
 
 	err = saveVersionCache(cache)
@@ -325,6 +328,7 @@ func TestGetUpdateMessageWithUpdate(t *testing.T) {
 		LastCheck:       time.Now(),
 		LatestVersion:   "v0.31.0",
 		UpdateAvailable: true,
+		CurrentVersion:  version,
 	}
 
 	err = saveVersionCache(cache)
@@ -349,6 +353,7 @@ func TestVersionCacheJSON(t *testing.T) {
 		LastCheck:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LatestVersion:   "v0.31.0",
 		UpdateAvailable: true,
+		CurrentVersion:  "v0.30.0",
 	}
 
 	// Marshal to JSON
@@ -372,5 +377,57 @@ func TestVersionCacheJSON(t *testing.T) {
 	if loaded.UpdateAvailable != cache.UpdateAvailable {
 		t.Errorf("UpdateAvailable mismatch: got %v, expected %v",
 			loaded.UpdateAvailable, cache.UpdateAvailable)
+	}
+}
+
+func TestCheckForUpdatesAfterVersionUpgrade(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "buzz-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Override the cache path for testing
+	originalHomeDir := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", originalHomeDir)
+
+	// Simulate cache created when user was on v0.32.0
+	// and update to v0.33.0 was available
+	oldCache := &VersionCache{
+		LastCheck:       time.Now(),
+		LatestVersion:   "v0.33.0",
+		UpdateAvailable: true,
+		CurrentVersion:  "v0.32.0",
+	}
+
+	err = saveVersionCache(oldCache)
+	if err != nil {
+		t.Fatalf("Failed to save cache: %v", err)
+	}
+
+	// Now simulate that the user has upgraded to v0.33.0
+	originalVersion := version
+	version = "v0.33.0"
+	defer func() { version = originalVersion }()
+
+	// Check for updates - cache should be invalidated because current version changed
+	// This will try to fetch from GitHub, which might fail in offline environments
+	updateAvailable, latestVersion, err := checkForUpdates()
+	
+	// If we got a network error, we expect the cache to have been invalidated
+	// and we should get an error (no stale cache fallback in this case)
+	// If we successfully fetched from GitHub, we should get accurate results
+	
+	if err == nil {
+		// Successfully fetched from GitHub
+		// Since we're on v0.33.0, if GitHub also reports v0.33.0, no update should be available
+		if latestVersion == "v0.33.0" && updateAvailable {
+			t.Error("Expected no update available when current version equals latest version")
+		}
+	} else {
+		// Network error - this is acceptable, cache should have been invalidated
+		t.Logf("Network error (expected in offline environment): %v", err)
 	}
 }

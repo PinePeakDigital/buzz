@@ -27,6 +27,7 @@ type VersionCache struct {
 	LastCheck       time.Time `json:"last_check"`
 	LatestVersion   string    `json:"latest_version"`
 	UpdateAvailable bool      `json:"update_available"`
+	CurrentVersion  string    `json:"current_version"`
 }
 
 // getVersionCachePath returns the path to the version cache file
@@ -172,8 +173,14 @@ func checkForUpdates() (bool, string, error) {
 	}
 
 	// If cache exists and is fresh, use cached result
+	// But first verify that the current version hasn't changed
 	if cache != nil && time.Since(cache.LastCheck) < checkInterval {
-		return cache.UpdateAvailable, cache.LatestVersion, nil
+		// Invalidate cache if current version has changed (user upgraded/downgraded)
+		if cache.CurrentVersion != version {
+			cache = nil
+		} else {
+			return cache.UpdateAvailable, cache.LatestVersion, nil
+		}
 	}
 
 	// Fetch latest version from GitHub
@@ -194,6 +201,7 @@ func checkForUpdates() (bool, string, error) {
 		LastCheck:       time.Now(),
 		LatestVersion:   latestVersion,
 		UpdateAvailable: updateAvailable,
+		CurrentVersion:  version,
 	}
 	_ = saveVersionCache(newCache) // Ignore errors when saving cache
 
