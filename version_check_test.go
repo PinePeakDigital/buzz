@@ -415,11 +415,11 @@ func TestCheckForUpdatesAfterVersionUpgrade(t *testing.T) {
 	// Check for updates - cache should be invalidated because current version changed
 	// This will try to fetch from GitHub, which might fail in offline environments
 	updateAvailable, latestVersion, err := checkForUpdates()
-	
+
 	// If we got a network error, we expect the cache to have been invalidated
 	// and we should get an error (no stale cache fallback in this case)
 	// If we successfully fetched from GitHub, we should get accurate results
-	
+
 	if err == nil {
 		// Successfully fetched from GitHub
 		// Since we're on v0.33.0, if GitHub also reports v0.33.0, no update should be available
