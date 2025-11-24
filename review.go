@@ -341,47 +341,66 @@ func renderGoalChart(goal Goal, width int) string {
 		endTime = now
 	}
 
-	// Filter datapoints within timeframe
-	var filteredDatapoints []Datapoint
-	for _, dp := range goal.Datapoints {
-		dpTime := time.Unix(dp.Timestamp, 0)
-		if !dpTime.Before(startTime) && !dpTime.After(endTime) {
-			filteredDatapoints = append(filteredDatapoints, dp)
+	// For cumulative goals, we need to calculate the running sum from ALL datapoints
+	// before filtering, so that datapoints within the timeframe show their true cumulative value
+	var processedDatapoints []struct {
+		timestamp int64
+		value     float64
+	}
+
+	if goal.Kyoom {
+		// Cumulative goal: first sort ALL datapoints, calculate running sum, then filter
+		allDatapoints := make([]Datapoint, len(goal.Datapoints))
+		copy(allDatapoints, goal.Datapoints)
+		sort.Slice(allDatapoints, func(i, j int) bool {
+			return allDatapoints[i].Timestamp < allDatapoints[j].Timestamp
+		})
+
+		// Calculate running sum and keep only those in timeframe
+		sum := 0.0
+		for _, dp := range allDatapoints {
+			sum += dp.Value
+			dpTime := time.Unix(dp.Timestamp, 0)
+			if !dpTime.Before(startTime) && !dpTime.After(endTime) {
+				processedDatapoints = append(processedDatapoints, struct {
+					timestamp int64
+					value     float64
+				}{
+					timestamp: dp.Timestamp,
+					value:     sum,
+				})
+			}
+		}
+	} else {
+		// Non-cumulative: filter datapoints within timeframe first
+		var filteredDatapoints []Datapoint
+		for _, dp := range goal.Datapoints {
+			dpTime := time.Unix(dp.Timestamp, 0)
+			if !dpTime.Before(startTime) && !dpTime.After(endTime) {
+				filteredDatapoints = append(filteredDatapoints, dp)
+			}
+		}
+
+		// Sort filtered datapoints by timestamp
+		sort.Slice(filteredDatapoints, func(i, j int) bool {
+			return filteredDatapoints[i].Timestamp < filteredDatapoints[j].Timestamp
+		})
+
+		// Use actual values
+		for _, dp := range filteredDatapoints {
+			processedDatapoints = append(processedDatapoints, struct {
+				timestamp int64
+				value     float64
+			}{
+				timestamp: dp.Timestamp,
+				value:     dp.Value,
+			})
 		}
 	}
 
 	// Return empty if no datapoints in timeframe
-	if len(filteredDatapoints) == 0 {
+	if len(processedDatapoints) == 0 {
 		return ""
-	}
-
-	// Sort datapoints by timestamp using sort.Slice
-	sortedDatapoints := make([]Datapoint, len(filteredDatapoints))
-	copy(sortedDatapoints, filteredDatapoints)
-	sort.Slice(sortedDatapoints, func(i, j int) bool {
-		return sortedDatapoints[i].Timestamp < sortedDatapoints[j].Timestamp
-	})
-
-	// Process datapoints based on cumulative setting
-	processedDatapoints := make([]struct {
-		timestamp int64
-		value     float64
-	}, len(sortedDatapoints))
-
-	if goal.Kyoom {
-		// Cumulative: sum values progressively
-		sum := 0.0
-		for i, dp := range sortedDatapoints {
-			sum += dp.Value
-			processedDatapoints[i].timestamp = dp.Timestamp
-			processedDatapoints[i].value = sum
-		}
-	} else {
-		// Non-cumulative: use actual values
-		for i, dp := range sortedDatapoints {
-			processedDatapoints[i].timestamp = dp.Timestamp
-			processedDatapoints[i].value = dp.Value
-		}
 	}
 
 	// Chart dimensions
