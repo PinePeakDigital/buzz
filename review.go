@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -354,16 +355,12 @@ func renderGoalChart(goal Goal, width int) string {
 		return ""
 	}
 
-	// Sort datapoints by timestamp
+	// Sort datapoints by timestamp using sort.Slice
 	sortedDatapoints := make([]Datapoint, len(filteredDatapoints))
 	copy(sortedDatapoints, filteredDatapoints)
-	for i := 0; i < len(sortedDatapoints)-1; i++ {
-		for j := i + 1; j < len(sortedDatapoints); j++ {
-			if sortedDatapoints[i].Timestamp > sortedDatapoints[j].Timestamp {
-				sortedDatapoints[i], sortedDatapoints[j] = sortedDatapoints[j], sortedDatapoints[i]
-			}
-		}
-	}
+	sort.Slice(sortedDatapoints, func(i, j int) bool {
+		return sortedDatapoints[i].Timestamp < sortedDatapoints[j].Timestamp
+	})
 
 	// Process datapoints based on cumulative setting
 	processedDatapoints := make([]struct {
@@ -531,6 +528,12 @@ func getRoadValuesForTimeframe(goal Goal, startTime, endTime time.Time, numPoint
 
 	// If no roadall data, return zeros
 	if len(goal.Roadall) == 0 {
+		return values
+	}
+
+	// Handle edge case where numPoints is 1
+	if numPoints == 1 {
+		values[0] = getRoadValueAtTime(goal, startTime)
 		return values
 	}
 
