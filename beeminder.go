@@ -28,12 +28,12 @@ type Goal struct {
 	Gunits      string      `json:"gunits"`   // Goal units, like "hours" or "pushups" or "pages"
 	Deadline    int         `json:"deadline"` // Seconds by which deadline differs from midnight
 	Datapoints  []Datapoint `json:"datapoints,omitempty"`
-	Yaw         int         `json:"yaw"`         // Indicates which side is good (+1 = above road, -1 = below road)
-	Dir         int         `json:"dir"`         // Direction of road slope
-	Kyoom       bool        `json:"kyoom"`       // Whether goal is cumulative/auto-summing
-	Roadall     [][]any     `json:"roadall"`     // Yellow brick road segments [date, value, rate]
-	Tmin        string      `json:"tmin"`        // Min date for graph view (yyyy-mm-dd format)
-	Tmax        string      `json:"tmax"`        // Max date for graph view (yyyy-mm-dd format)
+	Yaw         int         `json:"yaw"`     // Indicates which side is good (+1 = above road, -1 = below road)
+	Dir         int         `json:"dir"`     // Direction of road slope
+	Kyoom       bool        `json:"kyoom"`   // Whether goal is cumulative/auto-summing
+	Roadall     [][]any     `json:"roadall"` // Yellow brick road segments [date, value, rate]
+	Tmin        string      `json:"tmin"`    // Min date for graph view (yyyy-mm-dd format)
+	Tmax        string      `json:"tmax"`    // Max date for graph view (yyyy-mm-dd format)
 }
 
 // Datapoint represents a Beeminder datapoint
