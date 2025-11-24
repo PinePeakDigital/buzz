@@ -500,8 +500,9 @@ func renderGoalChart(goal Goal, width int) string {
 					chart.WriteString("○")
 				}
 			} else if roadClose {
-				// Just road
-				chart.WriteString("─")
+				// Determine road line character based on direction
+				roadChar := getRoadCharacter(col, row, chartWidth, chartHeight, roadValues, minVal, maxVal)
+				chart.WriteString(roadChar)
 			} else {
 				chart.WriteString(" ")
 			}
@@ -517,7 +518,7 @@ func renderGoalChart(goal Goal, width int) string {
 		Foreground(lipgloss.Color("241")).
 		Padding(0, 2)
 
-	legend := "Legend: ● = on good side  ○ = on bad side  ─ = yellow brick road  █ = on target"
+	legend := "Legend: ● = on good side  ○ = on bad side  ─ = bright red line  █ = on target"
 	chart.WriteString(legendStyle.Render(legend) + "\n")
 
 	return chart.String()
@@ -621,4 +622,83 @@ func getRoadValueAtTime(goal Goal, t time.Time) float64 {
 	}
 
 	return 0
+}
+
+// getRoadCharacter determines the appropriate ASCII character for the road line
+// based on the road's direction at the current position
+func getRoadCharacter(col, row, chartWidth, chartHeight int, roadValues []float64, minVal, maxVal float64) string {
+	// Handle edge case where all values are the same
+	if maxVal == minVal {
+		return "─"
+	}
+
+	// Get current road position in row terms
+	roadVal := roadValues[col]
+	roadPos := (roadVal - minVal) / (maxVal - minVal)
+	currentRow := int(roadPos * float64(chartHeight-1))
+
+	// Get previous column's road row (if exists)
+	prevRow := currentRow
+	if col > 0 && col-1 < len(roadValues) {
+		prevRoadVal := roadValues[col-1]
+		prevRoadPos := (prevRoadVal - minVal) / (maxVal - minVal)
+		prevRow = int(prevRoadPos * float64(chartHeight-1))
+	}
+
+	// Get next column's road row (if exists)
+	nextRow := currentRow
+	if col < chartWidth-1 && col+1 < len(roadValues) {
+		nextRoadVal := roadValues[col+1]
+		nextRoadPos := (nextRoadVal - minVal) / (maxVal - minVal)
+		nextRow = int(nextRoadPos * float64(chartHeight-1))
+	}
+
+	// Determine direction changes
+	comingFromBelow := prevRow < currentRow
+	comingFromAbove := prevRow > currentRow
+	goingUp := nextRow > currentRow
+	goingDown := nextRow < currentRow
+
+	// Select character based on direction
+	// Use rounded corners for direction changes
+	if comingFromBelow && goingUp {
+		// Continuing upward - use vertical line if steep, otherwise horizontal
+		if row == currentRow {
+			return "─"
+		}
+		return "│"
+	} else if comingFromAbove && goingDown {
+		// Continuing downward
+		if row == currentRow {
+			return "─"
+		}
+		return "│"
+	} else if comingFromBelow && (goingDown || nextRow == currentRow) {
+		// Coming from below, turning right or going flat - top of curve
+		if row == currentRow {
+			return "╮"
+		}
+		return "│"
+	} else if comingFromAbove && (goingUp || nextRow == currentRow) {
+		// Coming from above, turning right or going flat - bottom of curve
+		if row == currentRow {
+			return "╯"
+		}
+		return "│"
+	} else if (prevRow == currentRow || col == 0) && goingUp {
+		// Flat or start, going up - bottom-left corner
+		if row == currentRow {
+			return "╰"
+		}
+		return "│"
+	} else if (prevRow == currentRow || col == 0) && goingDown {
+		// Flat or start, going down - top-left corner
+		if row == currentRow {
+			return "╭"
+		}
+		return "│"
+	}
+
+	// Default: horizontal line for flat sections
+	return "─"
 }
