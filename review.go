@@ -384,8 +384,18 @@ func renderGoalChart(goal Goal, width int) string {
 		}
 	}
 
-	// Calculate road values for the timeframe
-	roadValues := getRoadValuesForTimeframe(goal, startTime, endTime, len(processedDatapoints))
+	// Chart dimensions
+	chartHeight := 10
+	chartWidth := width - 8 // Leave room for padding and axis labels
+	if chartWidth < 40 {
+		chartWidth = 40
+	}
+	if chartWidth > 80 {
+		chartWidth = 80
+	}
+
+	// Calculate road values for each column of the chart
+	roadValues := getRoadValuesForTimeframe(goal, startTime, endTime, chartWidth)
 
 	// Find min and max values for scaling
 	minVal := processedDatapoints[0].value
@@ -414,16 +424,6 @@ func renderGoalChart(goal Goal, width int) string {
 	}
 	minVal -= valueRange * 0.1
 	maxVal += valueRange * 0.1
-
-	// Chart dimensions
-	chartHeight := 10
-	chartWidth := width - 8 // Leave room for padding and axis labels
-	if chartWidth < 40 {
-		chartWidth = 40
-	}
-	if chartWidth > 80 {
-		chartWidth = 80
-	}
 
 	// Build the chart
 	var chart strings.Builder
@@ -459,14 +459,15 @@ func renderGoalChart(goal Goal, width int) string {
 
 		// Draw the row
 		for col := 0; col < chartWidth; col++ {
+			// Get the road value for this column (road values are calculated per column)
+			roadVal := roadValues[col]
+
 			// Calculate which datapoint this column represents
 			dpIndex := (col * len(processedDatapoints)) / chartWidth
 			if dpIndex >= len(processedDatapoints) {
 				dpIndex = len(processedDatapoints) - 1
 			}
-
 			dp := processedDatapoints[dpIndex]
-			roadVal := roadValues[dpIndex]
 
 			// Calculate normalized positions (0.0 to 1.0)
 			dpPos := (dp.value - minVal) / (maxVal - minVal)

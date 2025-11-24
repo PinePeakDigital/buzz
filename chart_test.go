@@ -58,6 +58,11 @@ func TestRenderGoalChartWithDatapoints(t *testing.T) {
 	if !strings.Contains(chart, "Legend:") {
 		t.Error("Expected chart to contain legend")
 	}
+	// Check that road line is rendered (─ character should appear in chart body)
+	// Road line should appear as we have roadall data
+	if !strings.Contains(chart, "─") {
+		t.Error("Expected chart to contain road line (─)")
+	}
 }
 
 func TestRenderGoalChartCumulative(t *testing.T) {
