@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -54,29 +55,66 @@ func handleReviewCommand() {
 
 // reviewModel holds the state for the review command
 type reviewModel struct {
-	goals   []Goal
-	config  *Config
-	current int    // current goal index
-	width   int    // terminal width
-	height  int    // terminal height
-	err     string // error message to display
+	goals         []Goal
+	detailedGoals map[string]*Goal // Cache of goals with full details (datapoints, road, etc.)
+	config        *Config
+	current       int    // current goal index
+	width         int    // terminal width
+	height        int    // terminal height
+	err           string // error message to display
+	loading       bool   // whether we're currently loading goal details
 }
 
 // initialReviewModel creates a new review model
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
 	return reviewModel{
-		goals:   goals,
-		config:  config,
-		current: 0,
+		goals:         goals,
+		detailedGoals: make(map[string]*Goal),
+		config:        config,
+		current:       0,
+	}
+}
+
+// goalDetailsFetchedMsg is sent when goal details are fetched
+type goalDetailsFetchedMsg struct {
+	slug string
+	goal *Goal
+	err  error
+}
+
+// fetchGoalDetailsCmd fetches full details for a goal
+func fetchGoalDetailsCmd(config *Config, slug string) tea.Cmd {
+	return func() tea.Msg {
+		goal, err := FetchGoalWithDatapoints(config, slug)
+		return goalDetailsFetchedMsg{
+			slug: slug,
+			goal: goal,
+			err:  err,
+		}
 	}
 }
 
 func (m reviewModel) Init() tea.Cmd {
+	// Fetch details for the first goal
+	if len(m.goals) > 0 {
+		return fetchGoalDetailsCmd(m.config, m.goals[0].Slug)
+	}
 	return nil
 }
 
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case goalDetailsFetchedMsg:
+		// Goal details have been fetched
+		m.loading = false
+		if msg.err != nil {
+			m.err = fmt.Sprintf("Failed to load goal details: %v", msg.err)
+		} else {
+			m.detailedGoals[msg.slug] = msg.goal
+			m.err = ""
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -91,16 +129,28 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Next goal
 			if m.current < len(m.goals)-1 {
 				m.current++
+				m.err = ""
+				// Fetch details if not already cached
+				slug := m.goals[m.current].Slug
+				if _, ok := m.detailedGoals[slug]; !ok {
+					m.loading = true
+					return m, fetchGoalDetailsCmd(m.config, slug)
+				}
 			}
-			m.err = ""
 			return m, nil
 
 		case "left", "h", "p", "k":
 			// Previous goal
 			if m.current > 0 {
 				m.current--
+				m.err = ""
+				// Fetch details if not already cached
+				slug := m.goals[m.current].Slug
+				if _, ok := m.detailedGoals[slug]; !ok {
+					m.loading = true
+					return m, fetchGoalDetailsCmd(m.config, slug)
+				}
 			}
-			m.err = ""
 			return m, nil
 
 		case "o", "enter":
@@ -126,6 +176,12 @@ func (m reviewModel) View() string {
 	}
 
 	goal := m.goals[m.current]
+
+	// Use detailed goal if available
+	detailedGoal, hasDetails := m.detailedGoals[goal.Slug]
+	if hasDetails {
+		goal = *detailedGoal
+	}
 
 	// Create the goal details view
 	var view string
@@ -165,6 +221,14 @@ func (m reviewModel) View() string {
 	view += statusStyle.Render(statusSymbol) + titleStyle.Render(fmt.Sprintf("Goal: %s", goal.Slug)) + "\n"
 	view += counterStyle.Render(fmt.Sprintf("Goal %d of %d", m.current+1, len(m.goals))) + "\n\n"
 
+	// Loading indicator
+	if m.loading {
+		loadingStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("12")).
+			Padding(0, 2)
+		view += loadingStyle.Render("Loading goal details...") + "\n\n"
+	}
+
 	// Goal details section
 	detailStyle := lipgloss.NewStyle().
 		Padding(0, 2)
@@ -172,6 +236,14 @@ func (m reviewModel) View() string {
 	details := formatGoalDetails(&goal, m.config)
 
 	view += detailStyle.Render(details) + "\n"
+
+	// Display goal chart if detailed data is available
+	if hasDetails {
+		chart := renderGoalChart(goal, m.width)
+		if chart != "" {
+			view += chart
+		}
+	}
 
 	// Error message section (if any)
 	if m.err != "" {
@@ -292,4 +364,329 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	}
 
 	return details
+}
+
+// renderGoalChart renders an ASCII chart showing goal progress with datapoints and road
+func renderGoalChart(goal Goal, width int) string {
+	// Return empty if no datapoints
+	if len(goal.Datapoints) == 0 {
+		return ""
+	}
+
+	// Parse timeframe from tmin/tmax or default to last 30 days
+	var startTime, endTime time.Time
+	now := time.Now()
+
+	if goal.Tmin != "" && goal.Tmax != "" {
+		var err error
+		startTime, err = time.Parse("2006-01-02", goal.Tmin)
+		if err != nil {
+			// Fallback to last 30 days
+			startTime = now.AddDate(0, 0, -30)
+		}
+		endTime, err = time.Parse("2006-01-02", goal.Tmax)
+		if err != nil {
+			// Fallback to today
+			endTime = now
+		}
+	} else {
+		// Default to last 30 days
+		startTime = now.AddDate(0, 0, -30)
+		endTime = now
+	}
+
+	// Filter datapoints within timeframe
+	var filteredDatapoints []Datapoint
+	for _, dp := range goal.Datapoints {
+		dpTime := time.Unix(dp.Timestamp, 0)
+		if !dpTime.Before(startTime) && !dpTime.After(endTime) {
+			filteredDatapoints = append(filteredDatapoints, dp)
+		}
+	}
+
+	// Return empty if no datapoints in timeframe
+	if len(filteredDatapoints) == 0 {
+		return ""
+	}
+
+	// Sort datapoints by timestamp
+	sortedDatapoints := make([]Datapoint, len(filteredDatapoints))
+	copy(sortedDatapoints, filteredDatapoints)
+	for i := 0; i < len(sortedDatapoints)-1; i++ {
+		for j := i + 1; j < len(sortedDatapoints); j++ {
+			if sortedDatapoints[i].Timestamp > sortedDatapoints[j].Timestamp {
+				sortedDatapoints[i], sortedDatapoints[j] = sortedDatapoints[j], sortedDatapoints[i]
+			}
+		}
+	}
+
+	// Process datapoints based on cumulative setting
+	processedDatapoints := make([]struct {
+		timestamp int64
+		value     float64
+	}, len(sortedDatapoints))
+
+	if goal.Kyoom {
+		// Cumulative: sum values progressively
+		sum := 0.0
+		for i, dp := range sortedDatapoints {
+			sum += dp.Value
+			processedDatapoints[i].timestamp = dp.Timestamp
+			processedDatapoints[i].value = sum
+		}
+	} else {
+		// Non-cumulative: use actual values
+		for i, dp := range sortedDatapoints {
+			processedDatapoints[i].timestamp = dp.Timestamp
+			processedDatapoints[i].value = dp.Value
+		}
+	}
+
+	// Calculate road values for the timeframe
+	roadValues := getRoadValuesForTimeframe(goal, startTime, endTime, len(processedDatapoints))
+
+	// Find min and max values for scaling
+	minVal := processedDatapoints[0].value
+	maxVal := processedDatapoints[0].value
+	for _, dp := range processedDatapoints {
+		if dp.value < minVal {
+			minVal = dp.value
+		}
+		if dp.value > maxVal {
+			maxVal = dp.value
+		}
+	}
+	for _, rv := range roadValues {
+		if rv < minVal {
+			minVal = rv
+		}
+		if rv > maxVal {
+			maxVal = rv
+		}
+	}
+
+	// Add some padding to the range
+	valueRange := maxVal - minVal
+	if valueRange == 0 {
+		valueRange = 1
+	}
+	minVal -= valueRange * 0.1
+	maxVal += valueRange * 0.1
+
+	// Chart dimensions
+	chartHeight := 10
+	chartWidth := width - 8 // Leave room for padding and axis labels
+	if chartWidth < 40 {
+		chartWidth = 40
+	}
+	if chartWidth > 80 {
+		chartWidth = 80
+	}
+
+	// Build the chart
+	var chart strings.Builder
+
+	// Header with goal type and timeframe
+	chart.WriteString("\n")
+	chartStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("12")).
+		Padding(0, 2)
+
+	goalType := "Do More"
+	if goal.Yaw == -1 {
+		goalType = "Do Less"
+	}
+	cumulativeStr := ""
+	if goal.Kyoom {
+		cumulativeStr = " (Cumulative)"
+	}
+
+	header := fmt.Sprintf("Goal Progress Chart - %s%s", goalType, cumulativeStr)
+	chart.WriteString(chartStyle.Render(header) + "\n")
+
+	timeframeInfo := fmt.Sprintf("Timeframe: %s to %s", startTime.Format("Jan 2"), endTime.Format("Jan 2, 2006"))
+	chart.WriteString(chartStyle.Render(timeframeInfo) + "\n\n")
+
+	// Draw the chart row by row (top to bottom)
+	for row := chartHeight - 1; row >= 0; row-- {
+		// Calculate the value at this row
+		rowValue := minVal + (maxVal-minVal)*(float64(row)/float64(chartHeight-1))
+
+		// Y-axis label
+		chart.WriteString(fmt.Sprintf("%6.1f │", rowValue))
+
+		// Draw the row
+		for col := 0; col < chartWidth; col++ {
+			// Calculate which datapoint this column represents
+			dpIndex := (col * len(processedDatapoints)) / chartWidth
+			if dpIndex >= len(processedDatapoints) {
+				dpIndex = len(processedDatapoints) - 1
+			}
+
+			dp := processedDatapoints[dpIndex]
+			roadVal := roadValues[dpIndex]
+
+			// Calculate normalized positions (0.0 to 1.0)
+			dpPos := (dp.value - minVal) / (maxVal - minVal)
+			roadPos := (roadVal - minVal) / (maxVal - minVal)
+			rowPos := float64(row) / float64(chartHeight-1)
+
+			// Tolerance for "close enough"
+			tolerance := 1.0 / float64(chartHeight*2)
+
+			// Determine what to draw
+			dpClose := dpPos >= rowPos-tolerance && dpPos <= rowPos+tolerance
+			roadClose := roadPos >= rowPos-tolerance && roadPos <= rowPos+tolerance
+
+			if dpClose && roadClose {
+				// Both datapoint and road at this position
+				chart.WriteString("█")
+			} else if dpClose {
+				// Just datapoint - check if on good or bad side
+				goodSide := false
+				if goal.Yaw == 1 {
+					// Good side is above road
+					goodSide = dp.value >= roadVal
+				} else {
+					// Good side is below road
+					goodSide = dp.value <= roadVal
+				}
+				if goodSide {
+					chart.WriteString("●")
+				} else {
+					chart.WriteString("○")
+				}
+			} else if roadClose {
+				// Just road
+				chart.WriteString("─")
+			} else {
+				chart.WriteString(" ")
+			}
+		}
+		chart.WriteString("\n")
+	}
+
+	// X-axis
+	chart.WriteString("       └" + strings.Repeat("─", chartWidth) + "\n")
+
+	// Legend
+	legendStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Padding(0, 2)
+
+	legend := "Legend: ● = on good side  ○ = on bad side  ─ = yellow brick road  █ = on target"
+	chart.WriteString(legendStyle.Render(legend) + "\n")
+
+	return chart.String()
+}
+
+// getRoadValuesForTimeframe calculates road values for each datapoint timestamp
+func getRoadValuesForTimeframe(goal Goal, startTime, endTime time.Time, numPoints int) []float64 {
+	values := make([]float64, numPoints)
+
+	// If no roadall data, return zeros
+	if len(goal.Roadall) == 0 {
+		return values
+	}
+
+	// Calculate timestamps for each point
+	duration := endTime.Sub(startTime)
+	for i := 0; i < numPoints; i++ {
+		t := startTime.Add(time.Duration(float64(duration) * float64(i) / float64(numPoints-1)))
+		values[i] = getRoadValueAtTime(goal, t)
+	}
+
+	return values
+}
+
+// getRoadValueAtTime interpolates the road value at a specific time.
+//
+// Beeminder's roadall is a piecewise schedule: the first row is the anchor
+// (t, v set, r nil), and each subsequent row has exactly one of v/r null —
+// either the value at that t, or the rate (per runits) used to get there.
+// To interpolate we walk forward, materialising each row's value from the
+// previous anchor and the row's rate when the row's own value is missing.
+func getRoadValueAtTime(goal Goal, t time.Time) float64 {
+	if len(goal.Roadall) < 2 {
+		return 0
+	}
+
+	target := float64(t.Unix())
+
+	// Resolve the anchor (row 0): must have t and v set.
+	first := goal.Roadall[0]
+	if len(first) < 3 || first[0] == nil || first[1] == nil {
+		return 0
+	}
+	prevT := *first[0]
+	prevV := *first[1]
+
+	// If target is before the road starts, extrapolate backwards using the
+	// first segment's slope so the chart can still draw a value.
+	if target < prevT {
+		slope, ok := segmentSlopePerSecond(goal, 1, prevT, prevV)
+		if !ok {
+			return prevV
+		}
+		return prevV + slope*(target-prevT)
+	}
+
+	for i := 1; i < len(goal.Roadall); i++ {
+		cur := goal.Roadall[i]
+		if len(cur) < 3 || cur[0] == nil {
+			return prevV
+		}
+		curT := *cur[0]
+
+		// Materialise this row's value.
+		var curV float64
+		switch {
+		case cur[1] != nil:
+			curV = *cur[1]
+		case cur[2] != nil:
+			rate := *cur[2]
+			rps := ratePerDay(rate, goal.Runits) / 86400.0
+			curV = prevV + rps*(curT-prevT)
+		default:
+			return prevV
+		}
+
+		if target <= curT {
+			if curT == prevT {
+				return curV
+			}
+			frac := (target - prevT) / (curT - prevT)
+			return prevV + frac*(curV-prevV)
+		}
+
+		prevT = curT
+		prevV = curV
+	}
+
+	// Past the end of the road: return the last row's materialised value.
+	return prevV
+}
+
+// segmentSlopePerSecond returns the slope (gunits/second) of roadall segment
+// ending at index i, given the prior anchor (prevT, prevV). Used to
+// extrapolate before the start of the road.
+func segmentSlopePerSecond(goal Goal, i int, prevT, prevV float64) (float64, bool) {
+	if i >= len(goal.Roadall) {
+		return 0, false
+	}
+	cur := goal.Roadall[i]
+	if len(cur) < 3 || cur[0] == nil {
+		return 0, false
+	}
+	if cur[2] != nil {
+		return ratePerDay(*cur[2], goal.Runits) / 86400.0, true
+	}
+	if cur[1] == nil {
+		return 0, false
+	}
+	dt := *cur[0] - prevT
+	if dt == 0 {
+		return 0, false
+	}
+	return (*cur[1] - prevV) / dt, true
 }

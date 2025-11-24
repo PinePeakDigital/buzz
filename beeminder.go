@@ -25,6 +25,9 @@ type Goal struct {
 	Deadline    int                   `json:"deadline"`   // Seconds by which deadline differs from midnight
 	Yaw         int                   `json:"yaw"`        // Good side of the bright red line (+1 = above, -1 = below)
 	Dir         int                   `json:"dir"`        // Direction the bright red line is sloping (+1 = up, -1 = down)
+	Kyoom       bool                  `json:"kyoom"`      // Whether goal is cumulative/auto-summing
+	Tmin        string                `json:"tmin"`       // Min date for graph view (yyyy-mm-dd format)
+	Tmax        string                `json:"tmax"`       // Max date for graph view (yyyy-mm-dd format)
 	Curval      *float64              `json:"curval"`     // Most recent datapoint value
 	Goalval     *float64              `json:"goalval"`    // End value of the goal (may be null if computed from goaldate+rate)
 	Mathishard  []*float64            `json:"mathishard"` // [goaldate, goalval, rate] all filled in (may be null in error states)
