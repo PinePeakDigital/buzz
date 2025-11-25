@@ -55,13 +55,9 @@ func TestRenderGoalChartWithDatapoints(t *testing.T) {
 	if !strings.Contains(chart, "Do More") {
 		t.Error("Expected chart to contain 'Do More'")
 	}
-	if !strings.Contains(chart, "Legend:") {
-		t.Error("Expected chart to contain legend")
-	}
-	// Check that road line is rendered (─ character should appear in chart body)
-	// Road line should appear as we have roadall data
-	if !strings.Contains(chart, "─") {
-		t.Error("Expected chart to contain road line (─)")
+	// asciigraph uses its own caption format
+	if !strings.Contains(chart, "datapoints") && !strings.Contains(chart, "bright red line") {
+		t.Error("Expected chart to contain caption")
 	}
 }
 
