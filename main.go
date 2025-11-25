@@ -488,15 +488,20 @@ func handleTodayCommand() {
 	fmt.Print(getUpdateMessage())
 }
 
+// printAddUsageAndExit prints the usage for buzz add command and exits with code 1
+func printAddUsageAndExit(errorMsg string) {
+	fmt.Println("Error: " + errorMsg)
+	fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
+	fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment]")
+	os.Exit(1)
+}
+
 // handleAddCommand adds a datapoint to a goal without opening the TUI
 func handleAddCommand() {
 	// Check arguments: buzz add <goalslug> <value> [comment]
 	// Value can also be piped via stdin: echo "123" | buzz add mygoal [comment]
 	if len(os.Args) < 3 {
-		fmt.Println("Error: Missing required arguments")
-		fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
-		fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment]")
-		os.Exit(1)
+		printAddUsageAndExit("Missing required arguments")
 	}
 
 	goalSlug := os.Args[2]
@@ -512,10 +517,7 @@ func handleAddCommand() {
 		// Try to read value from stdin (for piped input)
 		stdinValue, err := readValueFromStdin()
 		if err != nil || stdinValue == "" {
-			fmt.Println("Error: Missing required value argument")
-			fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
-			fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment]")
-			os.Exit(1)
+			printAddUsageAndExit("Missing required value argument")
 		}
 		value = stdinValue
 		commentStartIndex = 3 // Comment starts at index 3 when value is piped
