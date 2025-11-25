@@ -13,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/guptarohit/asciigraph"
 )
 
 // handleReviewCommand launches an interactive review of all goals
@@ -460,7 +461,7 @@ func renderGoalChart(goal Goal, width int) string {
 
 	// Chart dimensions
 	chartHeight := 10
-	chartWidth := width - 8 // Leave room for padding and axis labels
+	chartWidth := width - 10 // Leave room for padding and axis labels
 	if chartWidth < 40 {
 		chartWidth = 40
 	}
@@ -468,42 +469,52 @@ func renderGoalChart(goal Goal, width int) string {
 		chartWidth = 80
 	}
 
-	// Calculate road values for each column of the chart
+	// Calculate road values for the timeframe (one per chart column)
 	roadValues := getRoadValuesForTimeframe(goal, startTime, endTime, chartWidth)
 
-	// Find min and max values for scaling
-	minVal := processedDatapoints[0].value
-	maxVal := processedDatapoints[0].value
+	// Create datapoint values array aligned to chart columns
+	// Map each datapoint to its appropriate column based on timestamp
+	datapointValues := make([]float64, chartWidth)
+	hasDatapoint := make([]bool, chartWidth)
+	duration := endTime.Sub(startTime)
+
 	for _, dp := range processedDatapoints {
-		if dp.value < minVal {
-			minVal = dp.value
+		dpTime := time.Unix(dp.timestamp, 0)
+		// Calculate which column this datapoint belongs to
+		progress := dpTime.Sub(startTime).Seconds() / duration.Seconds()
+		col := int(progress * float64(chartWidth-1))
+		if col < 0 {
+			col = 0
 		}
-		if dp.value > maxVal {
-			maxVal = dp.value
+		if col >= chartWidth {
+			col = chartWidth - 1
+		}
+		datapointValues[col] = dp.value
+		hasDatapoint[col] = true
+	}
+
+	// Fill in gaps in datapoint values
+	// First, find the first datapoint value to use as initial value
+	lastValue := 0.0
+	for i := 0; i < chartWidth; i++ {
+		if hasDatapoint[i] {
+			lastValue = datapointValues[i]
+			break
 		}
 	}
-	for _, rv := range roadValues {
-		if rv < minVal {
-			minVal = rv
-		}
-		if rv > maxVal {
-			maxVal = rv
+	// Now fill gaps using the last known value (forward fill)
+	for i := 0; i < chartWidth; i++ {
+		if hasDatapoint[i] {
+			lastValue = datapointValues[i]
+		} else {
+			datapointValues[i] = lastValue
 		}
 	}
 
-	// Add some padding to the range
-	valueRange := maxVal - minVal
-	if valueRange == 0 {
-		valueRange = 1
-	}
-	minVal -= valueRange * 0.1
-	maxVal += valueRange * 0.1
-
-	// Build the chart
+	// Build the chart header
 	var chart strings.Builder
-
-	// Header with goal type and timeframe
 	chart.WriteString("\n")
+
 	chartStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("12")).
 		Padding(0, 2)
@@ -523,77 +534,19 @@ func renderGoalChart(goal Goal, width int) string {
 	timeframeInfo := fmt.Sprintf("Timeframe: %s to %s", startTime.Format("Jan 2"), endTime.Format("Jan 2, 2006"))
 	chart.WriteString(chartStyle.Render(timeframeInfo) + "\n\n")
 
-	// Draw the chart row by row (top to bottom)
-	for row := chartHeight - 1; row >= 0; row-- {
-		// Calculate the value at this row
-		rowValue := minVal + (maxVal-minVal)*(float64(row)/float64(chartHeight-1))
+	// Use asciigraph to render both lines
+	// Create a combined view showing both datapoints and road
+	graphData := [][]float64{datapointValues, roadValues}
 
-		// Y-axis label
-		chart.WriteString(fmt.Sprintf("%6.1f │", rowValue))
+	graphOutput := asciigraph.PlotMany(graphData,
+		asciigraph.Height(chartHeight),
+		asciigraph.Width(chartWidth),
+		asciigraph.SeriesColors(asciigraph.Blue, asciigraph.Red),
+		asciigraph.Caption("Blue: datapoints, Red: bright red line"),
+	)
 
-		// Draw the row
-		for col := 0; col < chartWidth; col++ {
-			// Get the road value for this column (road values are calculated per column)
-			roadVal := roadValues[col]
-
-			// Calculate which datapoint this column represents
-			dpIndex := (col * len(processedDatapoints)) / chartWidth
-			if dpIndex >= len(processedDatapoints) {
-				dpIndex = len(processedDatapoints) - 1
-			}
-			dp := processedDatapoints[dpIndex]
-
-			// Calculate normalized positions (0.0 to 1.0)
-			dpPos := (dp.value - minVal) / (maxVal - minVal)
-			roadPos := (roadVal - minVal) / (maxVal - minVal)
-			rowPos := float64(row) / float64(chartHeight-1)
-
-			// Tolerance for "close enough"
-			tolerance := 1.0 / float64(chartHeight*2)
-
-			// Determine what to draw
-			dpClose := dpPos >= rowPos-tolerance && dpPos <= rowPos+tolerance
-			roadClose := roadPos >= rowPos-tolerance && roadPos <= rowPos+tolerance
-
-			if dpClose && roadClose {
-				// Both datapoint and road at this position
-				chart.WriteString("█")
-			} else if dpClose {
-				// Just datapoint - check if on good or bad side
-				goodSide := false
-				if goal.Yaw == 1 {
-					// Good side is above road
-					goodSide = dp.value >= roadVal
-				} else {
-					// Good side is below road
-					goodSide = dp.value <= roadVal
-				}
-				if goodSide {
-					chart.WriteString("●")
-				} else {
-					chart.WriteString("○")
-				}
-			} else if roadClose {
-				// Determine road line character based on direction
-				roadChar := getRoadCharacter(col, row, chartWidth, chartHeight, roadValues, minVal, maxVal)
-				chart.WriteString(roadChar)
-			} else {
-				chart.WriteString(" ")
-			}
-		}
-		chart.WriteString("\n")
-	}
-
-	// X-axis
-	chart.WriteString("       └" + strings.Repeat("─", chartWidth) + "\n")
-
-	// Legend
-	legendStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
-		Padding(0, 2)
-
-	legend := "Legend: ● = on good side  ○ = on bad side  ─ = bright red line  █ = on target"
-	chart.WriteString(legendStyle.Render(legend) + "\n")
+	chart.WriteString(graphOutput)
+	chart.WriteString("\n")
 
 	return chart.String()
 }
@@ -713,83 +666,4 @@ func segmentSlopePerSecond(goal Goal, i int, prevT, prevV float64) (float64, boo
 		return 0, false
 	}
 	return (*cur[1] - prevV) / dt, true
-}
-
-// getRoadCharacter determines the appropriate ASCII character for the road line
-// based on the road's direction at the current position
-func getRoadCharacter(col, row, chartWidth, chartHeight int, roadValues []float64, minVal, maxVal float64) string {
-	// Handle edge case where all values are the same
-	if maxVal == minVal {
-		return "─"
-	}
-
-	// Get current road position in row terms
-	roadVal := roadValues[col]
-	roadPos := (roadVal - minVal) / (maxVal - minVal)
-	currentRow := int(roadPos * float64(chartHeight-1))
-
-	// Get previous column's road row (if exists)
-	prevRow := currentRow
-	if col > 0 && col-1 < len(roadValues) {
-		prevRoadVal := roadValues[col-1]
-		prevRoadPos := (prevRoadVal - minVal) / (maxVal - minVal)
-		prevRow = int(prevRoadPos * float64(chartHeight-1))
-	}
-
-	// Get next column's road row (if exists)
-	nextRow := currentRow
-	if col < chartWidth-1 && col+1 < len(roadValues) {
-		nextRoadVal := roadValues[col+1]
-		nextRoadPos := (nextRoadVal - minVal) / (maxVal - minVal)
-		nextRow = int(nextRoadPos * float64(chartHeight-1))
-	}
-
-	// Determine direction changes
-	comingFromBelow := prevRow < currentRow
-	comingFromAbove := prevRow > currentRow
-	goingUp := nextRow > currentRow
-	goingDown := nextRow < currentRow
-
-	// Select character based on direction
-	// Use rounded corners for direction changes
-	if comingFromBelow && goingUp {
-		// Continuing upward - use vertical line if steep, otherwise horizontal
-		if row == currentRow {
-			return "─"
-		}
-		return "│"
-	} else if comingFromAbove && goingDown {
-		// Continuing downward
-		if row == currentRow {
-			return "─"
-		}
-		return "│"
-	} else if comingFromBelow && (goingDown || nextRow == currentRow) {
-		// Coming from below, turning right or going flat - top of curve
-		if row == currentRow {
-			return "╮"
-		}
-		return "│"
-	} else if comingFromAbove && (goingUp || nextRow == currentRow) {
-		// Coming from above, turning right or going flat - bottom of curve
-		if row == currentRow {
-			return "╯"
-		}
-		return "│"
-	} else if (prevRow == currentRow || col == 0) && goingUp {
-		// Flat or start, going up - bottom-left corner
-		if row == currentRow {
-			return "╰"
-		}
-		return "│"
-	} else if (prevRow == currentRow || col == 0) && goingDown {
-		// Flat or start, going down - top-left corner
-		if row == currentRow {
-			return "╭"
-		}
-		return "│"
-	}
-
-	// Default: horizontal line for flat sections
-	return "─"
 }

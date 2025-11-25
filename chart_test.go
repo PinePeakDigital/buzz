@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+// roadall builds a Beeminder-style roadall row. Pass nil for v or r to leave
+// that column unset (Beeminder rows past the anchor have exactly one of v/r).
+func roadallRow(t float64, v, r *float64) []*float64 {
+	tp := t
+	return []*float64{&tp, v, r}
+}
+
+func fptr(f float64) *float64 { return &f }
+
 func TestRenderGoalChartWithNoDatapoints(t *testing.T) {
 	goal := Goal{
 		Slug:       "test-goal",
@@ -37,9 +46,9 @@ func TestRenderGoalChartWithDatapoints(t *testing.T) {
 		},
 		Tmin: yesterday.Format("2006-01-02"),
 		Tmax: now.Format("2006-01-02"),
-		Roadall: [][]any{
-			{float64(yesterday.Unix()), 0.0, 5.0},
-			{float64(now.Unix()), 5.0, 5.0},
+		Roadall: [][]*float64{
+			roadallRow(float64(yesterday.Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.Unix()), fptr(5.0), nil),
 		},
 	}
 
@@ -55,13 +64,9 @@ func TestRenderGoalChartWithDatapoints(t *testing.T) {
 	if !strings.Contains(chart, "Do More") {
 		t.Error("Expected chart to contain 'Do More'")
 	}
-	if !strings.Contains(chart, "Legend:") {
-		t.Error("Expected chart to contain legend")
-	}
-	// Check that road line is rendered (─ character should appear in chart body)
-	// Road line should appear as we have roadall data
-	if !strings.Contains(chart, "─") {
-		t.Error("Expected chart to contain road line (─)")
+	// asciigraph uses its own caption format
+	if !strings.Contains(chart, "datapoints") && !strings.Contains(chart, "bright red line") {
+		t.Error("Expected chart to contain caption")
 	}
 }
 
@@ -158,33 +163,20 @@ func TestRenderGoalChartWithFallbackTimeframe(t *testing.T) {
 
 func TestGetRoadValueAtTime(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Anchor at v=0, then a rate-only segment 10 days later. The chart's
+	// interpolator should resolve to v≈5 at day 5 (5 days at 1/day, with
+	// d runits).
 	goal := Goal{
-		Roadall: [][]any{
-			{float64(baseTime.Unix()), 0.0, 1.0}, // Start at 0, rate 1/day
-			{float64(baseTime.AddDate(0, 0, 10).Unix()), 10.0, 1.0},
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), nil, fptr(1.0)),
 		},
 	}
 
-	// Test at day 5
 	testTime := baseTime.AddDate(0, 0, 5)
 	value := getRoadValueAtTime(goal, testTime)
 	if value < 4.9 || value > 5.1 {
-		t.Errorf("Expected value around 5.0, got %f", value)
-	}
-}
-
-func TestGetRoadValueAtTimeWithDateStrings(t *testing.T) {
-	goal := Goal{
-		Roadall: [][]any{
-			{"2024-01-01", 0.0, 1.0},
-			{"2024-01-11", 10.0, 1.0},
-		},
-	}
-
-	testTime := time.Date(2024, 1, 6, 0, 0, 0, 0, time.UTC)
-	value := getRoadValueAtTime(goal, testTime)
-	// Should be around 5.0 (5 days * 1/day rate)
-	if value < 4.0 || value > 6.0 {
 		t.Errorf("Expected value around 5.0, got %f", value)
 	}
 }
@@ -194,9 +186,10 @@ func TestGetRoadValuesForTimeframe(t *testing.T) {
 	endTime := baseTime.AddDate(0, 0, 10)
 
 	goal := Goal{
-		Roadall: [][]any{
-			{float64(baseTime.Unix()), 0.0, 1.0},
-			{float64(endTime.Unix()), 10.0, 1.0},
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(endTime.Unix()), fptr(10.0), nil),
 		},
 	}
 
@@ -221,7 +214,7 @@ func TestGetRoadValuesForTimeframeEmpty(t *testing.T) {
 	endTime := baseTime.AddDate(0, 0, 10)
 
 	goal := Goal{
-		Roadall: [][]any{}, // No road data
+		Roadall: [][]*float64{}, // No road data
 	}
 
 	values := getRoadValuesForTimeframe(goal, baseTime, endTime, 10)
