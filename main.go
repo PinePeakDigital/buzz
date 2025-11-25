@@ -508,19 +508,18 @@ func handleAddCommand() {
 	var value string
 	var commentStartIndex int // Index where optional comment starts
 
-	// Check if value is provided as argument or via stdin
-	if len(os.Args) >= 4 {
+	// Try to read value from stdin first (for piped input)
+	stdinValue, err := readValueFromStdin()
+	if err == nil && stdinValue != "" {
+		// Value provided via stdin
+		value = stdinValue
+		commentStartIndex = 3 // Comment starts at index 3 when value is piped
+	} else if len(os.Args) >= 4 {
 		// Value provided as argument
 		value = os.Args[3]
 		commentStartIndex = 4 // Comment starts at index 4
 	} else {
-		// Try to read value from stdin (for piped input)
-		stdinValue, err := readValueFromStdin()
-		if err != nil || stdinValue == "" {
-			printAddUsageAndExit("Missing required value argument")
-		}
-		value = stdinValue
-		commentStartIndex = 3 // Comment starts at index 3 when value is piped
+		printAddUsageAndExit("Missing required value argument")
 	}
 
 	// Optional comment - default to "Added via buzz" if not provided

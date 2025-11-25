@@ -320,6 +320,9 @@ func readValueFromStdin() (string, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		value := strings.TrimSpace(scanner.Text())
+		if value == "" {
+			return "", fmt.Errorf("no input from stdin")
+		}
 		return value, nil
 	}
 
