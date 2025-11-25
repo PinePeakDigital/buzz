@@ -358,11 +358,19 @@ func renderGoalChart(goal Goal, width int) string {
 		})
 
 		// Calculate running sum and keep only those in timeframe
+		// Also track the cumulative value at the start of the timeframe
 		sum := 0.0
+		startSum := 0.0
 		for _, dp := range allDatapoints {
-			sum += dp.Value
 			dpTime := time.Unix(dp.Timestamp, 0)
-			if !dpTime.Before(startTime) && !dpTime.After(endTime) {
+			
+			// Track the sum just before the timeframe starts
+			if dpTime.Before(startTime) {
+				sum += dp.Value
+				startSum = sum
+			} else if !dpTime.After(endTime) {
+				// Datapoint is within timeframe
+				sum += dp.Value
 				processedDatapoints = append(processedDatapoints, struct {
 					timestamp int64
 					value     float64
@@ -371,6 +379,34 @@ func renderGoalChart(goal Goal, width int) string {
 					value:     sum,
 				})
 			}
+			// Datapoints after endTime are ignored
+		}
+		
+		// Always add a starting point at the beginning of the timeframe
+		// with the cumulative sum up to that point (handles case where first 
+		// datapoint is partway through the timeframe)
+		if len(processedDatapoints) > 0 || startSum != 0 {
+			// Insert at the beginning
+			startPoint := struct {
+				timestamp int64
+				value     float64
+			}{
+				timestamp: startTime.Unix(),
+				value:     startSum,
+			}
+			// Prepend the start point
+			newProcessed := make([]struct {
+				timestamp int64
+				value     float64
+			}, 0, len(processedDatapoints)+1)
+			newProcessed = append(newProcessed, startPoint)
+			newProcessed = append(newProcessed, processedDatapoints...)
+			processedDatapoints = newProcessed
+		}
+		
+		// If we still have no datapoints, there's nothing to show
+		if len(processedDatapoints) == 0 {
+			return ""
 		}
 	} else {
 		// Non-cumulative: filter datapoints within timeframe first
@@ -434,25 +470,51 @@ func renderGoalChart(goal Goal, width int) string {
 		if col >= chartWidth {
 			col = chartWidth - 1
 		}
+		// Since processedDatapoints is sorted by timestamp, later iterations
+		// will overwrite earlier ones for the same column (which is correct)
 		datapointValues[col] = dp.value
 		hasDatapoint[col] = true
 	}
 
-	// Fill in gaps in datapoint values
-	// First, find the first datapoint value to use as initial value
-	lastValue := 0.0
+	// Interpolate between datapoints for a smoother line
+	// First pass: find first and last datapoint positions
+	firstDP, lastDP := -1, -1
 	for i := 0; i < chartWidth; i++ {
 		if hasDatapoint[i] {
-			lastValue = datapointValues[i]
-			break
+			if firstDP == -1 {
+				firstDP = i
+			}
+			lastDP = i
 		}
 	}
-	// Now fill gaps using the last known value (forward fill)
-	for i := 0; i < chartWidth; i++ {
-		if hasDatapoint[i] {
-			lastValue = datapointValues[i]
-		} else {
-			datapointValues[i] = lastValue
+
+	// If we have datapoints, interpolate
+	if firstDP >= 0 {
+		// Fill before first datapoint with first value
+		for i := 0; i < firstDP; i++ {
+			datapointValues[i] = datapointValues[firstDP]
+		}
+		
+		// Fill after last datapoint with last value
+		for i := lastDP + 1; i < chartWidth; i++ {
+			datapointValues[i] = datapointValues[lastDP]
+		}
+		
+		// Interpolate between datapoints
+		prevDP := firstDP
+		for i := firstDP + 1; i <= lastDP; i++ {
+			if hasDatapoint[i] {
+				// Linear interpolation from prevDP to i
+				if i > prevDP+1 {
+					startVal := datapointValues[prevDP]
+					endVal := datapointValues[i]
+					for j := prevDP + 1; j < i; j++ {
+						ratio := float64(j-prevDP) / float64(i-prevDP)
+						datapointValues[j] = startVal + ratio*(endVal-startVal)
+					}
+				}
+				prevDP = i
+			}
 		}
 	}
 
