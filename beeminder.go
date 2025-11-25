@@ -390,6 +390,39 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	return &goal, nil
 }
 
+// FetchGoalRawJSON fetches a goal and returns the raw JSON response
+// This preserves all fields from the API, not just the ones defined in the Goal struct
+func FetchGoalRawJSON(config *Config, goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
+
+	if includeDatapoints {
+		apiURL += "&datapoints=true"
+	}
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch goal: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("goal not found: %s", goalSlug)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return json.RawMessage(body), nil
+}
+
 // CreateGoal creates a new goal for the user
 // Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate
 func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {

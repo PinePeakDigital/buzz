@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -237,8 +238,7 @@ func printHelp() {
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
 	fmt.Println("  buzz view <goalslug> --json       Output goal data as JSON")
-	fmt.Println("  buzz view <goalslug> --json --datapoints")
-	fmt.Println("                                    Output goal data as JSON including datapoints")
+	fmt.Println("  buzz view <goalslug> --json --datapoints  Include datapoints in JSON output")
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
@@ -692,27 +692,34 @@ func handleViewCommand() {
 		return
 	}
 
-	// Fetch the goal (with or without datapoints based on flags)
-	var goal *Goal
-	if datapointsFlag {
-		goal, err = FetchGoalWithDatapoints(config, goalSlug)
-	} else {
-		goal, err = FetchGoal(config, goalSlug)
+	// If --json flag is present, fetch and output raw JSON
+	if jsonFlag {
+		rawJSON, err := FetchGoalRawJSON(config, goalSlug, datapointsFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Pretty print the raw JSON
+		var prettyJSON bytes.Buffer
+		if err := json.Indent(&prettyJSON, rawJSON, "", "  "); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to format JSON: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(prettyJSON.String())
+		return
 	}
+
+	// Warn if --datapoints is used without --json
+	if datapointsFlag {
+		fmt.Fprintln(os.Stderr, "Warning: --datapoints flag has no effect without --json")
+	}
+
+	// Fetch the goal for human-readable output
+	goal, err := FetchGoal(config, goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
-	}
-
-	// If --json flag is present, output as JSON
-	if jsonFlag {
-		jsonBytes, err := json.MarshalIndent(goal, "", "  ")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to marshal goal to JSON: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println(string(jsonBytes))
-		return
 	}
 
 	// Display goal information (human-readable format)
