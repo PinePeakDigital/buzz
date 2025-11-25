@@ -363,7 +363,7 @@ func renderGoalChart(goal Goal, width int) string {
 		startSum := 0.0
 		for _, dp := range allDatapoints {
 			dpTime := time.Unix(dp.Timestamp, 0)
-			
+
 			// Track the sum just before the timeframe starts
 			if dpTime.Before(startTime) {
 				sum += dp.Value
@@ -381,9 +381,9 @@ func renderGoalChart(goal Goal, width int) string {
 			}
 			// Datapoints after endTime are ignored
 		}
-		
+
 		// Always add a starting point at the beginning of the timeframe
-		// with the cumulative sum up to that point (handles case where first 
+		// with the cumulative sum up to that point (handles case where first
 		// datapoint is partway through the timeframe)
 		if len(processedDatapoints) > 0 || startSum != 0 {
 			// Insert at the beginning
@@ -403,7 +403,7 @@ func renderGoalChart(goal Goal, width int) string {
 			newProcessed = append(newProcessed, processedDatapoints...)
 			processedDatapoints = newProcessed
 		}
-		
+
 		// If we still have no datapoints, there's nothing to show
 		if len(processedDatapoints) == 0 {
 			return ""
@@ -494,12 +494,12 @@ func renderGoalChart(goal Goal, width int) string {
 		for i := 0; i < firstDP; i++ {
 			datapointValues[i] = datapointValues[firstDP]
 		}
-		
+
 		// Fill after last datapoint with last value
 		for i := lastDP + 1; i < chartWidth; i++ {
 			datapointValues[i] = datapointValues[lastDP]
 		}
-		
+
 		// Interpolate between datapoints
 		prevDP := firstDP
 		for i := firstDP + 1; i <= lastDP; i++ {
