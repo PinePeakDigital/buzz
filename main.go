@@ -491,7 +491,7 @@ func handleTodayCommand() {
 // handleAddCommand adds a datapoint to a goal without opening the TUI
 func handleAddCommand() {
 	// Check arguments: buzz add <goalslug> <value> [comment]
-	// Value can also be piped via stdin: echo "123" | buzz add mygoal
+	// Value can also be piped via stdin: echo "123" | buzz add mygoal [comment]
 	if len(os.Args) < 3 {
 		fmt.Println("Error: Missing required arguments")
 		fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
@@ -501,11 +501,13 @@ func handleAddCommand() {
 
 	goalSlug := os.Args[2]
 	var value string
+	var commentStartIndex int // Index where optional comment starts
 
 	// Check if value is provided as argument or via stdin
 	if len(os.Args) >= 4 {
 		// Value provided as argument
 		value = os.Args[3]
+		commentStartIndex = 4 // Comment starts at index 4
 	} else {
 		// Try to read value from stdin (for piped input)
 		stdinValue, err := readValueFromStdin()
@@ -516,12 +518,13 @@ func handleAddCommand() {
 			os.Exit(1)
 		}
 		value = stdinValue
+		commentStartIndex = 3 // Comment starts at index 3 when value is piped
 	}
 
 	// Optional comment - default to "Added via buzz" if not provided
 	comment := "Added via buzz"
-	if len(os.Args) >= 5 {
-		comment = strings.Join(os.Args[4:], " ")
+	if len(os.Args) >= commentStartIndex+1 {
+		comment = strings.Join(os.Args[commentStartIndex:], " ")
 	}
 
 	// Load config
