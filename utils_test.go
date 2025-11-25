@@ -359,3 +359,24 @@ func TestTimeToDecimalHours(t *testing.T) {
 		})
 	}
 }
+
+// TestReadValueFromStdin tests the readValueFromStdin function
+// Note: This test is limited because we can't easily mock os.Stdin in unit tests
+// The actual stdin piping behavior is tested via integration tests
+func TestReadValueFromStdinTerminal(t *testing.T) {
+	// When running tests from a terminal, stdin is typically a character device
+	// so readValueFromStdin should return an error
+	_, err := readValueFromStdin()
+	// In a test environment (terminal), stdin should not be a pipe
+	// so we expect an error
+	if err == nil {
+		// If no error, stdin might be piped (e.g., in CI environment)
+		// This is acceptable behavior, just log it
+		t.Log("readValueFromStdin succeeded - stdin appears to be piped (expected in CI)")
+	} else {
+		// Expected case: stdin is a terminal, should return error
+		if err.Error() != "stdin is not piped" && err.Error() != "no input from stdin" {
+			t.Errorf("readValueFromStdin() returned unexpected error: %v", err)
+		}
+	}
+}
