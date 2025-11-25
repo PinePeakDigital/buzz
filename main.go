@@ -230,6 +230,8 @@ func printHelp() {
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
+	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
+	fmt.Println("                                    Add a datapoint with value from stdin")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
@@ -486,22 +488,44 @@ func handleTodayCommand() {
 	fmt.Print(getUpdateMessage())
 }
 
+// printAddUsageAndExit prints the usage for buzz add command and exits with code 1
+func printAddUsageAndExit(errorMsg string) {
+	fmt.Println("Error: " + errorMsg)
+	fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
+	fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment]")
+	os.Exit(1)
+}
+
 // handleAddCommand adds a datapoint to a goal without opening the TUI
 func handleAddCommand() {
 	// Check arguments: buzz add <goalslug> <value> [comment]
-	if len(os.Args) < 4 {
-		fmt.Println("Error: Missing required arguments")
-		fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
-		os.Exit(1)
+	// Value can also be piped via stdin: echo "123" | buzz add mygoal [comment]
+	if len(os.Args) < 3 {
+		printAddUsageAndExit("Missing required arguments")
 	}
 
 	goalSlug := os.Args[2]
-	value := os.Args[3]
+	var value string
+	var commentStartIndex int // Index where optional comment starts
+
+	// Try to read value from stdin first (for piped input)
+	stdinValue, err := readValueFromStdin()
+	if err == nil && stdinValue != "" {
+		// Value provided via stdin
+		value = stdinValue
+		commentStartIndex = 3 // Comment starts at index 3 when value is piped
+	} else if len(os.Args) >= 4 {
+		// Value provided as argument
+		value = os.Args[3]
+		commentStartIndex = 4 // Comment starts at index 4
+	} else {
+		printAddUsageAndExit("Missing required value argument")
+	}
 
 	// Optional comment - default to "Added via buzz" if not provided
 	comment := "Added via buzz"
-	if len(os.Args) >= 5 {
-		comment = strings.Join(os.Args[4:], " ")
+	if len(os.Args) >= commentStartIndex+1 {
+		comment = strings.Join(os.Args[commentStartIndex:], " ")
 	}
 
 	// Load config

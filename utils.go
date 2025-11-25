@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -298,4 +300,35 @@ func updateScrollForCursor(m *model, displayLen int) {
 		selRow = m.appModel.cursor / cols
 	}
 	m.appModel.scrollRow = ensureRowVisible(selRow, m.appModel.scrollRow, visibleRows, totalRows)
+}
+
+// readValueFromStdin reads a value from stdin if it's being piped (non-interactive input)
+// Returns the trimmed value and nil on success, or empty string and error if stdin is not piped or read fails
+func readValueFromStdin() (string, error) {
+	// Check if stdin is a pipe (non-interactive)
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	// Check if stdin is a character device (terminal) - if so, no piped input
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return "", fmt.Errorf("stdin is not piped")
+	}
+
+	// Read the first line from stdin
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		value := strings.TrimSpace(scanner.Text())
+		if value == "" {
+			return "", fmt.Errorf("no input from stdin")
+		}
+		return value, nil
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	return "", fmt.Errorf("no input from stdin")
 }
