@@ -591,6 +591,39 @@ func getRoadValueAtTime(goal Goal, t time.Time) float64 {
 
 	timestamp := t.Unix()
 
+	// Parse the first segment to check if we're before it
+	firstSegment := goal.Roadall[0]
+	var firstSegTime int64
+	switch v := firstSegment[0].(type) {
+	case float64:
+		firstSegTime = int64(v)
+	case string:
+		parsedTime, err := time.Parse("2006-01-02", v)
+		if err == nil {
+			firstSegTime = parsedTime.Unix()
+		}
+	}
+
+	// If timestamp is before the first segment, extrapolate backwards using first segment's rate
+	if timestamp < firstSegTime {
+		var firstValue, firstRate float64
+		if len(firstSegment) > 1 {
+			switch v := firstSegment[1].(type) {
+			case float64:
+				firstValue = v
+			}
+		}
+		if len(firstSegment) > 2 {
+			switch v := firstSegment[2].(type) {
+			case float64:
+				firstRate = v
+			}
+		}
+		// Extrapolate backwards: value at first segment - rate * days before
+		daysBefore := float64(firstSegTime-timestamp) / 86400.0
+		return firstValue - (firstRate * daysBefore)
+	}
+
 	// Find the road segment that contains this timestamp
 	for i := 0; i < len(goal.Roadall)-1; i++ {
 		segment := goal.Roadall[i]
@@ -625,9 +658,11 @@ func getRoadValueAtTime(goal Goal, t time.Time) float64 {
 			// Parse values
 			var segValue, rate float64
 
-			switch v := segment[1].(type) {
-			case float64:
-				segValue = v
+			if len(segment) > 1 {
+				switch v := segment[1].(type) {
+				case float64:
+					segValue = v
+				}
 			}
 
 			// Rate is in segment[2]
