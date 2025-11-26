@@ -63,8 +63,9 @@ func TestReviewModelInit(t *testing.T) {
 	m := initialReviewModel(goals, config)
 	cmd := m.Init()
 
-	if cmd != nil {
-		t.Error("Expected Init() to return nil")
+	// Init should now return a command to fetch goal details
+	if cmd == nil {
+		t.Error("Expected Init() to return a command to fetch goal details")
 	}
 }
 
