@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -235,6 +237,8 @@ func printHelp() {
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
+	fmt.Println("  buzz view <goalslug> --json       Output goal data as JSON")
+	fmt.Println("  buzz view <goalslug> --json --datapoints  Include datapoints in JSON output")
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
@@ -623,36 +627,45 @@ func handleViewCommand() {
 	// Parse flags for the view command
 	viewFlags := flag.NewFlagSet("view", flag.ContinueOnError)
 	web := viewFlags.Bool("web", false, "Open the goal in the browser")
+	jsonOutput := viewFlags.Bool("json", false, "Output goal data as JSON")
+	datapoints := viewFlags.Bool("datapoints", false, "Include datapoints in output (use with --json)")
 	if err := viewFlags.Parse(os.Args[2:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			// Help was requested; print usage and exit 0
-			fmt.Println("Usage: buzz view <goalslug> [--web]")
+			fmt.Println("Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
 			return
 		}
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web]")
+		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
 		os.Exit(2)
 	}
 
 	// Get goal slug from remaining arguments
 	args := viewFlags.Args()
 
-	// Check if --web flag appears after the goal slug (handle both positions)
+	// Check if flags appear after the goal slug (handle both positions)
 	webFlag := *web
+	jsonFlag := *jsonOutput
+	datapointsFlag := *datapoints
 	var goalSlug string
 	var filteredArgs []string
 
 	for _, arg := range args {
-		if arg == "--web" {
+		switch arg {
+		case "--web":
 			webFlag = true
-		} else {
+		case "--json":
+			jsonFlag = true
+		case "--datapoints":
+			datapointsFlag = true
+		default:
 			filteredArgs = append(filteredArgs, arg)
 		}
 	}
 
 	if len(filteredArgs) < 1 {
 		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
-		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web]")
+		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
 		os.Exit(1)
 	}
 
@@ -679,14 +692,37 @@ func handleViewCommand() {
 		return
 	}
 
-	// Fetch the goal
+	// If --json flag is present, fetch and output raw JSON
+	if jsonFlag {
+		rawJSON, err := FetchGoalRawJSON(config, goalSlug, datapointsFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Pretty print the raw JSON
+		var prettyJSON bytes.Buffer
+		if err := json.Indent(&prettyJSON, rawJSON, "", "  "); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to format JSON: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(prettyJSON.String())
+		return
+	}
+
+	// Warn if --datapoints is used without --json
+	if datapointsFlag {
+		fmt.Fprintln(os.Stderr, "Warning: --datapoints flag has no effect without --json")
+	}
+
+	// Fetch the goal for human-readable output
 	goal, err := FetchGoal(config, goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Display goal information
+	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
 	fmt.Printf("Title:       %s\n", goal.Title)
 
