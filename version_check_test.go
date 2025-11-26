@@ -540,7 +540,7 @@ func TestDetectInstallMethodFromPath(t *testing.T) {
 			expected: InstallMethodBrew,
 		},
 		{
-			name:     "homebrew generic path",
+			name:     "homebrew bin Apple Silicon",
 			path:     "/opt/homebrew/bin/buzz",
 			expected: InstallMethodBrew,
 		},
@@ -569,16 +569,23 @@ func TestDetectInstallMethodFromPath(t *testing.T) {
 			path:     "/home/runner/work/buzz/buzz/buzz",
 			expected: InstallMethodUnknown,
 		},
+		{
+			name:     "unrelated homebrew in path should not match",
+			path:     "/Users/user/homebrew-scripts/buzz",
+			expected: InstallMethodUnknown,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test the path matching patterns
+			// Test the path matching patterns (must match version.go logic)
 			method := InstallMethodUnknown
 
 			// Check for Homebrew installation
+			// /Cellar/ is unique to Homebrew installations
+			// /opt/homebrew/ is the standard Homebrew prefix on Apple Silicon
 			if strings.Contains(tt.path, "/Cellar/") ||
-				strings.Contains(tt.path, "/homebrew/") {
+				strings.Contains(tt.path, "/opt/homebrew/") {
 				method = InstallMethodBrew
 			}
 

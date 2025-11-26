@@ -232,8 +232,10 @@ func detectInstallMethod() InstallMethod {
 
 	// Check for Homebrew installation
 	// Homebrew installs to /opt/homebrew/Cellar/ (Apple Silicon) or /usr/local/Cellar/ (Intel)
+	// The /Cellar/ path is unique to Homebrew installations
+	// /opt/homebrew/ is the standard Homebrew prefix on Apple Silicon
 	if strings.Contains(realPath, "/Cellar/") ||
-		strings.Contains(realPath, "/homebrew/") {
+		strings.Contains(realPath, "/opt/homebrew/") {
 		return InstallMethodBrew
 	}
 
