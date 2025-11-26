@@ -231,11 +231,11 @@ func detectInstallMethod() InstallMethod {
 	}
 
 	// Check for Homebrew installation
-	// Homebrew installs to /opt/homebrew/Cellar/ (Apple Silicon) or /usr/local/Cellar/ (Intel)
+	// Homebrew-managed binaries are symlinked to /opt/homebrew/bin/ (Apple Silicon) or /usr/local/bin/ (Intel)
 	// The /Cellar/ path is unique to Homebrew installations
-	// /opt/homebrew/ is the standard Homebrew prefix on Apple Silicon
 	if strings.Contains(realPath, "/Cellar/") ||
-		strings.Contains(realPath, "/opt/homebrew/") {
+		strings.HasPrefix(realPath, "/opt/homebrew/bin/") ||
+		strings.HasPrefix(realPath, "/usr/local/bin/") {
 		return InstallMethodBrew
 	}
 

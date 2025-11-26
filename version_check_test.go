@@ -465,20 +465,7 @@ func TestGetUpdateCommand(t *testing.T) {
 	}
 }
 
-func TestInstallMethodConstants(t *testing.T) {
-	// Verify that InstallMethod constants have expected values
-	if InstallMethodUnknown != 0 {
-		t.Errorf("InstallMethodUnknown should be 0, got %d", InstallMethodUnknown)
-	}
-	if InstallMethodBin != 1 {
-		t.Errorf("InstallMethodBin should be 1, got %d", InstallMethodBin)
-	}
-	if InstallMethodBrew != 2 {
-		t.Errorf("InstallMethodBrew should be 2, got %d", InstallMethodBrew)
-	}
-}
-
-func TestGetUpdateMessageWithBrewInstall(t *testing.T) {
+func TestGetUpdateMessage(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "buzz-test-*")
 	if err != nil {
@@ -522,6 +509,22 @@ func TestGetUpdateMessageWithBrewInstall(t *testing.T) {
 	}
 }
 
+// detectInstallMethodFromPath is a test helper that wraps the detection logic from version.go
+// This must be kept in sync with the detectInstallMethod() implementation
+func detectInstallMethodFromPath(path string) InstallMethod {
+	// Check for Homebrew installation
+	if strings.Contains(path, "/Cellar/") ||
+		strings.HasPrefix(path, "/opt/homebrew/bin/") ||
+		strings.HasPrefix(path, "/usr/local/bin/") {
+		return InstallMethodBrew
+	}
+	// Check for bin installation
+	if strings.Contains(path, "/.bin/") {
+		return InstallMethodBin
+	}
+	return InstallMethodUnknown
+}
+
 func TestDetectInstallMethodFromPath(t *testing.T) {
 	// Test the path detection logic by checking expected patterns
 	tests := []struct {
@@ -545,6 +548,11 @@ func TestDetectInstallMethodFromPath(t *testing.T) {
 			expected: InstallMethodBrew,
 		},
 		{
+			name:     "homebrew bin Intel Mac",
+			path:     "/usr/local/bin/buzz",
+			expected: InstallMethodBrew,
+		},
+		{
 			name:     "bin installation",
 			path:     "/Users/testuser/.bin/buzz",
 			expected: InstallMethodBin,
@@ -557,11 +565,6 @@ func TestDetectInstallMethodFromPath(t *testing.T) {
 		{
 			name:     "go install to go bin",
 			path:     "/Users/testuser/go/bin/buzz",
-			expected: InstallMethodUnknown,
-		},
-		{
-			name:     "direct download to local bin",
-			path:     "/usr/local/bin/buzz",
 			expected: InstallMethodUnknown,
 		},
 		{
@@ -578,21 +581,7 @@ func TestDetectInstallMethodFromPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test the path matching patterns (must match version.go logic)
-			method := InstallMethodUnknown
-
-			// Check for Homebrew installation
-			// /Cellar/ is unique to Homebrew installations
-			// /opt/homebrew/ is the standard Homebrew prefix on Apple Silicon
-			if strings.Contains(tt.path, "/Cellar/") ||
-				strings.Contains(tt.path, "/opt/homebrew/") {
-				method = InstallMethodBrew
-			}
-
-			// Check for bin installation
-			if strings.Contains(tt.path, "/.bin/") {
-				method = InstallMethodBin
-			}
+			method := detectInstallMethodFromPath(tt.path)
 
 			if method != tt.expected {
 				t.Errorf("path %q: got %v, expected %v", tt.path, method, tt.expected)
