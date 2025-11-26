@@ -208,6 +208,58 @@ func checkForUpdates() (bool, string, error) {
 	return updateAvailable, latestVersion, nil
 }
 
+// InstallMethod represents how buzz was installed
+type InstallMethod int
+
+const (
+	InstallMethodUnknown InstallMethod = iota
+	InstallMethodBin
+	InstallMethodBrew
+)
+
+// detectInstallMethod determines how buzz was installed based on the executable path
+func detectInstallMethod() InstallMethod {
+	execPath, err := os.Executable()
+	if err != nil {
+		return InstallMethodUnknown
+	}
+
+	// Resolve any symlinks to get the real path
+	realPath, err := filepath.EvalSymlinks(execPath)
+	if err != nil {
+		realPath = execPath
+	}
+
+	// Check for Homebrew installation
+	// Homebrew-managed binaries are symlinked to /opt/homebrew/bin/ (Apple Silicon) or /usr/local/bin/ (Intel)
+	// The /Cellar/ path is unique to Homebrew installations
+	if strings.Contains(realPath, "/Cellar/") ||
+		strings.HasPrefix(realPath, "/opt/homebrew/bin/") ||
+		strings.HasPrefix(realPath, "/usr/local/bin/") {
+		return InstallMethodBrew
+	}
+
+	// Check for bin installation
+	// bin typically installs to ~/.bin/
+	if strings.Contains(realPath, "/.bin/") {
+		return InstallMethodBin
+	}
+
+	return InstallMethodUnknown
+}
+
+// getUpdateCommand returns the appropriate update command based on install method
+func getUpdateCommand(method InstallMethod) string {
+	switch method {
+	case InstallMethodBrew:
+		return "brew upgrade narthur/tap/buzz"
+	case InstallMethodBin:
+		return "bin update buzz"
+	default:
+		return ""
+	}
+}
+
 // getUpdateMessage returns a message if an update is available
 func getUpdateMessage() string {
 	updateAvailable, latestVersion, err := checkForUpdates()
@@ -217,6 +269,12 @@ func getUpdateMessage() string {
 	}
 
 	if updateAvailable {
+		method := detectInstallMethod()
+		updateCmd := getUpdateCommand(method)
+
+		if updateCmd != "" {
+			return fmt.Sprintf("\nℹ️  Update available: %s → %s\n   Run: %s\n", version, latestVersion, updateCmd)
+		}
 		return fmt.Sprintf("\nℹ️  Update available: %s → %s\n   Visit https://github.com/pinepeakdigital/buzz/releases/latest to upgrade\n", version, latestVersion)
 	}
 

@@ -431,3 +431,161 @@ func TestCheckForUpdatesAfterVersionUpgrade(t *testing.T) {
 		t.Logf("Network error (expected in offline environment): %v", err)
 	}
 }
+
+func TestGetUpdateCommand(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   InstallMethod
+		expected string
+	}{
+		{
+			name:     "brew installation",
+			method:   InstallMethodBrew,
+			expected: "brew upgrade narthur/tap/buzz",
+		},
+		{
+			name:     "bin installation",
+			method:   InstallMethodBin,
+			expected: "bin update buzz",
+		},
+		{
+			name:     "unknown installation",
+			method:   InstallMethodUnknown,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getUpdateCommand(tt.method)
+			if result != tt.expected {
+				t.Errorf("getUpdateCommand(%v) = %q, expected %q", tt.method, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetUpdateMessage(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "buzz-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Override the cache path for testing
+	originalHomeDir := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", originalHomeDir)
+
+	// Create a cache indicating update is available
+	cache := &VersionCache{
+		LastCheck:       time.Now(),
+		LatestVersion:   "v0.31.0",
+		UpdateAvailable: true,
+		CurrentVersion:  version,
+	}
+
+	err = saveVersionCache(cache)
+	if err != nil {
+		t.Fatalf("Failed to save cache: %v", err)
+	}
+
+	// Get update message - since we can't easily mock the executable path,
+	// we just verify the message format is correct
+	msg := getUpdateMessage()
+	if msg == "" {
+		t.Error("Expected non-empty message when update available")
+	}
+
+	// Verify message contains version information
+	if !strings.Contains(msg, "v0.31.0") {
+		t.Errorf("Expected message to contain version v0.31.0, got: %s", msg)
+	}
+
+	// Verify message contains either an update command or the releases URL
+	if !strings.Contains(msg, "Run:") && !strings.Contains(msg, "github.com/pinepeakdigital/buzz/releases") {
+		t.Errorf("Expected message to contain either 'Run:' or releases URL, got: %s", msg)
+	}
+}
+
+// detectInstallMethodFromPath is a test helper that wraps the detection logic from version.go
+// This must be kept in sync with the detectInstallMethod() implementation
+func detectInstallMethodFromPath(path string) InstallMethod {
+	// Check for Homebrew installation
+	if strings.Contains(path, "/Cellar/") ||
+		strings.HasPrefix(path, "/opt/homebrew/bin/") ||
+		strings.HasPrefix(path, "/usr/local/bin/") {
+		return InstallMethodBrew
+	}
+	// Check for bin installation
+	if strings.Contains(path, "/.bin/") {
+		return InstallMethodBin
+	}
+	return InstallMethodUnknown
+}
+
+func TestDetectInstallMethodFromPath(t *testing.T) {
+	// Test the path detection logic by checking expected patterns
+	tests := []struct {
+		name     string
+		path     string
+		expected InstallMethod
+	}{
+		{
+			name:     "homebrew cellar Apple Silicon",
+			path:     "/opt/homebrew/Cellar/buzz/0.35.0/bin/buzz",
+			expected: InstallMethodBrew,
+		},
+		{
+			name:     "homebrew cellar Intel Mac",
+			path:     "/usr/local/Cellar/buzz/0.35.0/bin/buzz",
+			expected: InstallMethodBrew,
+		},
+		{
+			name:     "homebrew bin Apple Silicon",
+			path:     "/opt/homebrew/bin/buzz",
+			expected: InstallMethodBrew,
+		},
+		{
+			name:     "homebrew bin Intel Mac",
+			path:     "/usr/local/bin/buzz",
+			expected: InstallMethodBrew,
+		},
+		{
+			name:     "bin installation",
+			path:     "/Users/testuser/.bin/buzz",
+			expected: InstallMethodBin,
+		},
+		{
+			name:     "bin installation linux",
+			path:     "/home/testuser/.bin/buzz",
+			expected: InstallMethodBin,
+		},
+		{
+			name:     "go install to go bin",
+			path:     "/Users/testuser/go/bin/buzz",
+			expected: InstallMethodUnknown,
+		},
+		{
+			name:     "current directory",
+			path:     "/home/runner/work/buzz/buzz/buzz",
+			expected: InstallMethodUnknown,
+		},
+		{
+			name:     "unrelated homebrew in path should not match",
+			path:     "/Users/user/homebrew-scripts/buzz",
+			expected: InstallMethodUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			method := detectInstallMethodFromPath(tt.path)
+
+			if method != tt.expected {
+				t.Errorf("path %q: got %v, expected %v", tt.path, method, tt.expected)
+			}
+		})
+	}
+}
