@@ -747,8 +747,6 @@ func handleMouseClick(m model, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Validate the index is within bounds
 	if goalIndex >= 0 && goalIndex < len(displayGoals) {
-		// Update cursor to clicked goal
-		m.appModel.cursor = goalIndex
 		m.appModel.hasNavigated = true
 		m.appModel.lastNavigationTime = time.Now()
 
