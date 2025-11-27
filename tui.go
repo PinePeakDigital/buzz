@@ -172,6 +172,16 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Is it a key press?
 	case tea.KeyMsg:
 		return handleKeyPress(m, msg)
+
+	// Is it a mouse click?
+	case tea.MouseMsg:
+		// Only handle clicks when not in a modal
+		if !m.appModel.showModal && !m.appModel.showCreateModal {
+			if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+				return handleMouseClick(m, msg)
+			}
+		}
+		return m, nil
 	}
 
 	// Return the updated model to the Bubble Tea runtime for processing.
