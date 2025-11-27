@@ -709,3 +709,67 @@ func handleCreateGoal(m model) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
+
+// handleMouseClick handles mouse click events on the grid
+func handleMouseClick(m model, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	displayGoals := m.appModel.getDisplayGoals()
+	if len(displayGoals) == 0 {
+		return m, nil
+	}
+
+	// Calculate which goal was clicked based on coordinates
+	// Header is 2 lines (title + empty line), so content starts at line 2 (0-indexed)
+	headerHeight := 2
+	clickRow := msg.Y - headerHeight
+
+	// Each grid cell is 4 lines high (3 lines content + 1 line spacing)
+	cellHeight := 4
+	if clickRow < 0 {
+		// Clicked on header area
+		return m, nil
+	}
+	gridRow := clickRow / cellHeight
+
+	// Calculate column based on terminal width
+	cols := calculateColumns(m.appModel.width)
+	if cols < 1 {
+		cols = 1
+	}
+	// Approximate cell width
+	cellWidth := m.appModel.width / cols
+	if cellWidth < 1 {
+		cellWidth = 1
+	}
+	gridCol := msg.X / cellWidth
+
+	// Calculate the goal index accounting for scroll position
+	goalIndex := (m.appModel.scrollRow+gridRow)*cols + gridCol
+
+	// Validate the index is within bounds
+	if goalIndex >= 0 && goalIndex < len(displayGoals) {
+		// Update cursor to clicked goal
+		m.appModel.cursor = goalIndex
+		m.appModel.hasNavigated = true
+		m.appModel.lastNavigationTime = time.Now()
+
+		// Open the modal immediately (same as pressing Enter)
+		m.appModel.showModal = true
+		m.appModel.modalGoal = &displayGoals[goalIndex]
+
+		// Update cursor to point to goal in original list (for left/right navigation)
+		for i, goal := range m.appModel.goals {
+			if goal.Slug == displayGoals[goalIndex].Slug {
+				m.appModel.cursor = i
+				break
+			}
+		}
+
+		// Load detailed goal information
+		return m, tea.Batch(
+			loadGoalDetailsCmd(m.appModel.config, m.appModel.modalGoal.Slug),
+			navigationTimeoutCmd(navigationTimeout),
+		)
+	}
+
+	return m, nil
+}
