@@ -1288,3 +1288,410 @@ func TestScrollFollowsNavigation(t *testing.T) {
 		}
 	})
 }
+
+// mockMouseMsg creates a mock MouseMsg for testing
+func mockMouseMsg(x, y int, button tea.MouseButton, action tea.MouseAction) tea.MouseMsg {
+	return tea.MouseMsg{
+		X:      x,
+		Y:      y,
+		Button: button,
+		Action: action,
+	}
+}
+
+// TestHandleMouseClick tests the mouse click handler function
+func TestHandleMouseClick(t *testing.T) {
+	t.Run("click on first goal opens modal", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80, // 4 columns (80/20)
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on the first goal (row 0, col 0)
+		// Header is 2 lines, so clicking at Y=2 is the first row of goals
+		// X=0 is in the first column
+		msg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, cmd := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Check modal is open
+		if !resultModel.appModel.showModal {
+			t.Error("showModal should be true after clicking a goal")
+		}
+
+		// Check correct goal is selected
+		if resultModel.appModel.modalGoal == nil {
+			t.Error("modalGoal should not be nil after clicking a goal")
+		} else if resultModel.appModel.modalGoal.Slug != "goal1" {
+			t.Errorf("modalGoal.Slug should be 'goal1', got '%s'", resultModel.appModel.modalGoal.Slug)
+		}
+
+		// Check hasNavigated is true
+		if !resultModel.appModel.hasNavigated {
+			t.Error("hasNavigated should be true after clicking a goal")
+		}
+
+		// Check command is returned
+		if cmd == nil {
+			t.Error("command should not be nil after clicking a goal")
+		}
+	})
+
+	t.Run("click on second column goal", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        40, // 2 columns (40/20)
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on the second goal (row 0, col 1)
+		// With 2 columns and width 40, each cell is ~20 pixels wide
+		// X=25 is in the second column
+		msg := mockMouseMsg(25, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Check modal is open with goal2
+		if !resultModel.appModel.showModal {
+			t.Error("showModal should be true after clicking a goal")
+		}
+
+		if resultModel.appModel.modalGoal == nil {
+			t.Error("modalGoal should not be nil after clicking a goal")
+		} else if resultModel.appModel.modalGoal.Slug != "goal2" {
+			t.Errorf("modalGoal.Slug should be 'goal2', got '%s'", resultModel.appModel.modalGoal.Slug)
+		}
+	})
+
+	t.Run("click on second row goal", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        40, // 2 columns
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on the third goal (row 1, col 0)
+		// Each row is 4 lines high, so Y=6 (2 header + 4 first row) is in second row
+		msg := mockMouseMsg(0, 6, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Check modal is open with goal3
+		if !resultModel.appModel.showModal {
+			t.Error("showModal should be true after clicking a goal")
+		}
+
+		if resultModel.appModel.modalGoal == nil {
+			t.Error("modalGoal should not be nil after clicking a goal")
+		} else if resultModel.appModel.modalGoal.Slug != "goal3" {
+			t.Errorf("modalGoal.Slug should be 'goal3', got '%s'", resultModel.appModel.modalGoal.Slug)
+		}
+	})
+
+	t.Run("click with scroll offset", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+					{Slug: "goal4", Title: "Goal 4", Losedate: 1234567893},
+					{Slug: "goal5", Title: "Goal 5", Losedate: 1234567894},
+					{Slug: "goal6", Title: "Goal 6", Losedate: 1234567895},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    1,  // Scrolled down by 1 row
+				width:        40, // 2 columns
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on the first visible row (row 1 on screen = row 2 in data)
+		// Since scrollRow is 1, clicking the first visible row selects goal3 and goal4
+		// X=0 is first column = goal3
+		msg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Check modal is open with goal3 (row 1, col 0)
+		if !resultModel.appModel.showModal {
+			t.Error("showModal should be true after clicking a goal")
+		}
+
+		if resultModel.appModel.modalGoal == nil {
+			t.Error("modalGoal should not be nil after clicking a goal")
+		} else if resultModel.appModel.modalGoal.Slug != "goal3" {
+			t.Errorf("modalGoal.Slug should be 'goal3', got '%s'", resultModel.appModel.modalGoal.Slug)
+		}
+	})
+
+	t.Run("click on empty space does nothing", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80, // 4 columns
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on empty space (second column but only 1 goal exists)
+		msg := mockMouseMsg(25, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, cmd := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Modal should not open
+		if resultModel.appModel.showModal {
+			t.Error("showModal should be false when clicking empty space")
+		}
+
+		// No command should be returned
+		if cmd != nil {
+			t.Error("command should be nil when clicking empty space")
+		}
+	})
+
+	t.Run("click on header area does nothing", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80,
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on header area (Y=0 or Y=1)
+		msg := mockMouseMsg(0, 0, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, cmd := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Modal should not open
+		if resultModel.appModel.showModal {
+			t.Error("showModal should be false when clicking header area")
+		}
+
+		if cmd != nil {
+			t.Error("command should be nil when clicking header area")
+		}
+	})
+
+	t.Run("click with no goals does nothing", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals:        []Goal{},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80,
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		msg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, cmd := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Modal should not open
+		if resultModel.appModel.showModal {
+			t.Error("showModal should be false when no goals exist")
+		}
+
+		if cmd != nil {
+			t.Error("command should be nil when no goals exist")
+		}
+	})
+
+	t.Run("click updates cursor to match original goals list", func(t *testing.T) {
+		m := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+					{Slug: "goal3", Title: "Goal 3", Losedate: 1234567892},
+				},
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80,
+				height:       24,
+				showModal:    false,
+				hasNavigated: false,
+			},
+		}
+
+		// Click on goal2 (assuming it's in the second column or first row position 1)
+		// With width 80, we have 4 columns, so X=25 should be in column 1
+		msg := mockMouseMsg(25, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ := handleMouseClick(m, msg)
+		resultModel := result.(model)
+
+		// Cursor should point to goal2's position in original list (index 1)
+		if resultModel.appModel.cursor != 1 {
+			t.Errorf("cursor should be 1, got %d", resultModel.appModel.cursor)
+		}
+	})
+}
+
+// TestMouseClickIntegration tests mouse click through the full updateApp path
+func TestMouseClickIntegration(t *testing.T) {
+	t.Run("mouse click only triggers on left button release", func(t *testing.T) {
+		m := model{
+			state: "app",
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				config:          &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:          0,
+				scrollRow:       0,
+				width:           80,
+				height:          24,
+				showModal:       false,
+				showCreateModal: false,
+				hasNavigated:    false,
+			},
+		}
+
+		// Test right click - should not open modal
+		rightClickMsg := mockMouseMsg(0, 2, tea.MouseButtonRight, tea.MouseActionRelease)
+		result, _ := m.updateApp(rightClickMsg)
+		resultModel := result.(model)
+		if resultModel.appModel.showModal {
+			t.Error("right click should not open modal")
+		}
+
+		// Test left button press (not release) - should not open modal
+		pressMsg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionPress)
+		result, _ = m.updateApp(pressMsg)
+		resultModel = result.(model)
+		if resultModel.appModel.showModal {
+			t.Error("mouse press should not open modal")
+		}
+
+		// Test left button release - should open modal
+		releaseMsg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ = m.updateApp(releaseMsg)
+		resultModel = result.(model)
+		if !resultModel.appModel.showModal {
+			t.Error("left click release should open modal")
+		}
+	})
+
+	t.Run("mouse click ignored when modal is open", func(t *testing.T) {
+		m := model{
+			state: "app",
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
+				},
+				config:          &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:          0,
+				scrollRow:       0,
+				width:           80,
+				height:          24,
+				showModal:       true,
+				modalGoal:       &Goal{Slug: "goal1"},
+				showCreateModal: false,
+				hasNavigated:    false,
+			},
+		}
+
+		// Click should be ignored since modal is open
+		msg := mockMouseMsg(25, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ := m.updateApp(msg)
+		resultModel := result.(model)
+
+		// Modal should still be showing the same goal
+		if !resultModel.appModel.showModal {
+			t.Error("modal should still be open")
+		}
+		if resultModel.appModel.modalGoal.Slug != "goal1" {
+			t.Error("modal goal should not change when clicking with modal open")
+		}
+	})
+
+	t.Run("mouse click ignored when create modal is open", func(t *testing.T) {
+		m := model{
+			state: "app",
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				config:          &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:          0,
+				scrollRow:       0,
+				width:           80,
+				height:          24,
+				showModal:       false,
+				showCreateModal: true,
+				hasNavigated:    false,
+			},
+		}
+
+		// Click should be ignored since create modal is open
+		msg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
+		result, _ := m.updateApp(msg)
+		resultModel := result.(model)
+
+		// Goal modal should not open
+		if resultModel.appModel.showModal {
+			t.Error("goal modal should not open when create modal is open")
+		}
+	})
+}
