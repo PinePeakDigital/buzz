@@ -230,6 +230,7 @@ func printHelp() {
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
+	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
@@ -268,6 +269,9 @@ func main() {
 		case "today":
 			handleTodayCommand()
 			return
+		case "tomorrow":
+			handleTomorrowCommand()
+			return
 		case "add":
 			handleAddCommand()
 			return
@@ -291,7 +295,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -484,6 +488,66 @@ func handleTodayCommand() {
 
 	// Output each goal on a separate line with aligned columns
 	for _, goal := range todayGoals {
+		timeframe := FormatDueDate(goal.Losedate)
+		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
+	}
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// handleTomorrowCommand outputs all goals that are due tomorrow
+func handleTomorrowCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Sort goals (by due date ascending, then by stakes descending, then by name)
+	SortGoals(goals)
+
+	// Filter goals that are due tomorrow
+	var tomorrowGoals []Goal
+	for _, goal := range goals {
+		if IsDueTomorrow(goal.Losedate) {
+			tomorrowGoals = append(tomorrowGoals, goal)
+		}
+	}
+
+	// If no goals due tomorrow, exit
+	if len(tomorrowGoals) == 0 {
+		fmt.Println("No goals due tomorrow.")
+		return
+	}
+
+	// Calculate column widths for alignment
+	maxSlugWidth := 0
+	maxBareminWidth := 0
+	for _, goal := range tomorrowGoals {
+		if len(goal.Slug) > maxSlugWidth {
+			maxSlugWidth = len(goal.Slug)
+		}
+		if len(goal.Baremin) > maxBareminWidth {
+			maxBareminWidth = len(goal.Baremin)
+		}
+	}
+
+	// Output each goal on a separate line with aligned columns
+	for _, goal := range tomorrowGoals {
 		timeframe := FormatDueDate(goal.Losedate)
 		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
 	}
