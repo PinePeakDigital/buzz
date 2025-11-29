@@ -224,7 +224,7 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 	// Get start of day after tomorrow
 	startOfDayAfterTomorrow := time.Date(now.Year(), now.Month(), now.Day()+2, 0, 0, 0, 0, now.Location())
 
-	// Goal is due tomorrow if it's on or after midnight tonight but before midnight tomorrow
+	// Goal is due tomorrow if it's on or after midnight tonight but before the day after tomorrow
 	return !goalTime.Before(startOfTomorrow) && goalTime.Before(startOfDayAfterTomorrow)
 }
 
