@@ -448,7 +448,7 @@ func handleTomorrowCommand() {
 
 // handleDueCommand is a shared helper that outputs all goals matching the given filter
 // timeframeName is used in messages (e.g., "today" or "tomorrow")
-// filter is a function that takes a losedate and returns true if the goal matches
+// filter is a function that takes a losedate (Unix timestamp) and returns true if the goal matches
 func handleDueCommand(timeframeName string, filter func(int64) bool) {
 	// Load config
 	if !ConfigExists() {
