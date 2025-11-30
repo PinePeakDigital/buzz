@@ -230,6 +230,7 @@ func printHelp() {
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
+	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
@@ -268,6 +269,9 @@ func main() {
 		case "today":
 			handleTodayCommand()
 			return
+		case "tomorrow":
+			handleTomorrowCommand()
+			return
 		case "add":
 			handleAddCommand()
 			return
@@ -291,7 +295,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -434,6 +438,18 @@ func displayNextGoalWithTimestamp() {
 
 // handleTodayCommand outputs all goals that are due today
 func handleTodayCommand() {
+	handleDueCommand("today", IsDueToday)
+}
+
+// handleTomorrowCommand outputs all goals that are due tomorrow
+func handleTomorrowCommand() {
+	handleDueCommand("tomorrow", IsDueTomorrow)
+}
+
+// handleDueCommand is a shared helper that outputs all goals matching the given filter
+// timeframeName is used in messages (e.g., "today" or "tomorrow")
+// filter is a function that takes a losedate (Unix timestamp) and returns true if the goal matches
+func handleDueCommand(timeframeName string, filter func(int64) bool) {
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
@@ -456,24 +472,24 @@ func handleTodayCommand() {
 	// Sort goals (by due date ascending, then by stakes descending, then by name)
 	SortGoals(goals)
 
-	// Filter goals that are due today
-	var todayGoals []Goal
+	// Filter goals that match the criteria
+	var filteredGoals []Goal
 	for _, goal := range goals {
-		if IsDueToday(goal.Losedate) {
-			todayGoals = append(todayGoals, goal)
+		if filter(goal.Losedate) {
+			filteredGoals = append(filteredGoals, goal)
 		}
 	}
 
-	// If no goals due today, exit
-	if len(todayGoals) == 0 {
-		fmt.Println("No goals due today.")
+	// If no matching goals, exit
+	if len(filteredGoals) == 0 {
+		fmt.Printf("No goals due %s.\n", timeframeName)
 		return
 	}
 
 	// Calculate column widths for alignment
 	maxSlugWidth := 0
 	maxBareminWidth := 0
-	for _, goal := range todayGoals {
+	for _, goal := range filteredGoals {
 		if len(goal.Slug) > maxSlugWidth {
 			maxSlugWidth = len(goal.Slug)
 		}
@@ -483,7 +499,7 @@ func handleTodayCommand() {
 	}
 
 	// Output each goal on a separate line with aligned columns
-	for _, goal := range todayGoals {
+	for _, goal := range filteredGoals {
 		timeframe := FormatDueDate(goal.Losedate)
 		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
 	}

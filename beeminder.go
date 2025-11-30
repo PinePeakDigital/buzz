@@ -210,6 +210,24 @@ func IsDueTodayAt(losedate int64, now time.Time) bool {
 	return goalTime.Before(startOfTomorrow)
 }
 
+// IsDueTomorrow checks if a goal is due tomorrow (between midnight tonight and midnight tomorrow)
+func IsDueTomorrow(losedate int64) bool {
+	return IsDueTomorrowAt(losedate, time.Now())
+}
+
+// IsDueTomorrowAt checks if a goal is due tomorrow relative to a given time
+func IsDueTomorrowAt(losedate int64, now time.Time) bool {
+	goalTime := time.Unix(losedate, 0)
+
+	// Get start of tomorrow (midnight tonight)
+	startOfTomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	// Get start of day after tomorrow
+	startOfDayAfterTomorrow := time.Date(now.Year(), now.Month(), now.Day()+2, 0, 0, 0, 0, now.Location())
+
+	// Goal is due tomorrow if it's on or after midnight tonight but before the day after tomorrow
+	return !goalTime.Before(startOfTomorrow) && goalTime.Before(startOfDayAfterTomorrow)
+}
+
 // FormatDueDate formats the losedate timestamp into a readable string
 func FormatDueDate(losedate int64) string {
 	return FormatDueDateAt(losedate, time.Now())

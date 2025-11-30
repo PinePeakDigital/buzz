@@ -578,6 +578,78 @@ func TestIsDueToday(t *testing.T) {
 	}
 }
 
+// TestIsDueTomorrow tests the IsDueTomorrow function
+func TestIsDueTomorrow(t *testing.T) {
+	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		losedate int64
+		expected bool
+	}{
+		{
+			name:     "due in 1 hour (today, not tomorrow)",
+			losedate: now.Add(1 * time.Hour).Unix(),
+			expected: false,
+		},
+		{
+			name:     "due at end of today (not tomorrow)",
+			losedate: time.Date(2025, 1, 15, 23, 59, 59, 0, time.UTC).Unix(),
+			expected: false,
+		},
+		{
+			name:     "due at start of tomorrow",
+			losedate: time.Date(2025, 1, 16, 0, 0, 0, 0, time.UTC).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due tomorrow morning",
+			losedate: time.Date(2025, 1, 16, 1, 0, 0, 0, time.UTC).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due tomorrow noon",
+			losedate: time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due at end of tomorrow",
+			losedate: time.Date(2025, 1, 16, 23, 59, 59, 0, time.UTC).Unix(),
+			expected: true,
+		},
+		{
+			name:     "due at start of day after tomorrow (not tomorrow)",
+			losedate: time.Date(2025, 1, 17, 0, 0, 0, 0, time.UTC).Unix(),
+			expected: false,
+		},
+		{
+			name:     "due in 3 days (not tomorrow)",
+			losedate: now.Add(3 * 24 * time.Hour).Unix(),
+			expected: false,
+		},
+		{
+			name:     "overdue from yesterday (not tomorrow)",
+			losedate: now.Add(-24 * time.Hour).Unix(),
+			expected: false,
+		},
+		{
+			name:     "due right now (not tomorrow)",
+			losedate: now.Unix(),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDueTomorrowAt(tt.losedate, now)
+			if result != tt.expected {
+				t.Errorf("IsDueTomorrowAt(%d, %v) = %v, want %v", tt.losedate, now, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestFetchGoalWithMockServer tests FetchGoal function with a mock HTTP server
 func TestFetchGoalWithMockServer(t *testing.T) {
 	// Test case 1: successful fetch
