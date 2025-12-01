@@ -275,7 +275,7 @@ func getUpdateMessage() string {
 		if updateCmd != "" {
 			return fmt.Sprintf("\nℹ️  Update available: %s → %s\n   Run: %s\n", version, latestVersion, updateCmd)
 		}
-		return fmt.Sprintf("\nℹ️  Update available: %s → %s\n   Visit https://github.com/pinepeakdigital/buzz/releases/latest to upgrade\n", version, latestVersion)
+		return fmt.Sprintf("\nℹ️  Update available: %s → %s\n   See https://github.com/pinepeakdigital/buzz#installation for update instructions\n", version, latestVersion)
 	}
 
 	return ""
