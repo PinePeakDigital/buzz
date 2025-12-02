@@ -503,9 +503,9 @@ func TestGetUpdateMessage(t *testing.T) {
 		t.Errorf("Expected message to contain version v0.31.0, got: %s", msg)
 	}
 
-	// Verify message contains either an update command or the releases URL
-	if !strings.Contains(msg, "Run:") && !strings.Contains(msg, "github.com/pinepeakdigital/buzz/releases") {
-		t.Errorf("Expected message to contain either 'Run:' or releases URL, got: %s", msg)
+	// Verify message contains either an update command or the installation instructions URL
+	if !strings.Contains(msg, "Run:") && !strings.Contains(msg, "github.com/pinepeakdigital/buzz#installation") {
+		t.Errorf("Expected message to contain either 'Run:' or installation instructions URL, got: %s", msg)
 	}
 }
 
