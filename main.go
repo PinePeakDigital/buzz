@@ -442,78 +442,23 @@ func displayNextGoalWithTimestamp() {
 
 // handleTodayCommand outputs all goals that are due today
 func handleTodayCommand() {
-	handleDueCommand("today", IsDueToday)
+	handleFilteredCommand("today", func(g Goal) bool { return IsDueToday(g.Losedate) })
 }
 
 // handleTomorrowCommand outputs all goals that are due tomorrow
 func handleTomorrowCommand() {
-	handleDueCommand("tomorrow", IsDueTomorrow)
+	handleFilteredCommand("tomorrow", func(g Goal) bool { return IsDueTomorrow(g.Losedate) })
 }
 
 // handleLessCommand outputs all do-less type goals
 func handleLessCommand() {
-	// Load config
-	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
-		os.Exit(1)
-	}
-
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Fetch goals
-	goals, err := FetchGoals(config)
-	if err != nil {
-		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Sort goals (by due date ascending, then by stakes descending, then by name)
-	SortGoals(goals)
-
-	// Filter do-less goals (goal_type == "drinker")
-	var filteredGoals []Goal
-	for _, goal := range goals {
-		if IsDoLess(goal.GoalType) {
-			filteredGoals = append(filteredGoals, goal)
-		}
-	}
-
-	// If no matching goals, exit
-	if len(filteredGoals) == 0 {
-		fmt.Println("No do-less goals found.")
-		return
-	}
-
-	// Calculate column widths for alignment
-	maxSlugWidth := 0
-	maxBareminWidth := 0
-	for _, goal := range filteredGoals {
-		if len(goal.Slug) > maxSlugWidth {
-			maxSlugWidth = len(goal.Slug)
-		}
-		if len(goal.Baremin) > maxBareminWidth {
-			maxBareminWidth = len(goal.Baremin)
-		}
-	}
-
-	// Output each goal on a separate line with aligned columns
-	for _, goal := range filteredGoals {
-		timeframe := FormatDueDate(goal.Losedate)
-		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
-	}
-
-	// Check for updates and display message if available
-	fmt.Print(getUpdateMessage())
+	handleFilteredCommand("do-less", func(g Goal) bool { return IsDoLess(g.GoalType) })
 }
 
-// handleDueCommand is a shared helper that outputs all goals matching the given filter
-// timeframeName is used in messages (e.g., "today" or "tomorrow")
-// filter is a function that takes a losedate (Unix timestamp) and returns true if the goal matches
-func handleDueCommand(timeframeName string, filter func(int64) bool) {
+// handleFilteredCommand is a shared helper that outputs all goals matching the given filter
+// filterName is used in messages (e.g., "today", "tomorrow", or "do-less")
+// filter is a function that takes a Goal and returns true if the goal matches
+func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
@@ -539,14 +484,14 @@ func handleDueCommand(timeframeName string, filter func(int64) bool) {
 	// Filter goals that match the criteria
 	var filteredGoals []Goal
 	for _, goal := range goals {
-		if filter(goal.Losedate) {
+		if filter(goal) {
 			filteredGoals = append(filteredGoals, goal)
 		}
 	}
 
 	// If no matching goals, exit
 	if len(filteredGoals) == 0 {
-		fmt.Printf("No goals due %s.\n", timeframeName)
+		fmt.Printf("No %s goals found.\n", filterName)
 		return
 	}
 
