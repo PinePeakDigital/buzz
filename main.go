@@ -440,19 +440,34 @@ func displayNextGoalWithTimestamp() {
 	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
 
+// isDueTodayFilter returns true if the goal is due today
+func isDueTodayFilter(g Goal) bool {
+	return IsDueToday(g.Losedate)
+}
+
+// isDueTomorrowFilter returns true if the goal is due tomorrow
+func isDueTomorrowFilter(g Goal) bool {
+	return IsDueTomorrow(g.Losedate)
+}
+
+// isDoLessFilter returns true if the goal is a do-less type goal
+func isDoLessFilter(g Goal) bool {
+	return IsDoLess(g.GoalType)
+}
+
 // handleTodayCommand outputs all goals that are due today
 func handleTodayCommand() {
-	handleFilteredCommand("today", func(g Goal) bool { return IsDueToday(g.Losedate) })
+	handleFilteredCommand("today", isDueTodayFilter)
 }
 
 // handleTomorrowCommand outputs all goals that are due tomorrow
 func handleTomorrowCommand() {
-	handleFilteredCommand("tomorrow", func(g Goal) bool { return IsDueTomorrow(g.Losedate) })
+	handleFilteredCommand("tomorrow", isDueTomorrowFilter)
 }
 
 // handleLessCommand outputs all do-less type goals
 func handleLessCommand() {
-	handleFilteredCommand("do-less", func(g Goal) bool { return IsDoLess(g.GoalType) })
+	handleFilteredCommand("do-less", isDoLessFilter)
 }
 
 // handleFilteredCommand is a shared helper that outputs all goals matching the given filter

@@ -230,7 +230,10 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 }
 
 // IsDoLess checks if a goal is a "do-less" type goal
-// In Beeminder, do-less goals have goal_type "drinker"
+// In Beeminder, do-less goals have goal_type "drinker".
+// The naming comes from Beeminder's internal convention where goal types
+// are represented by descriptive shorthand names (e.g., "hustler" for do-more,
+// "biker" for odometer, "fatloser" for weight loss, "drinker" for do-less).
 func IsDoLess(goalType string) bool {
 	return goalType == "drinker"
 }
