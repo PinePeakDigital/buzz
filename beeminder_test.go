@@ -578,6 +578,33 @@ func TestIsDueToday(t *testing.T) {
 	}
 }
 
+// TestIsDoLess tests the IsDoLess function
+func TestIsDoLess(t *testing.T) {
+	tests := []struct {
+		name     string
+		goalType string
+		expected bool
+	}{
+		{"drinker is do-less", "drinker", true},
+		{"hustler is not do-less", "hustler", false},
+		{"biker is not do-less", "biker", false},
+		{"fatloser is not do-less", "fatloser", false},
+		{"gainer is not do-less", "gainer", false},
+		{"inboxer is not do-less", "inboxer", false},
+		{"empty string is not do-less", "", false},
+		{"DRINKER uppercase is not do-less", "DRINKER", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDoLess(tt.goalType)
+			if result != tt.expected {
+				t.Errorf("IsDoLess(%q) = %v, want %v", tt.goalType, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestIsDueTomorrow tests the IsDueTomorrow function
 func TestIsDueTomorrow(t *testing.T) {
 	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
@@ -1133,4 +1160,52 @@ func TestGoalFineprintField(t *testing.T) {
 			t.Errorf("Expected empty fineprint, got '%s'", goal.Fineprint)
 		}
 	})
+}
+
+// TestGoalTypeField tests that the GoalType field is properly parsed from API responses
+func TestGoalTypeField(t *testing.T) {
+	tests := []struct {
+		name         string
+		goalType     string
+		expectDoLess bool
+	}{
+		{"drinker goal type", "drinker", true},
+		{"hustler goal type", "hustler", false},
+		{"biker goal type", "biker", false},
+		{"fatloser goal type", "fatloser", false},
+		{"gainer goal type", "gainer", false},
+		{"inboxer goal type", "inboxer", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				goal := Goal{
+					Slug:     "testgoal",
+					Title:    "Test Goal",
+					GoalType: tt.goalType,
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(goal)
+			}))
+			defer mockServer.Close()
+
+			config := &Config{
+				Username:  "testuser",
+				AuthToken: "testtoken",
+				BaseURL:   mockServer.URL,
+			}
+
+			goal, err := FetchGoal(config, "testgoal")
+			if err != nil {
+				t.Fatalf("FetchGoal failed: %v", err)
+			}
+			if goal.GoalType != tt.goalType {
+				t.Errorf("Expected GoalType '%s', got '%s'", tt.goalType, goal.GoalType)
+			}
+			if IsDoLess(goal.GoalType) != tt.expectDoLess {
+				t.Errorf("IsDoLess(%s) = %v, want %v", goal.GoalType, IsDoLess(goal.GoalType), tt.expectDoLess)
+			}
+		})
+	}
 }

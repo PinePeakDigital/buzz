@@ -231,6 +231,7 @@ func printHelp() {
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
+	fmt.Println("  buzz less                         Output all do-less type goals")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
@@ -272,6 +273,9 @@ func main() {
 		case "tomorrow":
 			handleTomorrowCommand()
 			return
+		case "less":
+			handleLessCommand()
+			return
 		case "add":
 			handleAddCommand()
 			return
@@ -295,7 +299,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, tomorrow, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, less, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -444,6 +448,66 @@ func handleTodayCommand() {
 // handleTomorrowCommand outputs all goals that are due tomorrow
 func handleTomorrowCommand() {
 	handleDueCommand("tomorrow", IsDueTomorrow)
+}
+
+// handleLessCommand outputs all do-less type goals
+func handleLessCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Sort goals (by due date ascending, then by stakes descending, then by name)
+	SortGoals(goals)
+
+	// Filter do-less goals (goal_type == "drinker")
+	var filteredGoals []Goal
+	for _, goal := range goals {
+		if IsDoLess(goal.GoalType) {
+			filteredGoals = append(filteredGoals, goal)
+		}
+	}
+
+	// If no matching goals, exit
+	if len(filteredGoals) == 0 {
+		fmt.Println("No do-less goals found.")
+		return
+	}
+
+	// Calculate column widths for alignment
+	maxSlugWidth := 0
+	maxBareminWidth := 0
+	for _, goal := range filteredGoals {
+		if len(goal.Slug) > maxSlugWidth {
+			maxSlugWidth = len(goal.Slug)
+		}
+		if len(goal.Baremin) > maxBareminWidth {
+			maxBareminWidth = len(goal.Baremin)
+		}
+	}
+
+	// Output each goal on a separate line with aligned columns
+	for _, goal := range filteredGoals {
+		timeframe := FormatDueDate(goal.Losedate)
+		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
+	}
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
 }
 
 // handleDueCommand is a shared helper that outputs all goals matching the given filter
