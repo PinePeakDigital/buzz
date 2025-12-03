@@ -172,6 +172,16 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Is it a key press?
 	case tea.KeyMsg:
 		return handleKeyPress(m, msg)
+
+	// Is it a mouse click?
+	case tea.MouseMsg:
+		// Only handle clicks when not in a modal
+		if !m.appModel.showModal && !m.appModel.showCreateModal {
+			if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+				return handleMouseClick(m, msg)
+			}
+		}
+		return m, nil
 	}
 
 	// Return the updated model to the Bubble Tea runtime for processing.
@@ -302,7 +312,7 @@ func main() {
 	}
 
 	// No arguments, run the interactive TUI
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
