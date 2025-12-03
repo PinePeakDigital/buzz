@@ -594,6 +594,15 @@ func handleAddCommand() {
 
 	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
 
+	// Fetch the goal to display the updated limsum
+	goal, err := FetchGoal(config, goalSlug)
+	if err != nil {
+		// Don't fail the command if fetching limsum fails, just skip displaying it
+		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %v\n", err)
+	} else {
+		fmt.Printf("Limsum: %s\n", goal.Limsum)
+	}
+
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
 }
