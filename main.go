@@ -23,6 +23,10 @@ var version = "dev"
 // navigationTimeout is the duration of inactivity before the cell highlight is auto-disabled
 const navigationTimeout = 3 * time.Second
 
+// limsumFetchDelay is the duration to wait after adding a datapoint before fetching the updated limsum
+// This gives the Beeminder server time to update the goal's limsum with the new datapoint
+const limsumFetchDelay = 2 * time.Second
+
 func (m model) Init() tea.Cmd {
 	if m.state == "auth" {
 		return m.authModel.Init()
@@ -593,6 +597,9 @@ func handleAddCommand() {
 	}
 
 	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
+
+	// Wait briefly before fetching limsum to allow the server to update
+	time.Sleep(limsumFetchDelay)
 
 	// Fetch the goal to display the updated limsum
 	goal, err := FetchGoal(config, goalSlug)
