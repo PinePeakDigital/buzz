@@ -231,6 +231,7 @@ func printHelp() {
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
+	fmt.Println("  buzz less                         Output all do-less type goals")
 	fmt.Println("  buzz add <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
@@ -272,6 +273,9 @@ func main() {
 		case "tomorrow":
 			handleTomorrowCommand()
 			return
+		case "less":
+			handleLessCommand()
+			return
 		case "add":
 			handleAddCommand()
 			return
@@ -295,7 +299,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, tomorrow, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, less, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -436,20 +440,40 @@ func displayNextGoalWithTimestamp() {
 	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
 
+// isDueTodayFilter returns true if the goal is due today
+func isDueTodayFilter(g Goal) bool {
+	return IsDueToday(g.Losedate)
+}
+
+// isDueTomorrowFilter returns true if the goal is due tomorrow
+func isDueTomorrowFilter(g Goal) bool {
+	return IsDueTomorrow(g.Losedate)
+}
+
+// isDoLessFilter returns true if the goal is a do-less type goal
+func isDoLessFilter(g Goal) bool {
+	return IsDoLess(g.GoalType)
+}
+
 // handleTodayCommand outputs all goals that are due today
 func handleTodayCommand() {
-	handleDueCommand("today", IsDueToday)
+	handleFilteredCommand("today", isDueTodayFilter)
 }
 
 // handleTomorrowCommand outputs all goals that are due tomorrow
 func handleTomorrowCommand() {
-	handleDueCommand("tomorrow", IsDueTomorrow)
+	handleFilteredCommand("tomorrow", isDueTomorrowFilter)
 }
 
-// handleDueCommand is a shared helper that outputs all goals matching the given filter
-// timeframeName is used in messages (e.g., "today" or "tomorrow")
-// filter is a function that takes a losedate (Unix timestamp) and returns true if the goal matches
-func handleDueCommand(timeframeName string, filter func(int64) bool) {
+// handleLessCommand outputs all do-less type goals
+func handleLessCommand() {
+	handleFilteredCommand("do-less", isDoLessFilter)
+}
+
+// handleFilteredCommand is a shared helper that outputs all goals matching the given filter
+// filterName is used in messages (e.g., "today", "tomorrow", or "do-less")
+// filter is a function that takes a Goal and returns true if the goal matches
+func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
@@ -475,14 +499,14 @@ func handleDueCommand(timeframeName string, filter func(int64) bool) {
 	// Filter goals that match the criteria
 	var filteredGoals []Goal
 	for _, goal := range goals {
-		if filter(goal.Losedate) {
+		if filter(goal) {
 			filteredGoals = append(filteredGoals, goal)
 		}
 	}
 
 	// If no matching goals, exit
 	if len(filteredGoals) == 0 {
-		fmt.Printf("No goals due %s.\n", timeframeName)
+		fmt.Printf("No %s goals found.\n", filterName)
 		return
 	}
 

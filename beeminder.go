@@ -16,6 +16,7 @@ type Goal struct {
 	Slug        string      `json:"slug"`
 	Title       string      `json:"title"`
 	Fineprint   string      `json:"fineprint"` // User-provided description of what they're committing to
+	GoalType    string      `json:"goal_type"` // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
 	Losedate    int64       `json:"losedate"`
 	Pledge      float64     `json:"pledge"`
 	Safebuf     int         `json:"safebuf"`
@@ -226,6 +227,15 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 
 	// Goal is due tomorrow if it's on or after midnight tonight but before the day after tomorrow
 	return !goalTime.Before(startOfTomorrow) && goalTime.Before(startOfDayAfterTomorrow)
+}
+
+// IsDoLess checks if a goal is a "do-less" type goal
+// In Beeminder, do-less goals have goal_type "drinker".
+// The naming comes from Beeminder's internal convention where goal types
+// are represented by descriptive shorthand names (e.g., "hustler" for do-more,
+// "biker" for odometer, "fatloser" for weight loss, "drinker" for do-less).
+func IsDoLess(goalType string) bool {
+	return goalType == "drinker"
 }
 
 // FormatDueDate formats the losedate timestamp into a readable string
