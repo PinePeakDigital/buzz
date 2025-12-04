@@ -15,8 +15,8 @@ import (
 type Goal struct {
 	Slug        string      `json:"slug"`
 	Title       string      `json:"title"`
-	Fineprint   string      `json:"fineprint"`  // User-provided description of what they're committing to
-	GoalType    string      `json:"goal_type"`  // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
+	Fineprint   string      `json:"fineprint"` // User-provided description of what they're committing to
+	GoalType    string      `json:"goal_type"` // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
 	Losedate    int64       `json:"losedate"`
 	Pledge      float64     `json:"pledge"`
 	Safebuf     int         `json:"safebuf"`
