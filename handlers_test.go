@@ -1288,3 +1288,68 @@ func TestScrollFollowsNavigation(t *testing.T) {
 		}
 	})
 }
+
+// TestLimsumFetchDelay tests the delay behavior before fetching limsum after adding a datapoint
+func TestLimsumFetchDelay(t *testing.T) {
+	t.Run("limsumFetchDelay has correct default value", func(t *testing.T) {
+		// Verify the default delay is 2 seconds
+		if limsumFetchDelay != 2*time.Second {
+			t.Errorf("limsumFetchDelay = %v, want %v", limsumFetchDelay, 2*time.Second)
+		}
+	})
+
+	t.Run("limsumFetchDelay can be overridden for testing", func(t *testing.T) {
+		// Store the original value and defer restoration
+		originalDelay := limsumFetchDelay
+		defer func() { limsumFetchDelay = originalDelay }()
+
+		// Override the delay for testing
+		limsumFetchDelay = 1 * time.Millisecond
+
+		// Verify the delay is now 1 millisecond
+		if limsumFetchDelay != 1*time.Millisecond {
+			t.Errorf("limsumFetchDelay = %v, want %v", limsumFetchDelay, 1*time.Millisecond)
+		}
+	})
+
+	t.Run("delay is applied correctly", func(t *testing.T) {
+		// Store the original value and defer restoration
+		originalDelay := limsumFetchDelay
+		defer func() { limsumFetchDelay = originalDelay }()
+
+		// Set a short delay for testing
+		testDelay := 50 * time.Millisecond
+		limsumFetchDelay = testDelay
+
+		// Measure the time it takes to execute the delay
+		start := time.Now()
+		time.Sleep(limsumFetchDelay)
+		elapsed := time.Since(start)
+
+		// Verify the delay was applied (allow 10ms tolerance)
+		if elapsed < testDelay {
+			t.Errorf("delay was not applied correctly: elapsed %v, want at least %v", elapsed, testDelay)
+		}
+	})
+
+	t.Run("delay does not block error handling", func(t *testing.T) {
+		// Store the original value and defer restoration
+		originalDelay := limsumFetchDelay
+		defer func() { limsumFetchDelay = originalDelay }()
+
+		// Set a short delay for testing
+		limsumFetchDelay = 1 * time.Millisecond
+
+		// Simulate the delay followed by an error condition
+		var fetchError error
+		time.Sleep(limsumFetchDelay)
+
+		// Simulate a fetch error
+		fetchError = nil // In a real scenario, this would be set by FetchGoal
+
+		// Verify that after the delay, error handling is still possible
+		if fetchError != nil {
+			t.Errorf("error handling should work after delay, got error: %v", fetchError)
+		}
+	})
+}

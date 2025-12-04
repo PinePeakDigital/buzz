@@ -25,7 +25,8 @@ const navigationTimeout = 3 * time.Second
 
 // limsumFetchDelay is the duration to wait after adding a datapoint before fetching the updated limsum
 // This gives the Beeminder server time to update the goal's limsum with the new datapoint
-const limsumFetchDelay = 2 * time.Second
+// This is a variable (not const) to allow tests to override it
+var limsumFetchDelay = 2 * time.Second
 
 func (m model) Init() tea.Cmd {
 	if m.state == "auth" {
