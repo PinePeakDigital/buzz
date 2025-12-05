@@ -605,6 +605,80 @@ func TestIsDoLess(t *testing.T) {
 	}
 }
 
+// TestIsDoLessGoal tests the IsDoLessGoal function
+func TestIsDoLessGoal(t *testing.T) {
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected bool
+	}{
+		{
+			name:     "drinker goal type is do-less",
+			goal:     Goal{Slug: "caffeine", GoalType: "drinker", Yaw: -1, Dir: 1},
+			expected: true,
+		},
+		{
+			name:     "hustler goal type is not do-less",
+			goal:     Goal{Slug: "workout", GoalType: "hustler", Yaw: 1, Dir: 1},
+			expected: false,
+		},
+		{
+			name:     "biker goal type is not do-less",
+			goal:     Goal{Slug: "steps", GoalType: "biker", Yaw: 1, Dir: 1},
+			expected: false,
+		},
+		{
+			name:     "fatloser goal type is not do-less",
+			goal:     Goal{Slug: "weight", GoalType: "fatloser", Yaw: -1, Dir: -1},
+			expected: false,
+		},
+		{
+			name:     "inboxer goal type is not do-less",
+			goal:     Goal{Slug: "inbox", GoalType: "inboxer", Yaw: -1, Dir: -1},
+			expected: false,
+		},
+		{
+			name:     "custom goal with WEEN attributes (yaw=-1, dir=1) is do-less",
+			goal:     Goal{Slug: "custom-doless", GoalType: "custom", Yaw: -1, Dir: 1},
+			expected: true,
+		},
+		{
+			name:     "custom goal with MOAR attributes (yaw=1, dir=1) is not do-less",
+			goal:     Goal{Slug: "custom-domore", GoalType: "custom", Yaw: 1, Dir: 1},
+			expected: false,
+		},
+		{
+			name:     "custom goal with PHAT attributes (yaw=-1, dir=-1) is not do-less",
+			goal:     Goal{Slug: "custom-phat", GoalType: "custom", Yaw: -1, Dir: -1},
+			expected: false,
+		},
+		{
+			name:     "custom goal with RASH attributes (yaw=1, dir=-1) is not do-less",
+			goal:     Goal{Slug: "custom-rash", GoalType: "custom", Yaw: 1, Dir: -1},
+			expected: false,
+		},
+		{
+			name:     "goal with empty type and WEEN attributes is do-less",
+			goal:     Goal{Slug: "unknown", GoalType: "", Yaw: -1, Dir: 1},
+			expected: true,
+		},
+		{
+			name:     "goal with default yaw/dir (0, 0) and non-drinker type is not do-less",
+			goal:     Goal{Slug: "default", GoalType: "hustler", Yaw: 0, Dir: 0},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDoLessGoal(tt.goal)
+			if result != tt.expected {
+				t.Errorf("IsDoLessGoal(%+v) = %v, want %v", tt.goal, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestIsDueTomorrow tests the IsDueTomorrow function
 func TestIsDueTomorrow(t *testing.T) {
 	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
@@ -805,6 +879,91 @@ func TestFetchGoalWithMockServer(t *testing.T) {
 			t.Errorf("Expected slug 'test goal', got %s", goal.Slug)
 		}
 	})
+}
+
+// TestFetchGoalsWithGoalType tests that FetchGoals correctly parses goal_type, yaw, and dir for each goal
+func TestFetchGoalsWithGoalType(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify it's a GET request
+		if r.Method != http.MethodGet {
+			t.Errorf("Expected GET request, got %s", r.Method)
+		}
+
+		// Verify the URL path
+		expectedPath := "/api/v1/users/testuser/goals.json"
+		if r.URL.Path != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+
+		// Return a list of goals with different goal types and yaw/dir attributes
+		goals := []Goal{
+			{Slug: "workout", Title: "Work Out", GoalType: "hustler", Yaw: 1, Dir: 1, Losedate: 1234567890},
+			{Slug: "caffeine", Title: "Limit Caffeine", GoalType: "drinker", Yaw: -1, Dir: 1, Losedate: 1234567891},
+			{Slug: "weight", Title: "Lose Weight", GoalType: "fatloser", Yaw: -1, Dir: -1, Losedate: 1234567892},
+			{Slug: "inbox", Title: "Inbox Zero", GoalType: "inboxer", Yaw: -1, Dir: -1, Losedate: 1234567893},
+			{Slug: "custom-doless", Title: "Custom Do Less", GoalType: "custom", Yaw: -1, Dir: 1, Losedate: 1234567894},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(goals)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+		BaseURL:   mockServer.URL,
+	}
+
+	goals, err := FetchGoals(config)
+	if err != nil {
+		t.Fatalf("FetchGoals failed: %v", err)
+	}
+
+	if len(goals) != 5 {
+		t.Errorf("Expected 5 goals, got %d", len(goals))
+	}
+
+	// Check that goal_type, yaw, and dir are properly parsed for each goal
+	expectedData := map[string]struct {
+		goalType string
+		yaw      int
+		dir      int
+	}{
+		"workout":       {"hustler", 1, 1},
+		"caffeine":      {"drinker", -1, 1},
+		"weight":        {"fatloser", -1, -1},
+		"inbox":         {"inboxer", -1, -1},
+		"custom-doless": {"custom", -1, 1},
+	}
+
+	for _, goal := range goals {
+		expected := expectedData[goal.Slug]
+		if goal.GoalType != expected.goalType {
+			t.Errorf("Goal %s: expected GoalType %q, got %q", goal.Slug, expected.goalType, goal.GoalType)
+		}
+		if goal.Yaw != expected.yaw {
+			t.Errorf("Goal %s: expected Yaw %d, got %d", goal.Slug, expected.yaw, goal.Yaw)
+		}
+		if goal.Dir != expected.dir {
+			t.Errorf("Goal %s: expected Dir %d, got %d", goal.Slug, expected.dir, goal.Dir)
+		}
+	}
+
+	// Check that IsDoLessGoal correctly identifies do-less goals
+	// (both drinker type and custom goals with WEEN attributes)
+	doLessCount := 0
+	expectedDoLessGoals := map[string]bool{"caffeine": true, "custom-doless": true}
+	for _, goal := range goals {
+		if IsDoLessGoal(goal) {
+			doLessCount++
+			if !expectedDoLessGoals[goal.Slug] {
+				t.Errorf("Goal %s should not be identified as do-less", goal.Slug)
+			}
+		}
+	}
+	if doLessCount != 2 {
+		t.Errorf("Expected 2 do-less goals (caffeine and custom-doless), got %d", doLessCount)
+	}
 }
 
 // TestRefreshGoalWithMockServer tests RefreshGoal function with a mock HTTP server

@@ -28,6 +28,8 @@ type Goal struct {
 	Runits      string      `json:"runits"`
 	Gunits      string      `json:"gunits"`   // Goal units, like "hours" or "pushups" or "pages"
 	Deadline    int         `json:"deadline"` // Seconds by which deadline differs from midnight
+	Yaw         int         `json:"yaw"`      // Good side of the bright red line (+1 = above, -1 = below)
+	Dir         int         `json:"dir"`      // Direction the bright red line is sloping (+1 = up, -1 = down)
 	Datapoints  []Datapoint `json:"datapoints,omitempty"`
 }
 
@@ -229,13 +231,32 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 	return !goalTime.Before(startOfTomorrow) && goalTime.Before(startOfDayAfterTomorrow)
 }
 
-// IsDoLess checks if a goal is a "do-less" type goal
+// IsDoLess checks if a goal is a "do-less" type goal based on goal_type string.
 // In Beeminder, do-less goals have goal_type "drinker".
 // The naming comes from Beeminder's internal convention where goal types
 // are represented by descriptive shorthand names (e.g., "hustler" for do-more,
 // "biker" for odometer, "fatloser" for weight loss, "drinker" for do-less).
 func IsDoLess(goalType string) bool {
 	return goalType == "drinker"
+}
+
+// IsDoLessGoal checks if a goal is a "do-less" type goal.
+// A goal is considered "do-less" if:
+// 1. Its goal_type is "drinker" (the standard do-less type), OR
+// 2. It has the WEEN platonic goal type attributes (yaw = -1 and dir = 1),
+//    which represents "go up less, like quit smoking" - this handles custom goals
+//    that are configured to behave like do-less goals.
+func IsDoLessGoal(goal Goal) bool {
+	// Check for the standard "drinker" goal type
+	if goal.GoalType == "drinker" {
+		return true
+	}
+	// Check for the WEEN platonic goal type (yaw = -1, dir = 1)
+	// This handles custom goals configured as do-less
+	if goal.Yaw == -1 && goal.Dir == 1 {
+		return true
+	}
+	return false
 }
 
 // FormatDueDate formats the losedate timestamp into a readable string

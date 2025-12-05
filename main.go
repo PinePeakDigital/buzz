@@ -457,7 +457,7 @@ func isDueTomorrowFilter(g Goal) bool {
 
 // isDoLessFilter returns true if the goal is a do-less type goal
 func isDoLessFilter(g Goal) bool {
-	return IsDoLess(g.GoalType)
+	return IsDoLessGoal(g)
 }
 
 // handleTodayCommand outputs all goals that are due today
