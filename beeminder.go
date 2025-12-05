@@ -242,10 +242,10 @@ func IsDoLess(goalType string) bool {
 
 // IsDoLessGoal checks if a goal is a "do-less" type goal.
 // A goal is considered "do-less" if:
-// 1. Its goal_type is "drinker" (the standard do-less type), OR
-// 2. It has the WEEN platonic goal type attributes (yaw = -1 and dir = 1),
-//    which represents "go up less, like quit smoking" - this handles custom goals
-//    that are configured to behave like do-less goals.
+//  1. Its goal_type is "drinker" (the standard do-less type), OR
+//  2. It has the WEEN platonic goal type attributes (yaw = -1 and dir = 1),
+//     which represents "go up less, like quit smoking" - this handles custom goals
+//     that are configured to behave like do-less goals.
 func IsDoLessGoal(goal Goal) bool {
 	// Check for the standard "drinker" goal type
 	if goal.GoalType == "drinker" {
