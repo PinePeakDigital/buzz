@@ -362,7 +362,8 @@ func DeleteDatapoint(config *Config, goalSlug, datapointID string) error {
 // GetLastDatapoint fetches the most recent datapoint for a goal
 func GetLastDatapoint(config *Config, goalSlug string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
-	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json?auth_token=%s&count=1&sort=timestamp",
+	// Use sort=-timestamp to get the most recent datapoint first (descending order)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json?auth_token=%s&count=1&sort=-timestamp",
 		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
 
 	resp, err := http.Get(apiURL)
@@ -372,7 +373,11 @@ func GetLastDatapoint(config *Config, goalSlug string) (*Datapoint, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var datapoints []Datapoint
@@ -384,8 +389,8 @@ func GetLastDatapoint(config *Config, goalSlug string) (*Datapoint, error) {
 		return nil, fmt.Errorf("no datapoints found for goal %s", goalSlug)
 	}
 
-	// Return the last datapoint (most recent)
-	return &datapoints[len(datapoints)-1], nil
+	// Return the first datapoint (most recent with descending sort)
+	return &datapoints[0], nil
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it

@@ -1349,8 +1349,8 @@ query := r.URL.Query()
 if query.Get("count") != "1" {
 t.Errorf("Expected count=1, got %s", query.Get("count"))
 }
-if query.Get("sort") != "timestamp" {
-t.Errorf("Expected sort=timestamp, got %s", query.Get("sort"))
+if query.Get("sort") != "-timestamp" {
+t.Errorf("Expected sort=-timestamp, got %s", query.Get("sort"))
 }
 
 w.WriteHeader(tt.statusCode)
