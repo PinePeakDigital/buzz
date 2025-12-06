@@ -330,6 +330,64 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	return nil
 }
 
+// DeleteDatapoint deletes a datapoint from a Beeminder goal
+func DeleteDatapoint(config *Config, goalSlug, datapointID string) error {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints/%s.json?auth_token=%s",
+		baseURL, config.Username, url.PathEscape(goalSlug), url.PathEscape(datapointID), config.AuthToken)
+
+	req, err := http.NewRequest(http.MethodDelete, apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete datapoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return nil
+}
+
+// GetLastDatapoint fetches the most recent datapoint for a goal
+func GetLastDatapoint(config *Config, goalSlug string) (*Datapoint, error) {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json?auth_token=%s&count=1&sort=timestamp",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch datapoints: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var datapoints []Datapoint
+	if err := json.NewDecoder(resp.Body).Decode(&datapoints); err != nil {
+		return nil, fmt.Errorf("failed to decode datapoints: %w", err)
+	}
+
+	if len(datapoints) == 0 {
+		return nil, fmt.Errorf("no datapoints found for goal %s", goalSlug)
+	}
+
+	// Return the last datapoint (most recent)
+	return &datapoints[len(datapoints)-1], nil
+}
+
 // CreateCharge creates a new charge for the authenticated user and returns it
 func CreateCharge(config *Config, amount float64, note string, dryrun bool) (*Charge, error) {
 	baseURL := getBaseURL(config)

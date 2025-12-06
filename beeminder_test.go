@@ -1209,3 +1209,191 @@ func TestGoalTypeField(t *testing.T) {
 		})
 	}
 }
+
+// TestDeleteDatapoint tests the DeleteDatapoint function with a mock server
+func TestDeleteDatapoint(t *testing.T) {
+tests := []struct {
+name           string
+goalSlug       string
+datapointID    string
+statusCode     int
+expectError    bool
+errorContains  string
+}{
+{
+name:        "successful delete",
+goalSlug:    "testgoal",
+datapointID: "abc123",
+statusCode:  http.StatusOK,
+expectError: false,
+},
+{
+name:          "not found",
+goalSlug:      "testgoal",
+datapointID:   "notfound",
+statusCode:    http.StatusNotFound,
+expectError:   true,
+errorContains: "404",
+},
+{
+name:          "special characters in slug",
+goalSlug:      "test-goal_123",
+datapointID:   "xyz789",
+statusCode:    http.StatusOK,
+expectError:   false,
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Verify it's a DELETE request
+if r.Method != http.MethodDelete {
+t.Errorf("Expected DELETE request, got %s", r.Method)
+}
+
+// Verify the URL path contains the goal slug and datapoint ID
+expectedPath := "/api/v1/users/testuser/goals/" + url.PathEscape(tt.goalSlug) + "/datapoints/" + url.PathEscape(tt.datapointID) + ".json"
+if r.URL.Path != expectedPath {
+t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+}
+
+w.WriteHeader(tt.statusCode)
+if tt.statusCode != http.StatusOK {
+w.Write([]byte("Error message"))
+} else {
+w.Write([]byte("{}"))
+}
+}))
+defer mockServer.Close()
+
+config := &Config{
+Username:  "testuser",
+AuthToken: "testtoken",
+BaseURL:   mockServer.URL,
+}
+
+err := DeleteDatapoint(config, tt.goalSlug, tt.datapointID)
+
+if tt.expectError {
+if err == nil {
+t.Errorf("Expected error but got none")
+} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+t.Errorf("Expected error to contain '%s', got: %v", tt.errorContains, err)
+}
+} else {
+if err != nil {
+t.Errorf("Unexpected error: %v", err)
+}
+}
+})
+}
+}
+
+// TestGetLastDatapoint tests the GetLastDatapoint function with a mock server
+func TestGetLastDatapoint(t *testing.T) {
+tests := []struct {
+name          string
+goalSlug      string
+datapoints    []Datapoint
+statusCode    int
+expectError   bool
+errorContains string
+}{
+{
+name:     "single datapoint",
+goalSlug: "testgoal",
+datapoints: []Datapoint{
+{
+ID:        "dp1",
+Timestamp: 1234567890,
+Value:     5.0,
+Comment:   "test comment",
+},
+},
+statusCode:  http.StatusOK,
+expectError: false,
+},
+{
+name:          "no datapoints",
+goalSlug:      "testgoal",
+datapoints:    []Datapoint{},
+statusCode:    http.StatusOK,
+expectError:   true,
+errorContains: "no datapoints found",
+},
+{
+name:          "API error",
+goalSlug:      "testgoal",
+datapoints:    nil,
+statusCode:    http.StatusNotFound,
+expectError:   true,
+errorContains: "404",
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Verify it's a GET request
+if r.Method != http.MethodGet {
+t.Errorf("Expected GET request, got %s", r.Method)
+}
+
+// Verify the URL contains the correct parameters
+if !strings.Contains(r.URL.Path, "/datapoints.json") {
+t.Errorf("Expected path to contain /datapoints.json, got %s", r.URL.Path)
+}
+
+query := r.URL.Query()
+if query.Get("count") != "1" {
+t.Errorf("Expected count=1, got %s", query.Get("count"))
+}
+if query.Get("sort") != "timestamp" {
+t.Errorf("Expected sort=timestamp, got %s", query.Get("sort"))
+}
+
+w.WriteHeader(tt.statusCode)
+if tt.statusCode == http.StatusOK {
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(tt.datapoints)
+}
+}))
+defer mockServer.Close()
+
+config := &Config{
+Username:  "testuser",
+AuthToken: "testtoken",
+BaseURL:   mockServer.URL,
+}
+
+datapoint, err := GetLastDatapoint(config, tt.goalSlug)
+
+if tt.expectError {
+if err == nil {
+t.Errorf("Expected error but got none")
+} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+t.Errorf("Expected error to contain '%s', got: %v", tt.errorContains, err)
+}
+} else {
+if err != nil {
+t.Errorf("Unexpected error: %v", err)
+}
+if datapoint == nil {
+t.Errorf("Expected datapoint but got nil")
+} else {
+expectedDP := &tt.datapoints[0]
+if datapoint.ID != expectedDP.ID {
+t.Errorf("Expected ID %s, got %s", expectedDP.ID, datapoint.ID)
+}
+if datapoint.Value != expectedDP.Value {
+t.Errorf("Expected value %.2f, got %.2f", expectedDP.Value, datapoint.Value)
+}
+if datapoint.Comment != expectedDP.Comment {
+t.Errorf("Expected comment '%s', got '%s'", expectedDP.Comment, datapoint.Comment)
+}
+}
+}
+})
+}
+}
