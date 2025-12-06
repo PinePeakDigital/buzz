@@ -307,8 +307,8 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 	return result.LastDatapoint.Value, nil
 }
 
-// CreateDatapoint submits a new datapoint to a Beeminder goal
-func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
+// CreateDatapoint submits a new datapoint to a Beeminder goal and returns the created datapoint
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, goalSlug)
@@ -319,15 +319,24 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	resp, err := http.Post(url, "application/x-www-form-urlencoded",
 		strings.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to create datapoint: %w", err)
+		return nil, fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	return nil
+	var datapoint Datapoint
+	if err := json.NewDecoder(resp.Body).Decode(&datapoint); err != nil {
+		return nil, fmt.Errorf("failed to decode datapoint: %w", err)
+	}
+
+	return &datapoint, nil
 }
 
 // DeleteDatapoint deletes a datapoint from a Beeminder goal

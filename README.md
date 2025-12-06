@@ -104,16 +104,17 @@ The comment parameter is optional and defaults to "Added via buzz" if not provid
 
 **Note:** When you run `buzz add` while the TUI is running in another terminal, the TUI will automatically refresh within 1 second to show the new datapoint.
 
-**buzz undo** - Delete the last created datapoint from a goal:
+**buzz undo** - Delete the last datapoint created with `buzz add`:
 
 ```bash
-buzz undo <goalslug>
+buzz undo
 
-# Example:
-buzz undo workout    # Deletes the most recent datapoint from the workout goal
+# Example workflow:
+buzz add workout 1 'morning run'    # Adds a datapoint
+buzz undo                            # Oops, made a mistake - undo it!
 ```
 
-This command removes the most recently created datapoint from the specified goal. It displays the deleted datapoint's value and comment, then shows the updated limsum after deletion. This is useful for quickly correcting mistakes when you accidentally add an incorrect datapoint.
+This command removes the most recently created datapoint that was added via `buzz add`. It remembers which datapoint was last created, so you don't need to specify a goal slug. This is useful for quickly correcting mistakes when you accidentally add an incorrect datapoint.
 
 **Note:** When you run `buzz undo` while the TUI is running in another terminal, the TUI will automatically refresh within 1 second to reflect the change.
 

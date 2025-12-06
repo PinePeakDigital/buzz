@@ -138,3 +138,60 @@ func getRefreshFlagTimestamp() int64 {
 
 	return timestamp
 }
+
+// LastDatapointInfo holds information about the last datapoint created via buzz add
+type LastDatapointInfo struct {
+	GoalSlug    string `json:"goal_slug"`
+	DatapointID string `json:"datapoint_id"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// getLastDatapointPath returns the path to the last datapoint info file
+func getLastDatapointPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".buzz-last-datapoint"), nil
+}
+
+// SaveLastDatapoint saves information about the last created datapoint
+func SaveLastDatapoint(goalSlug, datapointID string) error {
+	path, err := getLastDatapointPath()
+	if err != nil {
+		return err
+	}
+
+	info := LastDatapointInfo{
+		GoalSlug:    goalSlug,
+		DatapointID: datapointID,
+		Timestamp:   time.Now().Unix(),
+	}
+
+	data, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0600)
+}
+
+// LoadLastDatapoint loads information about the last created datapoint
+func LoadLastDatapoint() (*LastDatapointInfo, error) {
+	path, err := getLastDatapointPath()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var info LastDatapointInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}

@@ -241,7 +241,7 @@ func printHelp() {
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
-	fmt.Println("  buzz undo <goalslug>              Delete the last created datapoint from a goal")
+	fmt.Println("  buzz undo                         Delete the last datapoint created with 'buzz add'")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
@@ -613,10 +613,16 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = CreateDatapoint(config, goalSlug, timestamp, value, comment)
+	datapoint, err := CreateDatapoint(config, goalSlug, timestamp, value, comment)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Save information about this datapoint for potential undo
+	if err := SaveLastDatapoint(goalSlug, datapoint.ID); err != nil {
+		// Don't fail the command if saving fails
+		fmt.Fprintf(os.Stderr, "Warning: Could not save datapoint info for undo: %v\n", err)
 	}
 
 	// Signal any running TUI instances to refresh
@@ -643,16 +649,15 @@ func handleAddCommand() {
 	fmt.Print(getUpdateMessage())
 }
 
-// handleUndoCommand deletes the last created datapoint from a goal
+// handleUndoCommand deletes the last datapoint created via buzz add
 func handleUndoCommand() {
-	// Check arguments: buzz undo <goalslug>
-	if len(os.Args) < 3 {
-		fmt.Println("Error: Missing required argument")
-		fmt.Println("Usage: buzz undo <goalslug>")
+	// buzz undo no longer requires a goalslug argument
+	if len(os.Args) > 2 {
+		fmt.Println("Error: buzz undo does not take any arguments")
+		fmt.Println("Usage: buzz undo")
+		fmt.Println("       This will undo the last datapoint created with 'buzz add'")
 		os.Exit(1)
 	}
-
-	goalSlug := os.Args[2]
 
 	// Load config
 	if !ConfigExists() {
@@ -666,15 +671,19 @@ func handleUndoCommand() {
 		os.Exit(1)
 	}
 
-	// Get the last datapoint
-	lastDatapoint, err := GetLastDatapoint(config, goalSlug)
+	// Load information about the last created datapoint
+	lastInfo, err := LoadLastDatapoint()
 	if err != nil {
-		fmt.Printf("Error: Failed to get last datapoint: %v\n", err)
+		if os.IsNotExist(err) {
+			fmt.Println("Error: No datapoint to undo. Use 'buzz add' to create a datapoint first.")
+		} else {
+			fmt.Printf("Error: Failed to load last datapoint info: %v\n", err)
+		}
 		os.Exit(1)
 	}
 
 	// Delete the datapoint
-	err = DeleteDatapoint(config, goalSlug, lastDatapoint.ID)
+	err = DeleteDatapoint(config, lastInfo.GoalSlug, lastInfo.DatapointID)
 	if err != nil {
 		fmt.Printf("Error: Failed to delete datapoint: %v\n", err)
 		os.Exit(1)
@@ -686,14 +695,14 @@ func handleUndoCommand() {
 		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %v\n", err)
 	}
 
-	fmt.Printf("Successfully deleted datapoint from %s: id=%s, value=%.2f, comment=\"%s\"\n",
-		goalSlug, lastDatapoint.ID, lastDatapoint.Value, lastDatapoint.Comment)
+	fmt.Printf("Successfully deleted last datapoint from %s (id=%s)\n",
+		lastInfo.GoalSlug, lastInfo.DatapointID)
 
 	// Wait briefly before fetching limsum to allow the server to update
 	time.Sleep(limsumFetchDelay)
 
 	// Fetch the goal to display the updated limsum
-	goal, err := FetchGoal(config, goalSlug)
+	goal, err := FetchGoal(config, lastInfo.GoalSlug)
 	if err != nil {
 		// Don't fail the command if fetching limsum fails, just skip displaying it
 		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %v\n", err)
