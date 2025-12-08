@@ -19,7 +19,7 @@ This will download the latest release and make it available in your PATH.
 To update:
 
 ```bash
-bin update pinepeakdigital/buzz
+bin update buzz
 ```
 
 ### Homebrew
