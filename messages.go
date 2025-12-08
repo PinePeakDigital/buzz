@@ -61,9 +61,12 @@ func refreshTickCmd() tea.Cmd {
 }
 
 // submitDatapointCmd submits a datapoint to Beeminder API
+// Note: The TUI doesn't poll for datapoint appearance like handleAddCommand does.
+// Instead, it triggers a full goal refresh after submission (see datapointSubmittedMsg handling),
+// which will fetch updated data including the new datapoint and limsum.
 func submitDatapointCmd(config *Config, goalSlug, timestamp, value, comment string) tea.Cmd {
 	return func() tea.Msg {
-		err := CreateDatapoint(config, goalSlug, timestamp, value, comment)
+		_, err := CreateDatapoint(config, goalSlug, timestamp, value, comment)
 		return datapointSubmittedMsg{err: err}
 	}
 }

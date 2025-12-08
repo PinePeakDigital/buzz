@@ -329,27 +329,35 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 	return result.LastDatapoint.Value, nil
 }
 
-// CreateDatapoint submits a new datapoint to a Beeminder goal
-func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
+// CreateDatapoint submits a new datapoint to a Beeminder goal and returns the created datapoint
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
-		baseURL, config.Username, goalSlug)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
+		baseURL, config.Username, url.PathEscape(goalSlug))
 
-	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
-		config.AuthToken, timestamp, value, comment)
+	data := url.Values{}
+	data.Set("auth_token", config.AuthToken)
+	data.Set("timestamp", timestamp)
+	data.Set("value", value)
+	data.Set("comment", comment)
 
-	resp, err := http.Post(url, "application/x-www-form-urlencoded",
-		strings.NewReader(data))
+	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
+		strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create datapoint: %w", err)
+		return nil, fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
-	return nil
+	var datapoint Datapoint
+	if err := json.NewDecoder(resp.Body).Decode(&datapoint); err != nil {
+		return nil, fmt.Errorf("failed to decode datapoint response: %w", err)
+	}
+
+	return &datapoint, nil
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it
@@ -419,10 +427,10 @@ func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
 // FetchGoalWithDatapoints fetches goal details including recent datapoints
 func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
-		baseURL, config.Username, goalSlug, config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
@@ -532,4 +540,61 @@ func RefreshGoal(config *Config, goalSlug string) (bool, error) {
 	}
 
 	return result, nil
+}
+
+// WaitForDatapoint polls the goal's recent datapoints until the specified datapoint ID appears
+// or the timeout is reached. Returns true if the datapoint was found, false if timeout occurred.
+// The error return value is used to indicate permanent failures (e.g., authentication errors,
+// non-existent goals) where continuing to poll would be futile.
+// Note: A zero or negative timeout will result in at least one polling attempt before checking the deadline.
+func WaitForDatapoint(config *Config, goalSlug, datapointID string, timeout, pollInterval time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		// Fetch the goal with datapoints
+		goal, err := FetchGoalWithDatapoints(config, goalSlug)
+		if err != nil {
+			// Check if this is a permanent error that we shouldn't retry
+			if isPermanentError(err) {
+				return false, err
+			}
+			// For transient errors, check if we should continue polling
+			if !time.Now().Before(deadline) {
+				// Timeout reached
+				return false, nil
+			}
+			// Wait before retry on transient errors
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Check if the datapoint ID exists in the recent datapoints
+		for _, dp := range goal.Datapoints {
+			if dp.ID == datapointID {
+				return true, nil
+			}
+		}
+
+		// Check if we've exceeded the deadline
+		if !time.Now().Before(deadline) {
+			// Timeout reached without finding the datapoint
+			return false, nil
+		}
+
+		// Wait before next poll
+		time.Sleep(pollInterval)
+	}
+}
+
+// isPermanentError checks if an error indicates a permanent failure that shouldn't be retried
+func isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	// Check for HTTP status codes that indicate permanent failures
+	// 401 Unauthorized, 403 Forbidden, 404 Not Found
+	return strings.Contains(errMsg, "status 401") ||
+		strings.Contains(errMsg, "status 403") ||
+		strings.Contains(errMsg, "status 404")
 }
