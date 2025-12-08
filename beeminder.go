@@ -329,8 +329,8 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 	return result.LastDatapoint.Value, nil
 }
 
-// CreateDatapoint submits a new datapoint to a Beeminder goal
-func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
+// CreateDatapoint submits a new datapoint to a Beeminder goal and returns the created datapoint
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, goalSlug)
@@ -341,15 +341,87 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	resp, err := http.Post(url, "application/x-www-form-urlencoded",
 		strings.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to create datapoint: %w", err)
+		return nil, fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var datapoint Datapoint
+	if err := json.NewDecoder(resp.Body).Decode(&datapoint); err != nil {
+		return nil, fmt.Errorf("failed to decode datapoint: %w", err)
+	}
+
+	return &datapoint, nil
+}
+
+// DeleteDatapoint deletes a datapoint from a Beeminder goal
+func DeleteDatapoint(config *Config, goalSlug, datapointID string) error {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints/%s.json?auth_token=%s",
+		baseURL, config.Username, url.PathEscape(goalSlug), url.PathEscape(datapointID), config.AuthToken)
+
+	req, err := http.NewRequest(http.MethodDelete, apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete datapoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	return nil
+}
+
+// GetLastDatapoint fetches the most recent datapoint for a goal
+func GetLastDatapoint(config *Config, goalSlug string) (*Datapoint, error) {
+	baseURL := getBaseURL(config)
+	// Use sort=-timestamp to get the most recent datapoint first (descending order)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json?auth_token=%s&count=1&sort=-timestamp",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch datapoints: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var datapoints []Datapoint
+	if err := json.NewDecoder(resp.Body).Decode(&datapoints); err != nil {
+		return nil, fmt.Errorf("failed to decode datapoints: %w", err)
+	}
+
+	if len(datapoints) == 0 {
+		return nil, fmt.Errorf("no datapoints found for goal %s", goalSlug)
+	}
+
+	// Return the first datapoint (most recent with descending sort)
+	return &datapoints[0], nil
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it

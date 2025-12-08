@@ -241,6 +241,7 @@ func printHelp() {
 	fmt.Println("                                    Add a datapoint to a goal")
 	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
+	fmt.Println("  buzz undo                         Delete the last datapoint created with 'buzz add'")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
@@ -284,6 +285,9 @@ func main() {
 		case "add":
 			handleAddCommand()
 			return
+		case "undo":
+			handleUndoCommand()
+			return
 		case "refresh":
 			handleRefreshCommand()
 			return
@@ -304,7 +308,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, tomorrow, less, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, less, add, undo, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -609,10 +613,16 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = CreateDatapoint(config, goalSlug, timestamp, value, comment)
+	datapoint, err := CreateDatapoint(config, goalSlug, timestamp, value, comment)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Save information about this datapoint for potential undo
+	if err := SaveLastDatapoint(goalSlug, datapoint.ID); err != nil {
+		// Don't fail the command if saving fails
+		fmt.Fprintf(os.Stderr, "Warning: Could not save datapoint info for undo: %v\n", err)
 	}
 
 	// Signal any running TUI instances to refresh
@@ -628,6 +638,76 @@ func handleAddCommand() {
 
 	// Fetch the goal to display the updated limsum
 	goal, err := FetchGoal(config, goalSlug)
+	if err != nil {
+		// Don't fail the command if fetching limsum fails, just skip displaying it
+		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %v\n", err)
+	} else {
+		fmt.Printf("Limsum: %s\n", goal.Limsum)
+	}
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// handleUndoCommand deletes the last datapoint created via buzz add
+func handleUndoCommand() {
+	// buzz undo no longer requires a goalslug argument
+	if len(os.Args) > 2 {
+		fmt.Println("Error: buzz undo does not take any arguments")
+		fmt.Println("Usage: buzz undo")
+		fmt.Println("       This will undo the last datapoint created with 'buzz add'")
+		os.Exit(1)
+	}
+
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Load information about the last created datapoint
+	lastInfo, err := LoadLastDatapoint()
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Error: No datapoint to undo. Use 'buzz add' to create a datapoint first.")
+		} else {
+			fmt.Printf("Error: Failed to load last datapoint info: %v\n", err)
+		}
+		os.Exit(1)
+	}
+
+	// Delete the datapoint
+	err = DeleteDatapoint(config, lastInfo.GoalSlug, lastInfo.DatapointID)
+	if err != nil {
+		fmt.Printf("Error: Failed to delete datapoint: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Clean up the last datapoint file
+	lastDatapointPath := lastDatapointInfoPath()
+	if err := os.Remove(lastDatapointPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not remove last datapoint file: %v\n", err)
+	}
+	// Signal any running TUI instances to refresh
+	if err := createRefreshFlag(); err != nil {
+		// Don't fail the command if flag creation fails
+		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %v\n", err)
+	}
+
+	fmt.Printf("Successfully deleted last datapoint from %s (id=%s)\n",
+		lastInfo.GoalSlug, lastInfo.DatapointID)
+
+	// Wait briefly before fetching limsum to allow the server to update
+	time.Sleep(limsumFetchDelay)
+
+	// Fetch the goal to display the updated limsum
+	goal, err := FetchGoal(config, lastInfo.GoalSlug)
 	if err != nil {
 		// Don't fail the command if fetching limsum fails, just skip displaying it
 		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %v\n", err)

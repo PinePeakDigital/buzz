@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 )
@@ -224,4 +225,133 @@ func TestRefreshFlagTimestamp(t *testing.T) {
 
 	// Clean up after all tests
 	deleteRefreshFlag()
+}
+
+// TestLastDatapointFunctions tests the last datapoint info file operations
+func TestLastDatapointFunctions(t *testing.T) {
+	// Helper to clean up the last datapoint file
+	cleanupLastDatapoint := func() {
+		path, _ := getLastDatapointPath()
+		if path != "" {
+			os.Remove(path)
+		}
+	}
+
+	// Clean up before and after tests
+	cleanupLastDatapoint()
+	defer cleanupLastDatapoint()
+
+	t.Run("getLastDatapointPath returns valid path", func(t *testing.T) {
+		path, err := getLastDatapointPath()
+		if err != nil {
+			t.Fatalf("getLastDatapointPath() error = %v", err)
+		}
+		if path == "" {
+			t.Error("getLastDatapointPath() returned empty path")
+		}
+	})
+
+	t.Run("LoadLastDatapoint returns error when file does not exist", func(t *testing.T) {
+		cleanupLastDatapoint()
+
+		_, err := LoadLastDatapoint()
+		if err == nil {
+			t.Error("LoadLastDatapoint() should error when file doesn't exist")
+		}
+		if !os.IsNotExist(err) {
+			t.Errorf("LoadLastDatapoint() error should be IsNotExist, got: %v", err)
+		}
+	})
+
+	t.Run("SaveLastDatapoint and LoadLastDatapoint work correctly", func(t *testing.T) {
+		cleanupLastDatapoint()
+
+		// Save test data
+		goalSlug := "testgoal"
+		datapointID := "abc123"
+		beforeTime := time.Now().Unix()
+
+		if err := SaveLastDatapoint(goalSlug, datapointID); err != nil {
+			t.Fatalf("SaveLastDatapoint() error = %v", err)
+		}
+
+		afterTime := time.Now().Unix()
+
+		// Load and verify
+		info, err := LoadLastDatapoint()
+		if err != nil {
+			t.Fatalf("LoadLastDatapoint() error = %v", err)
+		}
+
+		if info.GoalSlug != goalSlug {
+			t.Errorf("GoalSlug = %q, want %q", info.GoalSlug, goalSlug)
+		}
+		if info.DatapointID != datapointID {
+			t.Errorf("DatapointID = %q, want %q", info.DatapointID, datapointID)
+		}
+		if info.Timestamp < beforeTime || info.Timestamp > afterTime {
+			t.Errorf("Timestamp = %d, want between %d and %d", info.Timestamp, beforeTime, afterTime)
+		}
+	})
+
+	t.Run("SaveLastDatapoint overwrites existing data", func(t *testing.T) {
+		cleanupLastDatapoint()
+
+		// Save first datapoint
+		if err := SaveLastDatapoint("goal1", "id1"); err != nil {
+			t.Fatalf("First SaveLastDatapoint() error = %v", err)
+		}
+
+		// Wait to ensure different timestamp
+		time.Sleep(1 * time.Second)
+
+		// Save second datapoint (should overwrite)
+		if err := SaveLastDatapoint("goal2", "id2"); err != nil {
+			t.Fatalf("Second SaveLastDatapoint() error = %v", err)
+		}
+
+		// Load and verify we got the second one
+		info, err := LoadLastDatapoint()
+		if err != nil {
+			t.Fatalf("LoadLastDatapoint() error = %v", err)
+		}
+
+		if info.GoalSlug != "goal2" {
+			t.Errorf("GoalSlug = %q, want %q (should be overwritten)", info.GoalSlug, "goal2")
+		}
+		if info.DatapointID != "id2" {
+			t.Errorf("DatapointID = %q, want %q (should be overwritten)", info.DatapointID, "id2")
+		}
+	})
+
+	t.Run("LastDatapointInfo JSON marshaling", func(t *testing.T) {
+		info := &LastDatapointInfo{
+			GoalSlug:    "mygoal",
+			DatapointID: "xyz789",
+			Timestamp:   1234567890,
+		}
+
+		// Marshal to JSON
+		data, err := json.Marshal(info)
+		if err != nil {
+			t.Fatalf("Failed to marshal LastDatapointInfo: %v", err)
+		}
+
+		// Unmarshal back
+		var decoded LastDatapointInfo
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("Failed to unmarshal LastDatapointInfo: %v", err)
+		}
+
+		// Verify fields
+		if decoded.GoalSlug != info.GoalSlug {
+			t.Errorf("GoalSlug = %q, want %q", decoded.GoalSlug, info.GoalSlug)
+		}
+		if decoded.DatapointID != info.DatapointID {
+			t.Errorf("DatapointID = %q, want %q", decoded.DatapointID, info.DatapointID)
+		}
+		if decoded.Timestamp != info.Timestamp {
+			t.Errorf("Timestamp = %d, want %d", decoded.Timestamp, info.Timestamp)
+		}
+	})
 }
