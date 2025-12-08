@@ -332,13 +332,13 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 // CreateDatapoint submits a new datapoint to a Beeminder goal and returns the created datapoint
 func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
-		baseURL, config.Username, goalSlug)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
+		baseURL, config.Username, url.PathEscape(goalSlug))
 
 	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
 		config.AuthToken, timestamp, value, comment)
 
-	resp, err := http.Post(url, "application/x-www-form-urlencoded",
+	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
 		strings.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create datapoint: %w", err)
@@ -424,10 +424,10 @@ func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
 // FetchGoalWithDatapoints fetches goal details including recent datapoints
 func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
-		baseURL, config.Username, goalSlug, config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
@@ -543,7 +543,7 @@ func RefreshGoal(config *Config, goalSlug string) (bool, error) {
 // or the timeout is reached. Returns true if the datapoint was found, false if timeout occurred.
 func WaitForDatapoint(config *Config, goalSlug, datapointID string, timeout, pollInterval time.Duration) (bool, error) {
 	deadline := time.Now().Add(timeout)
-	
+
 	for time.Now().Before(deadline) {
 		// Fetch the goal with datapoints
 		goal, err := FetchGoalWithDatapoints(config, goalSlug)
