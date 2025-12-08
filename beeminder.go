@@ -430,14 +430,13 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 	return result.LastDatapoint.Value, nil
 }
 
-// CreateDatapoint submits a new datapoint to a Beeminder goal
-func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, requestid string) error {
+// CreateDatapoint submits a new datapoint to a Beeminder goal and returns the created datapoint
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error) {
 	return CreateDatapointWithDaystamp(config, goalSlug, timestamp, "", value, comment, requestid)
 }
 
-// CreateDatapointWithDaystamp submits a new datapoint to a Beeminder goal with optional daystamp
-// If daystamp is provided (format YYYYMMDD), it will be used instead of timestamp
-func CreateDatapointWithDaystamp(config *Config, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
+// CreateDatapointWithDaystamp submits a new datapoint to a Beeminder goal with optional daystamp and returns the created datapoint
+func CreateDatapointWithDaystamp(config *Config, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, goalSlug)
@@ -463,16 +462,21 @@ func CreateDatapointWithDaystamp(config *Config, goalSlug, timestamp, daystamp, 
 	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
 		strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create datapoint: %w", err)
+		return nil, fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
 	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
-	return nil
+	var datapoint Datapoint
+	if err := json.NewDecoder(resp.Body).Decode(&datapoint); err != nil {
+		return nil, fmt.Errorf("failed to decode datapoint response: %w", err)
+	}
+
+	return &datapoint, nil
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it
@@ -741,4 +745,33 @@ func RefreshGoal(config *Config, goalSlug string) (bool, error) {
 	}
 
 	return result, nil
+}
+
+// WaitForDatapoint polls the goal's recent datapoints until the specified datapoint ID appears
+// or the timeout is reached. Returns true if the datapoint was found, false if timeout occurred.
+func WaitForDatapoint(config *Config, goalSlug, datapointID string, timeout, pollInterval time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+	
+	for time.Now().Before(deadline) {
+		// Fetch the goal with datapoints
+		goal, err := FetchGoalWithDatapoints(config, goalSlug)
+		if err != nil {
+			// Don't fail immediately on fetch errors, keep trying
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Check if the datapoint ID exists in the recent datapoints
+		for _, dp := range goal.Datapoints {
+			if dp.ID == datapointID {
+				return true, nil
+			}
+		}
+
+		// Wait before next poll
+		time.Sleep(pollInterval)
+	}
+
+	// Timeout reached without finding the datapoint
+	return false, nil
 }
