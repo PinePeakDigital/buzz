@@ -439,7 +439,7 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, reques
 func CreateDatapointWithDaystamp(config *Config, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error) {
 	baseURL := getBaseURL(config)
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
-		baseURL, config.Username, goalSlug)
+		baseURL, config.Username, url.PathEscape(goalSlug))
 
 	data := url.Values{}
 	data.Set("auth_token", config.AuthToken)
@@ -581,16 +581,16 @@ func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
 // FetchGoalWithDatapoints fetches goal details including recent datapoints
 func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
-		baseURL, config.Username, goalSlug, config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
 
-	LogRequest(config, "GET", url)
-	resp, err := http.Get(url)
+	LogRequest(config, "GET", apiURL)
+	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(config, resp.StatusCode, url)
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -751,7 +751,7 @@ func RefreshGoal(config *Config, goalSlug string) (bool, error) {
 // or the timeout is reached. Returns true if the datapoint was found, false if timeout occurred.
 func WaitForDatapoint(config *Config, goalSlug, datapointID string, timeout, pollInterval time.Duration) (bool, error) {
 	deadline := time.Now().Add(timeout)
-	
+
 	for time.Now().Before(deadline) {
 		// Fetch the goal with datapoints
 		goal, err := FetchGoalWithDatapoints(config, goalSlug)
