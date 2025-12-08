@@ -544,14 +544,26 @@ func RefreshGoal(config *Config, goalSlug string) (bool, error) {
 
 // WaitForDatapoint polls the goal's recent datapoints until the specified datapoint ID appears
 // or the timeout is reached. Returns true if the datapoint was found, false if timeout occurred.
+// The error return value is used to indicate permanent failures (e.g., authentication errors,
+// non-existent goals) where continuing to poll would be futile.
+// Note: A zero or negative timeout will result in at least one polling attempt before checking the deadline.
 func WaitForDatapoint(config *Config, goalSlug, datapointID string, timeout, pollInterval time.Duration) (bool, error) {
 	deadline := time.Now().Add(timeout)
 
-	for time.Now().Before(deadline) {
+	for {
 		// Fetch the goal with datapoints
 		goal, err := FetchGoalWithDatapoints(config, goalSlug)
 		if err != nil {
-			// Don't fail immediately on fetch errors, keep trying
+			// Check if this is a permanent error that we shouldn't retry
+			if isPermanentError(err) {
+				return false, err
+			}
+			// For transient errors, check if we should continue polling
+			if !time.Now().Before(deadline) {
+				// Timeout reached
+				return false, nil
+			}
+			// Wait before retry on transient errors
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -563,10 +575,26 @@ func WaitForDatapoint(config *Config, goalSlug, datapointID string, timeout, pol
 			}
 		}
 
+		// Check if we've exceeded the deadline
+		if !time.Now().Before(deadline) {
+			// Timeout reached without finding the datapoint
+			return false, nil
+		}
+
 		// Wait before next poll
 		time.Sleep(pollInterval)
 	}
+}
 
-	// Timeout reached without finding the datapoint
-	return false, nil
+// isPermanentError checks if an error indicates a permanent failure that shouldn't be retried
+func isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	// Check for HTTP status codes that indicate permanent failures
+	// 401 Unauthorized, 403 Forbidden, 404 Not Found
+	return strings.Contains(errMsg, "status 401") ||
+		strings.Contains(errMsg, "status 403") ||
+		strings.Contains(errMsg, "status 404")
 }

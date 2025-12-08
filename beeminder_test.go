@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1484,6 +1485,96 @@ func TestWaitForDatapoint(t *testing.T) {
 			t.Errorf("Expected at least 2 API calls, got %d", callCount)
 		}
 	})
+
+	t.Run("returns error on permanent failure", func(t *testing.T) {
+		// Create a mock server that always returns 404
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		// Should return error immediately on permanent failure
+		start := time.Now()
+		found, err := WaitForDatapoint(config, "testgoal", "target-id", 5*time.Second, 100*time.Millisecond)
+		elapsed := time.Since(start)
+
+		if err == nil {
+			t.Error("Expected error on permanent failure, got nil")
+		}
+		if found {
+			t.Error("Expected not to find datapoint on error")
+		}
+		// Should fail fast, not wait for full timeout
+		if elapsed > 1*time.Second {
+			t.Errorf("Expected to fail fast (< 1s), but took %v", elapsed)
+		}
+	})
+
+	t.Run("handles zero timeout with at least one attempt", func(t *testing.T) {
+		callCount := 0
+		// Create a mock server that tracks calls
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			goal := Goal{
+				Slug: "testgoal",
+				Datapoints: []Datapoint{
+					{ID: "target-id", Value: 1.0, Comment: "test"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		// Should make at least one attempt even with zero timeout
+		found, err := WaitForDatapoint(config, "testgoal", "target-id", 0, 100*time.Millisecond)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if !found {
+			t.Error("Expected to find datapoint on first attempt")
+		}
+		if callCount < 1 {
+			t.Errorf("Expected at least 1 API call with zero timeout, got %d", callCount)
+		}
+	})
+}
+
+// TestIsPermanentError tests the isPermanentError function
+func TestIsPermanentError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"401 unauthorized", fmt.Errorf("API returned status 401"), true},
+		{"403 forbidden", fmt.Errorf("API returned status 403"), true},
+		{"404 not found", fmt.Errorf("API returned status 404"), true},
+		{"500 server error", fmt.Errorf("API returned status 500"), false},
+		{"network error", fmt.Errorf("connection refused"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isPermanentError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isPermanentError(%v) = %v, want %v", tt.err, result, tt.expected)
+			}
+		})
+	}
 }
 
 // TestCreateDatapointReturnsDatapoint tests that CreateDatapoint returns the created datapoint
