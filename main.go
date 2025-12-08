@@ -689,6 +689,11 @@ func handleUndoCommand() {
 		os.Exit(1)
 	}
 
+	// Clean up the last datapoint file
+	lastDatapointPath := lastDatapointInfoPath()
+	if err := os.Remove(lastDatapointPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not remove last datapoint file: %v\n", err)
+	}
 	// Signal any running TUI instances to refresh
 	if err := createRefreshFlag(); err != nil {
 		// Don't fail the command if flag creation fails
