@@ -57,13 +57,7 @@ Replace `/path/to/buzz` with the actual path to the downloaded binary.
 
 ### From Source
 
-If you have Go installed:
-
-```bash
-go install github.com/pinepeakdigital/buzz@latest
-```
-
-To update, simply run the same command again:
+If you have Go installed, you can install and update using the same command:
 
 ```bash
 go install github.com/pinepeakdigital/buzz@latest
