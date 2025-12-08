@@ -335,11 +335,14 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, url.PathEscape(goalSlug))
 
-	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
-		config.AuthToken, timestamp, value, comment)
+	data := url.Values{}
+	data.Set("auth_token", config.AuthToken)
+	data.Set("timestamp", timestamp)
+	data.Set("value", value)
+	data.Set("comment", comment)
 
 	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
-		strings.NewReader(data))
+		strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create datapoint: %w", err)
 	}
