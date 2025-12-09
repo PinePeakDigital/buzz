@@ -66,6 +66,31 @@ On first run, you'll be prompted to authenticate with Beeminder:
 
 Your credentials will be stored securely in `~/.buzzrc` with read/write permissions for your user only.
 
+## Configuration
+
+### Logging (Optional)
+
+Buzz supports optional logging of HTTP requests and responses to help with debugging and monitoring API calls. Logging is **disabled by default** to respect user preferences and avoid cluttering your filesystem.
+
+To enable logging, edit your `~/.buzzrc` file and add a `log_file` field:
+
+```json
+{
+  "username": "your_username",
+  "auth_token": "your_token",
+  "log_file": "/path/to/buzz.log"
+}
+```
+
+When logging is enabled, buzz will append timestamped entries for each HTTP request and response to the specified log file:
+
+```
+[2025-12-09 12:34:56] REQUEST: GET https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=...
+[2025-12-09 12:34:57] RESPONSE: 200 https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=...
+```
+
+To disable logging, simply remove the `log_file` field from your `~/.buzzrc` or set it to an empty string.
+
 ## Usage
 
 ### Command Line Interface
