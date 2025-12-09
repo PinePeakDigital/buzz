@@ -64,11 +64,13 @@ func FetchGoals(config *Config) ([]Goal, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals.json?auth_token=%s",
 		baseURL, config.Username, config.AuthToken)
 
+	LogRequest(config, "GET", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goals: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, url)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -304,11 +306,13 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
 		baseURL, config.Username, goalSlug, config.AuthToken)
 
+	LogRequest(config, "GET", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, url)
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -338,12 +342,14 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string)
 	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
 		config.AuthToken, timestamp, value, comment)
 
+	LogRequest(config, "POST", url)
 	resp, err := http.Post(url, "application/x-www-form-urlencoded",
 		strings.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, url)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -366,12 +372,14 @@ func CreateCharge(config *Config, amount float64, note string, dryrun bool) (*Ch
 		data.Set("dryrun", "true")
 	}
 
+	LogRequest(config, "POST", apiURL)
 	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
 		strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create charge: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(resp.Body)
@@ -394,11 +402,13 @@ func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s",
 		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
 
+	LogRequest(config, "GET", apiURL)
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("goal not found: %s", goalSlug)
@@ -422,11 +432,13 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
 		baseURL, config.Username, goalSlug, config.AuthToken)
 
+	LogRequest(config, "GET", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, url)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -451,11 +463,13 @@ func FetchGoalRawJSON(config *Config, goalSlug string, includeDatapoints bool) (
 		apiURL += "&datapoints=true"
 	}
 
+	LogRequest(config, "GET", apiURL)
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("goal not found: %s", goalSlug)
@@ -490,12 +504,14 @@ func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval
 	data.Set("goalval", goalval)
 	data.Set("rate", rate)
 
+	LogRequest(config, "POST", apiURL)
 	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
 		strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create goal: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -516,11 +532,13 @@ func RefreshGoal(config *Config, goalSlug string) (bool, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
 		baseURL, config.Username, goalSlug, config.AuthToken)
 
+	LogRequest(config, "GET", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to refresh goal: %w", err)
 	}
 	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, url)
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("API returned status %d", resp.StatusCode)

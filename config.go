@@ -14,6 +14,7 @@ type Config struct {
 	Username  string `json:"username"`
 	AuthToken string `json:"auth_token"`
 	BaseURL   string `json:"base_url,omitempty"` // Optional base URL for API, defaults to https://www.beeminder.com
+	LogFile   string `json:"log_file,omitempty"` // Optional path to log file
 }
 
 // getConfigPath returns the path to the config file
@@ -137,4 +138,38 @@ func getRefreshFlagTimestamp() int64 {
 	}
 
 	return timestamp
+}
+
+// logToFile writes a log entry to the configured log file
+// If config.LogFile is empty, logging is disabled and this function does nothing
+func logToFile(config *Config, message string) {
+	if config == nil || config.LogFile == "" {
+		return // Logging disabled
+	}
+
+	f, err := os.OpenFile(config.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return // Fail silently if can't open log
+	}
+	defer f.Close()
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, message)
+	f.WriteString(logEntry)
+}
+
+// LogRequest logs HTTP request details to the configured log file
+func LogRequest(config *Config, method, url string) {
+	if config == nil || config.LogFile == "" {
+		return
+	}
+	logToFile(config, fmt.Sprintf("REQUEST: %s %s", method, url))
+}
+
+// LogResponse logs HTTP response details to the configured log file
+func LogResponse(config *Config, statusCode int, url string) {
+	if config == nil || config.LogFile == "" {
+		return
+	}
+	logToFile(config, fmt.Sprintf("RESPONSE: %d %s", statusCode, url))
 }

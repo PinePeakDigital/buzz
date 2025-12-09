@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -224,4 +226,186 @@ func TestRefreshFlagTimestamp(t *testing.T) {
 
 	// Clean up after all tests
 	deleteRefreshFlag()
+}
+
+// TestLoggingFunctionality tests the logging feature
+func TestLoggingFunctionality(t *testing.T) {
+t.Run("LogRequest does nothing when LogFile is empty", func(t *testing.T) {
+config := &Config{
+Username:  "test",
+AuthToken: "token",
+LogFile:   "", // Empty means disabled
+}
+// Should not panic or error
+LogRequest(config, "GET", "http://example.com")
+LogResponse(config, 200, "http://example.com")
+})
+
+t.Run("LogRequest does nothing when config is nil", func(t *testing.T) {
+// Should not panic or error
+LogRequest(nil, "GET", "http://example.com")
+LogResponse(nil, 200, "http://example.com")
+})
+
+t.Run("LogRequest writes to file when LogFile is set", func(t *testing.T) {
+// Create a temp file for testing
+logFile := "/tmp/buzz_test_log.txt"
+defer func() {
+// Clean up
+os.Remove(logFile)
+}()
+
+config := &Config{
+Username:  "test",
+AuthToken: "token",
+LogFile:   logFile,
+}
+
+// Log a request
+LogRequest(config, "GET", "http://example.com/api")
+
+// Verify file exists
+if _, err := os.Stat(logFile); os.IsNotExist(err) {
+t.Error("Log file should exist after LogRequest")
+}
+
+// Read and verify content
+data, err := os.ReadFile(logFile)
+if err != nil {
+t.Fatalf("Failed to read log file: %v", err)
+}
+
+content := string(data)
+if !strings.Contains(content, "REQUEST: GET http://example.com/api") {
+t.Errorf("Log content should contain request details, got: %s", content)
+}
+if !strings.Contains(content, "[20") { // Check for timestamp format [20XX-XX-XX ...]
+t.Errorf("Log content should contain timestamp, got: %s", content)
+}
+})
+
+t.Run("LogResponse writes to file when LogFile is set", func(t *testing.T) {
+// Create a temp file for testing
+logFile := "/tmp/buzz_test_log_response.txt"
+defer func() {
+// Clean up
+os.Remove(logFile)
+}()
+
+config := &Config{
+Username:  "test",
+AuthToken: "token",
+LogFile:   logFile,
+}
+
+// Log a response
+LogResponse(config, 200, "http://example.com/api")
+
+// Verify file exists
+if _, err := os.Stat(logFile); os.IsNotExist(err) {
+t.Error("Log file should exist after LogResponse")
+}
+
+// Read and verify content
+data, err := os.ReadFile(logFile)
+if err != nil {
+t.Fatalf("Failed to read log file: %v", err)
+}
+
+content := string(data)
+if !strings.Contains(content, "RESPONSE: 200 http://example.com/api") {
+t.Errorf("Log content should contain response details, got: %s", content)
+}
+})
+
+t.Run("Multiple log entries are appended", func(t *testing.T) {
+// Create a temp file for testing
+logFile := "/tmp/buzz_test_log_multiple.txt"
+defer func() {
+// Clean up
+os.Remove(logFile)
+}()
+
+config := &Config{
+Username:  "test",
+AuthToken: "token",
+LogFile:   logFile,
+}
+
+// Log multiple entries
+LogRequest(config, "GET", "http://example.com/api/1")
+LogResponse(config, 200, "http://example.com/api/1")
+LogRequest(config, "POST", "http://example.com/api/2")
+LogResponse(config, 201, "http://example.com/api/2")
+
+// Read and verify content
+data, err := os.ReadFile(logFile)
+if err != nil {
+t.Fatalf("Failed to read log file: %v", err)
+}
+
+content := string(data)
+if !strings.Contains(content, "REQUEST: GET http://example.com/api/1") {
+t.Error("Log should contain first request")
+}
+if !strings.Contains(content, "RESPONSE: 200 http://example.com/api/1") {
+t.Error("Log should contain first response")
+}
+if !strings.Contains(content, "REQUEST: POST http://example.com/api/2") {
+t.Error("Log should contain second request")
+}
+if !strings.Contains(content, "RESPONSE: 201 http://example.com/api/2") {
+t.Error("Log should contain second response")
+}
+})
+}
+
+// TestConfigWithLogFile tests Config struct with LogFile field
+func TestConfigWithLogFile(t *testing.T) {
+t.Run("Config marshaling includes log_file", func(t *testing.T) {
+config := &Config{
+Username:  "myusername",
+AuthToken: "myauthtoken",
+LogFile:   "/path/to/log.txt",
+}
+
+// Marshal to JSON
+data, err := json.Marshal(config)
+if err != nil {
+t.Fatalf("Failed to marshal config: %v", err)
+}
+
+// Verify JSON field name
+var jsonMap map[string]interface{}
+if err := json.Unmarshal(data, &jsonMap); err != nil {
+t.Fatalf("Failed to unmarshal to map: %v", err)
+}
+
+if _, exists := jsonMap["log_file"]; !exists {
+t.Error("JSON should have 'log_file' field")
+}
+
+// Unmarshal back and verify
+var decoded Config
+if err := json.Unmarshal(data, &decoded); err != nil {
+t.Fatalf("Failed to unmarshal config: %v", err)
+}
+
+if decoded.LogFile != config.LogFile {
+t.Errorf("LogFile = %q, want %q", decoded.LogFile, config.LogFile)
+}
+})
+
+t.Run("Config unmarshaling handles missing log_file", func(t *testing.T) {
+jsonData := `{"username":"myusername","auth_token":"myauthtoken"}`
+
+var config Config
+if err := json.Unmarshal([]byte(jsonData), &config); err != nil {
+t.Fatalf("Failed to unmarshal config: %v", err)
+}
+
+if config.LogFile != "" {
+t.Errorf("LogFile should be empty when not in JSON, got %q", config.LogFile)
+}
+})
 }
