@@ -253,10 +253,6 @@ t.Run("LogRequest writes to file when LogFile is set", func(t *testing.T) {
 tmpDir := t.TempDir()
 		logFile := filepath.Join(tmpDir, "buzz_test_log.txt")
 
-
-
-
-
 config := &Config{
 Username:  "test",
 AuthToken: "token",
@@ -291,10 +287,6 @@ t.Run("LogResponse writes to file when LogFile is set", func(t *testing.T) {
 tmpDir := t.TempDir()
 		logFile := filepath.Join(tmpDir, "buzz_test_log_response.txt")
 
-
-
-
-
 config := &Config{
 Username:  "test",
 AuthToken: "token",
@@ -325,10 +317,6 @@ t.Run("Multiple log entries are appended", func(t *testing.T) {
 // Create a temp directory for testing
 tmpDir := t.TempDir()
 		logFile := filepath.Join(tmpDir, "buzz_test_log_multiple.txt")
-
-
-
-
 
 config := &Config{
 Username:  "test",
