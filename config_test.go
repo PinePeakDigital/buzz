@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -248,12 +249,13 @@ LogResponse(nil, 200, "http://example.com")
 })
 
 t.Run("LogRequest writes to file when LogFile is set", func(t *testing.T) {
-// Create a temp file for testing
-logFile := "/tmp/buzz_test_log.txt"
-defer func() {
-// Clean up
-os.Remove(logFile)
-}()
+// Create a temp directory for testing
+tmpDir := t.TempDir()
+		logFile := filepath.Join(tmpDir, "buzz_test_log.txt")
+
+
+
+
 
 config := &Config{
 Username:  "test",
@@ -285,12 +287,13 @@ t.Errorf("Log content should contain timestamp, got: %s", content)
 })
 
 t.Run("LogResponse writes to file when LogFile is set", func(t *testing.T) {
-// Create a temp file for testing
-logFile := "/tmp/buzz_test_log_response.txt"
-defer func() {
-// Clean up
-os.Remove(logFile)
-}()
+// Create a temp directory for testing
+tmpDir := t.TempDir()
+		logFile := filepath.Join(tmpDir, "buzz_test_log_response.txt")
+
+
+
+
 
 config := &Config{
 Username:  "test",
@@ -319,12 +322,13 @@ t.Errorf("Log content should contain response details, got: %s", content)
 })
 
 t.Run("Multiple log entries are appended", func(t *testing.T) {
-// Create a temp file for testing
-logFile := "/tmp/buzz_test_log_multiple.txt"
-defer func() {
-// Clean up
-os.Remove(logFile)
-}()
+// Create a temp directory for testing
+tmpDir := t.TempDir()
+		logFile := filepath.Join(tmpDir, "buzz_test_log_multiple.txt")
+
+
+
+
 
 config := &Config{
 Username:  "test",

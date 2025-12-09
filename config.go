@@ -155,21 +155,16 @@ func logToFile(config *Config, message string) {
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, message)
+	// Intentionally ignore write errors to fail silently and not disrupt normal operations
 	f.WriteString(logEntry)
 }
 
 // LogRequest logs HTTP request details to the configured log file
 func LogRequest(config *Config, method, url string) {
-	if config == nil || config.LogFile == "" {
-		return
-	}
 	logToFile(config, fmt.Sprintf("REQUEST: %s %s", method, url))
 }
 
 // LogResponse logs HTTP response details to the configured log file
 func LogResponse(config *Config, statusCode int, url string) {
-	if config == nil || config.LogFile == "" {
-		return
-	}
 	logToFile(config, fmt.Sprintf("RESPONSE: %d %s", statusCode, url))
 }
