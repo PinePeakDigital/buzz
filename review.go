@@ -134,6 +134,12 @@ func (m reviewModel) View() string {
 
 	details := ""
 	details += fmt.Sprintf("Title:       %s\n", goal.Title)
+	
+	// Display fine print if it exists
+	if goal.Fineprint != "" {
+		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
+	}
+	
 	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
 	deadlineTime := time.Unix(goal.Losedate, 0)
 	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
@@ -152,6 +158,11 @@ func (m reviewModel) View() string {
 	if goal.Autoratchet != nil {
 		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
 	}
+	
+	// Generate and display goal URL
+	baseURL := getBaseURL(m.config)
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(m.config.Username), url.PathEscape(goal.Slug))
+	details += fmt.Sprintf("URL:         %s\n", goalURL)
 
 	view += detailStyle.Render(details) + "\n"
 

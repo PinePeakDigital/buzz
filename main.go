@@ -789,7 +789,22 @@ func handleViewCommand() {
 	}
 
 	fmt.Printf("Limsum:      %s\n", goal.Limsum)
+	
+	// Display deadline (formatted timestamp)
+	deadlineTime := time.Unix(goal.Losedate, 0)
+	fmt.Printf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
+	
+	// Display due time (time of day)
+	fmt.Printf("Due time:    %s\n", formatDueTime(goal.Deadline))
+	
 	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
+
+	// Display current rate (n / unit)
+	if goal.Rate != nil && goal.Runits != "" {
+		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
+		fmt.Printf("Rate:        %s\n", rateStr)
+	}
+
 	fmt.Printf("Autodata:    %s\n", goal.Autodata)
 
 	// Display autoratchet only if set (not nil)
