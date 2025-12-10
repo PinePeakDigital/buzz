@@ -232,14 +232,14 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	}
 
 	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
-	
+
 	// Display deadline (formatted timestamp)
 	deadlineTime := time.Unix(goal.Losedate, 0)
 	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
-	
+
 	// Display due time (time of day)
 	details += fmt.Sprintf("Due time:    %s\n", formatDueTime(goal.Deadline))
-	
+
 	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
 
 	// Display current rate (n / unit)
