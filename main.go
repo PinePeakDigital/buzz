@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -781,41 +780,7 @@ func handleViewCommand() {
 
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
-	fmt.Printf("Title:       %s\n", goal.Title)
-
-	// Display fine print if it exists
-	if goal.Fineprint != "" {
-		fmt.Printf("Fine print:  %s\n", goal.Fineprint)
-	}
-
-	fmt.Printf("Limsum:      %s\n", goal.Limsum)
-	
-	// Display deadline (formatted timestamp)
-	deadlineTime := time.Unix(goal.Losedate, 0)
-	fmt.Printf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
-	
-	// Display due time (time of day)
-	fmt.Printf("Due time:    %s\n", formatDueTime(goal.Deadline))
-	
-	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
-
-	// Display current rate (n / unit)
-	if goal.Rate != nil && goal.Runits != "" {
-		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
-		fmt.Printf("Rate:        %s\n", rateStr)
-	}
-
-	fmt.Printf("Autodata:    %s\n", goal.Autodata)
-
-	// Display autoratchet only if set (not nil)
-	if goal.Autoratchet != nil {
-		fmt.Printf("Autoratchet: %.0f\n", *goal.Autoratchet)
-	}
-
-	// Generate and display goal URL
-	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
-	fmt.Printf("URL:         %s\n", goalURL)
+	fmt.Print(formatGoalDetails(goal, config))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
