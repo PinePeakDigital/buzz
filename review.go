@@ -132,26 +132,7 @@ func (m reviewModel) View() string {
 	detailStyle := lipgloss.NewStyle().
 		Padding(0, 2)
 
-	details := ""
-	details += fmt.Sprintf("Title:       %s\n", goal.Title)
-	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
-	deadlineTime := time.Unix(goal.Losedate, 0)
-	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
-	details += fmt.Sprintf("Due time:    %s\n", formatDueTime(goal.Deadline))
-	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
-
-	// Display current rate (n / unit)
-	if goal.Rate != nil && goal.Runits != "" {
-		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
-		details += fmt.Sprintf("Rate:        %s\n", rateStr)
-	}
-
-	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
-
-	// Display autoratchet only if set (not nil)
-	if goal.Autoratchet != nil {
-		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
-	}
+	details := formatGoalDetails(&goal, m.config)
 
 	view += detailStyle.Render(details) + "\n"
 
@@ -237,4 +218,47 @@ func formatDueTime(deadlineOffset int) string {
 	// Create a time at the specified hour and minute
 	t := time.Date(0, 1, 1, hours, minutes, 0, 0, time.UTC)
 	return t.Format("3:04 PM")
+}
+
+// formatGoalDetails formats the goal details in a consistent way for both view and review commands
+func formatGoalDetails(goal *Goal, config *Config) string {
+	var details string
+
+	details += fmt.Sprintf("Title:       %s\n", goal.Title)
+
+	// Display fine print if it exists
+	if goal.Fineprint != "" {
+		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
+	}
+
+	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
+
+	// Display deadline (formatted timestamp)
+	deadlineTime := time.Unix(goal.Losedate, 0)
+	details += fmt.Sprintf("Deadline:    %s\n", deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST"))
+
+	// Display due time (time of day)
+	details += fmt.Sprintf("Due time:    %s\n", formatDueTime(goal.Deadline))
+
+	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
+
+	// Display current rate (n / unit)
+	if goal.Rate != nil && goal.Runits != "" {
+		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
+		details += fmt.Sprintf("Rate:        %s\n", rateStr)
+	}
+
+	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
+
+	// Display autoratchet only if set (not nil)
+	if goal.Autoratchet != nil {
+		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
+	}
+
+	// Generate and display goal URL
+	baseURL := getBaseURL(config)
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
+	details += fmt.Sprintf("URL:         %s\n", goalURL)
+
+	return details
 }

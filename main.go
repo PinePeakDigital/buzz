@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -781,26 +780,7 @@ func handleViewCommand() {
 
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
-	fmt.Printf("Title:       %s\n", goal.Title)
-
-	// Display fine print if it exists
-	if goal.Fineprint != "" {
-		fmt.Printf("Fine print:  %s\n", goal.Fineprint)
-	}
-
-	fmt.Printf("Limsum:      %s\n", goal.Limsum)
-	fmt.Printf("Pledge:      $%.2f\n", goal.Pledge)
-	fmt.Printf("Autodata:    %s\n", goal.Autodata)
-
-	// Display autoratchet only if set (not nil)
-	if goal.Autoratchet != nil {
-		fmt.Printf("Autoratchet: %.0f\n", *goal.Autoratchet)
-	}
-
-	// Generate and display goal URL
-	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
-	fmt.Printf("URL:         %s\n", goalURL)
+	fmt.Print(formatGoalDetails(goal, config))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())

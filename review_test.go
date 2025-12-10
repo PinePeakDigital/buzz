@@ -482,3 +482,92 @@ func TestReviewModelViewWithDueTime(t *testing.T) {
 		t.Errorf("Expected view to contain '3:00 PM', but got:\n%s", view)
 	}
 }
+
+func TestReviewModelViewWithFineprint(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:      "testgoal",
+			Title:     "Test Goal",
+			Fineprint: "This is a test description",
+			Safebuf:   5,
+			Pledge:    10.0,
+			Losedate:  1234567890,
+			Limsum:    "+1 in 2 days",
+			Baremin:   "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the fine print
+	expectedFineprint := "Fine print:  This is a test description"
+	if !strings.Contains(view, expectedFineprint) {
+		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedFineprint, view)
+	}
+}
+
+func TestReviewModelViewWithoutFineprint(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:      "testgoal",
+			Title:     "Test Goal",
+			Fineprint: "", // Empty fine print
+			Safebuf:   5,
+			Pledge:    10.0,
+			Losedate:  1234567890,
+			Limsum:    "+1 in 2 days",
+			Baremin:   "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view doesn't contain "Fine print:" when fineprint is empty
+	if strings.Contains(view, "Fine print:") {
+		t.Errorf("Expected view to not contain 'Fine print:' when fineprint is empty, but got:\n%s", view)
+	}
+}
+
+func TestReviewModelViewWithURL(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the URL
+	if !strings.Contains(view, "URL:") {
+		t.Error("Expected view to contain 'URL:' label")
+	}
+
+	expectedURL := "https://www.beeminder.com/testuser/testgoal"
+	if !strings.Contains(view, expectedURL) {
+		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedURL, view)
+	}
+}
