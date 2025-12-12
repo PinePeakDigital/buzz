@@ -568,15 +568,27 @@ func handleAddCommand() {
 	// Get remaining positional arguments after flag parsing
 	args := addFlags.Args()
 
-	// Detect if known flags appear after positional arguments and warn the user
-	// Only check for double-dash flags to avoid false positives with negative numbers
+	// Detect if flags appear after positional arguments and warn the user
+	// Check for double-dash followed by a letter and containing '=' or being a standalone word
+	// This identifies flags like --requestid or --requestid=value while avoiding false positives
+	// with negative numbers (e.g., -5) or decorative dashes (e.g., --this--)
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "--requestid") {
-			fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
-			fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
-			fmt.Fprintf(os.Stderr, "Correct usage: buzz add --requestid=ID goalslug value comment\n")
-			fmt.Fprintln(os.Stderr, "")
-			break
+		if len(arg) > 2 && arg[0] == '-' && arg[1] == '-' {
+			// Check if third character is a letter
+			thirdChar := arg[2]
+			isLetter := (thirdChar >= 'a' && thirdChar <= 'z') || (thirdChar >= 'A' && thirdChar <= 'Z')
+			// Check if it contains '=' or ends with a letter/digit (not punctuation)
+			hasEquals := strings.Contains(arg, "=")
+			lastChar := arg[len(arg)-1]
+			endsWithAlphanumeric := (lastChar >= 'a' && lastChar <= 'z') || (lastChar >= 'A' && lastChar <= 'Z') || (lastChar >= '0' && lastChar <= '9')
+			
+			if isLetter && (hasEquals || endsWithAlphanumeric) {
+				fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
+				fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
+				fmt.Fprintf(os.Stderr, "Correct usage: buzz add --requestid=ID goalslug value comment\n")
+				fmt.Fprintln(os.Stderr, "")
+				break
+			}
 		}
 	}
 
