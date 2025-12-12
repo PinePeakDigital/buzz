@@ -236,9 +236,11 @@ func printHelp() {
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
 	fmt.Println("  buzz less                         Output all do-less type goals")
-	fmt.Println("  buzz add <goalslug> <value> [comment] [--requestid=<id>]")
+	fmt.Println("  buzz add [--requestid=<id>] <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
-	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment] [--requestid=<id>]")
+	fmt.Println("  buzz add <goalslug> <value> \"quoted comment\" --requestid=<id>")
+	fmt.Println("                                    Add with flags after (comment must be quoted)")
+	fmt.Println("  echo \"<value>\" | buzz add [--requestid=<id>] <goalslug> [comment]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
@@ -539,8 +541,12 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 // printAddUsageAndExit prints the usage for buzz add command and exits with code 1
 func printAddUsageAndExit(errorMsg string) {
 	fmt.Println("Error: " + errorMsg)
-	fmt.Println("Usage: buzz add <goalslug> <value> [comment] [--requestid=<id>]")
-	fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment] [--requestid=<id>]")
+	fmt.Println("Usage: buzz add [--requestid=<id>] <goalslug> <value> [comment]")
+	fmt.Println("       buzz add <goalslug> <value> \"quoted comment\" --requestid=<id>")
+	fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] <goalslug> [comment]")
+	fmt.Println("")
+	fmt.Println("Note: Flags (--requestid) should come BEFORE positional arguments,")
+	fmt.Println("      OR the comment must be quoted if flags come after.")
 	os.Exit(1)
 }
 
@@ -551,8 +557,9 @@ func handleAddCommand() {
 	requestid := addFlags.String("requestid", "", "Request ID for idempotency")
 	if err := addFlags.Parse(os.Args[2:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Println("Usage: buzz add <goalslug> <value> [comment] [--requestid=<id>]")
-			fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment] [--requestid=<id>]")
+			fmt.Println("Usage: buzz add [--requestid=<id>] <goalslug> <value> [comment]")
+			fmt.Println("       buzz add <goalslug> <value> \"quoted comment\" --requestid=<id>")
+			fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] <goalslug> [comment]")
 			return
 		}
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
@@ -561,6 +568,18 @@ func handleAddCommand() {
 
 	// Get remaining positional arguments after flag parsing
 	args := addFlags.Args()
+
+	// Detect if flags appear after positional arguments and warn the user
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--") || strings.HasPrefix(arg, "-") {
+			fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
+			fmt.Fprintf(os.Stderr, "Flags should come BEFORE positional arguments, or quote the comment if you want flags after.\n")
+			fmt.Fprintf(os.Stderr, "Example: buzz add --requestid=ID goalslug value comment\n")
+			fmt.Fprintf(os.Stderr, "     or: buzz add goalslug value \"quoted comment\" --requestid=ID\n")
+			fmt.Fprintln(os.Stderr, "")
+			break
+		}
+	}
 
 	// Check arguments: buzz add <goalslug> <value> [comment]
 	// Value can also be piped via stdin: echo "123" | buzz add mygoal [comment]
