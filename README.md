@@ -160,13 +160,14 @@ Lists all goals where you're trying to do less of something (weight loss, habit 
 **buzz add** - Add a datapoint to a goal without opening the TUI:
 
 ```bash
-buzz add <goalslug> <value> [comment]
+buzz add <goalslug> <value> [comment] [--requestid=<id>]
 
 # Examples:
 buzz add opsec 1                    # Adds value 1 with default comment "Added via buzz"
 buzz add workout 2.5 'morning run'  # Adds value 2.5 with custom comment
 buzz add study 00:05 'quick review' # Adds 5 minutes (converted to 0.083333 hours)
 buzz add focus 1:30                 # Adds 1.5 hours (1 hour 30 minutes)
+buzz add reading 3 'finished chapter 5' --requestid=abc123  # Adds with a request ID for idempotency
 ```
 
 The `<value>` parameter supports both decimal numbers and time formats:
@@ -177,6 +178,11 @@ The `<value>` parameter supports both decimal numbers and time formats:
 Time formats are automatically converted to decimal hours before submitting to Beeminder.
 
 The comment parameter is optional and defaults to "Added via buzz" if not provided.
+
+The `--requestid` flag is optional and provides idempotency:
+- **Prevents duplicates**: Safely retry submissions without creating duplicate datapoints
+- **Updates existing**: If a datapoint with the same requestid exists but differs, it gets updated
+- **Scoped per goal**: The same requestid can be used across different goals
 
 **Note:** When you run `buzz add` while the TUI is running in another terminal, the TUI will automatically refresh within 1 second to show the new datapoint.
 

@@ -236,9 +236,9 @@ func printHelp() {
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
 	fmt.Println("  buzz less                         Output all do-less type goals")
-	fmt.Println("  buzz add <goalslug> <value> [comment]")
+	fmt.Println("  buzz add <goalslug> <value> [comment] [--requestid=<id>]")
 	fmt.Println("                                    Add a datapoint to a goal")
-	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment]")
+	fmt.Println("  echo \"<value>\" | buzz add <goalslug> [comment] [--requestid=<id>]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
@@ -539,41 +539,57 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 // printAddUsageAndExit prints the usage for buzz add command and exits with code 1
 func printAddUsageAndExit(errorMsg string) {
 	fmt.Println("Error: " + errorMsg)
-	fmt.Println("Usage: buzz add <goalslug> <value> [comment]")
-	fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment]")
+	fmt.Println("Usage: buzz add <goalslug> <value> [comment] [--requestid=<id>]")
+	fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment] [--requestid=<id>]")
 	os.Exit(1)
 }
 
 // handleAddCommand adds a datapoint to a goal without opening the TUI
 func handleAddCommand() {
+	// Parse flags for the add command
+	addFlags := flag.NewFlagSet("add", flag.ContinueOnError)
+	requestid := addFlags.String("requestid", "", "Request ID for idempotency")
+	if err := addFlags.Parse(os.Args[2:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println("Usage: buzz add <goalslug> <value> [comment] [--requestid=<id>]")
+			fmt.Println("       echo \"<value>\" | buzz add <goalslug> [comment] [--requestid=<id>]")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		printAddUsageAndExit("Invalid flags")
+	}
+
+	// Get remaining positional arguments after flag parsing
+	args := addFlags.Args()
+
 	// Check arguments: buzz add <goalslug> <value> [comment]
 	// Value can also be piped via stdin: echo "123" | buzz add mygoal [comment]
-	if len(os.Args) < 3 {
+	if len(args) < 1 {
 		printAddUsageAndExit("Missing required arguments")
 	}
 
-	goalSlug := os.Args[2]
+	goalSlug := args[0]
 	var value string
-	var commentStartIndex int // Index where optional comment starts
+	var commentStartIndex int // Index where optional comment starts in args
 
 	// Try to read value from stdin first (for piped input)
 	stdinValue, err := readValueFromStdin()
 	if err == nil && stdinValue != "" {
 		// Value provided via stdin
 		value = stdinValue
-		commentStartIndex = 3 // Comment starts at index 3 when value is piped
-	} else if len(os.Args) >= 4 {
+		commentStartIndex = 1 // Comment starts at index 1 when value is piped
+	} else if len(args) >= 2 {
 		// Value provided as argument
-		value = os.Args[3]
-		commentStartIndex = 4 // Comment starts at index 4
+		value = args[1]
+		commentStartIndex = 2 // Comment starts at index 2
 	} else {
 		printAddUsageAndExit("Missing required value argument")
 	}
 
 	// Optional comment - default to "Added via buzz" if not provided
 	comment := "Added via buzz"
-	if len(os.Args) >= commentStartIndex+1 {
-		comment = strings.Join(os.Args[commentStartIndex:], " ")
+	if len(args) >= commentStartIndex+1 {
+		comment = strings.Join(args[commentStartIndex:], " ")
 	}
 
 	// Load config
@@ -608,7 +624,7 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = CreateDatapoint(config, goalSlug, timestamp, value, comment)
+	err = CreateDatapoint(config, goalSlug, timestamp, value, comment, *requestid)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %v\n", err)
 		os.Exit(1)
@@ -620,7 +636,11 @@ func handleAddCommand() {
 		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %v\n", err)
 	}
 
-	fmt.Printf("Successfully added datapoint to %s: value=%s, comment=\"%s\"\n", goalSlug, value, comment)
+	successMsg := fmt.Sprintf("Successfully added datapoint to %s: value=%s, comment=\"%s\"", goalSlug, value, comment)
+	if *requestid != "" {
+		successMsg += fmt.Sprintf(", requestid=\"%s\"", *requestid)
+	}
+	fmt.Println(successMsg)
 
 	// Wait briefly before fetching limsum to allow the server to update
 	time.Sleep(limsumFetchDelay)

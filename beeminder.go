@@ -334,13 +334,18 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 }
 
 // CreateDatapoint submits a new datapoint to a Beeminder goal
-func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, requestid string) error {
 	baseURL := getBaseURL(config)
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, goalSlug)
 
 	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
 		config.AuthToken, timestamp, value, comment)
+	
+	// Add requestid if provided
+	if requestid != "" {
+		data += fmt.Sprintf("&requestid=%s", requestid)
+	}
 
 	LogRequest(config, "POST", url)
 	resp, err := http.Post(url, "application/x-www-form-urlencoded",
