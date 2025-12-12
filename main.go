@@ -582,7 +582,7 @@ func handleAddCommand() {
 			hasEquals := strings.Contains(arg, "=")
 			lastChar := rune(arg[len(arg)-1])
 			endsWithAlphanumeric := unicode.IsLetter(lastChar) || unicode.IsDigit(lastChar)
-			
+
 			if isLetter && (hasEquals || endsWithAlphanumeric) {
 				fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
 				fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
