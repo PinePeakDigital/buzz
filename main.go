@@ -568,9 +568,10 @@ func handleAddCommand() {
 	// Get remaining positional arguments after flag parsing
 	args := addFlags.Args()
 
-	// Detect if flags appear after positional arguments and warn the user
+	// Detect if known flags appear after positional arguments and warn the user
+	// Only check for double-dash flags to avoid false positives with negative numbers
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "--") || strings.HasPrefix(arg, "-") {
+		if strings.HasPrefix(arg, "--requestid") {
 			fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
 			fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
 			fmt.Fprintf(os.Stderr, "Correct usage: buzz add --requestid=ID goalslug value comment\n")
