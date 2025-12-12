@@ -344,7 +344,7 @@ func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, reques
 	data.Set("timestamp", timestamp)
 	data.Set("value", value)
 	data.Set("comment", comment)
-	
+
 	// Add requestid if provided
 	if requestid != "" {
 		data.Set("requestid", requestid)
