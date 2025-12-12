@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -573,14 +574,14 @@ func handleAddCommand() {
 	// This identifies flags like --requestid or --requestid=value while avoiding false positives
 	// with negative numbers (e.g., -5) or decorative dashes (e.g., --this--)
 	for _, arg := range args {
-		if len(arg) > 2 && arg[0] == '-' && arg[1] == '-' {
+		if len(arg) >= 3 && arg[0] == '-' && arg[1] == '-' {
 			// Check if third character is a letter
-			thirdChar := arg[2]
-			isLetter := (thirdChar >= 'a' && thirdChar <= 'z') || (thirdChar >= 'A' && thirdChar <= 'Z')
+			thirdChar := rune(arg[2])
+			isLetter := unicode.IsLetter(thirdChar)
 			// Check if it contains '=' or ends with a letter/digit (not punctuation)
 			hasEquals := strings.Contains(arg, "=")
-			lastChar := arg[len(arg)-1]
-			endsWithAlphanumeric := (lastChar >= 'a' && lastChar <= 'z') || (lastChar >= 'A' && lastChar <= 'Z') || (lastChar >= '0' && lastChar <= '9')
+			lastChar := rune(arg[len(arg)-1])
+			endsWithAlphanumeric := unicode.IsLetter(lastChar) || unicode.IsDigit(lastChar)
 			
 			if isLetter && (hasEquals || endsWithAlphanumeric) {
 				fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
