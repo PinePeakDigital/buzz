@@ -334,22 +334,30 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 }
 
 // CreateDatapoint submits a new datapoint to a Beeminder goal
-func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment string) error {
+func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, requestid string) error {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, goalSlug)
 
-	data := fmt.Sprintf("auth_token=%s&timestamp=%s&value=%s&comment=%s",
-		config.AuthToken, timestamp, value, comment)
+	data := url.Values{}
+	data.Set("auth_token", config.AuthToken)
+	data.Set("timestamp", timestamp)
+	data.Set("value", value)
+	data.Set("comment", comment)
 
-	LogRequest(config, "POST", url)
-	resp, err := http.Post(url, "application/x-www-form-urlencoded",
-		strings.NewReader(data))
+	// Add requestid if provided
+	if requestid != "" {
+		data.Set("requestid", requestid)
+	}
+
+	LogRequest(config, "POST", apiURL)
+	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded",
+		strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(config, resp.StatusCode, url)
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("API returned status %d", resp.StatusCode)

@@ -1368,3 +1368,87 @@ func TestGoalTypeField(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateDatapointWithRequestID tests CreateDatapoint function with requestid parameter
+func TestCreateDatapointWithRequestID(t *testing.T) {
+	tests := []struct {
+		name      string
+		requestid string
+		wantInURL bool
+	}{
+		{
+			name:      "with requestid",
+			requestid: "test-request-id-123",
+			wantInURL: true,
+		},
+		{
+			name:      "without requestid",
+			requestid: "",
+			wantInURL: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock server that captures the request
+			var capturedBody string
+			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify it's a POST request
+				if r.Method != http.MethodPost {
+					t.Errorf("Expected POST request, got %s", r.Method)
+				}
+
+				// Verify the URL path
+				if !strings.Contains(r.URL.Path, "/users/testuser/goals/testgoal/datapoints.json") {
+					t.Errorf("Unexpected URL path: %s", r.URL.Path)
+				}
+
+				// Parse the request body
+				if err := r.ParseForm(); err != nil {
+					t.Errorf("Failed to parse form: %v", err)
+				}
+				capturedBody = r.PostForm.Encode()
+
+				// Return success
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"id":"123"}`))
+			}))
+			defer mockServer.Close()
+
+			// Create a config with mock server URL
+			config := &Config{
+				Username:  "testuser",
+				AuthToken: "testtoken",
+				BaseURL:   mockServer.URL,
+			}
+
+			// Call CreateDatapoint
+			err := CreateDatapoint(config, "testgoal", "1234567890", "5.0", "test comment", tt.requestid)
+			if err != nil {
+				t.Fatalf("CreateDatapoint failed: %v", err)
+			}
+
+			// Verify requestid presence in request body
+			if tt.wantInURL {
+				if !strings.Contains(capturedBody, "requestid="+tt.requestid) {
+					t.Errorf("Expected requestid in body, got: %s", capturedBody)
+				}
+			} else {
+				if strings.Contains(capturedBody, "requestid=") {
+					t.Errorf("Did not expect requestid in body, got: %s", capturedBody)
+				}
+			}
+
+			// Verify other required fields are present
+			if !strings.Contains(capturedBody, "auth_token=testtoken") {
+				t.Errorf("Expected auth_token in body, got: %s", capturedBody)
+			}
+			if !strings.Contains(capturedBody, "timestamp=1234567890") {
+				t.Errorf("Expected timestamp in body, got: %s", capturedBody)
+			}
+			if !strings.Contains(capturedBody, "value=5.0") {
+				t.Errorf("Expected value in body, got: %s", capturedBody)
+			}
+		})
+	}
+}
