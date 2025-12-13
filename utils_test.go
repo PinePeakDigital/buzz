@@ -380,3 +380,78 @@ func TestReadValueFromStdinTerminal(t *testing.T) {
 		}
 	}
 }
+
+// TestDetectMisplacedFlag tests the detectMisplacedFlag function
+func TestDetectMisplacedFlag(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		expectedFlag string
+		description  string
+	}{
+		{
+			name:         "flag --requestid after args",
+			args:         []string{"goalslug", "1", "comment", "--requestid"},
+			expectedFlag: "--requestid",
+			description:  "Should detect --requestid flag after positional arguments",
+		},
+		{
+			name:         "flag --requestid= after args",
+			args:         []string{"goalslug", "1", "comment", "--requestid=123"},
+			expectedFlag: "--requestid=123",
+			description:  "Should detect --requestid=value flag after positional arguments",
+		},
+		{
+			name:         "negative number",
+			args:         []string{"goalslug", "-5.5", "comment"},
+			expectedFlag: "",
+			description:  "Should not detect negative numbers as flags",
+		},
+		{
+			name:         "decorative dashes",
+			args:         []string{"goalslug", "1", "--decorative--"},
+			expectedFlag: "",
+			description:  "Should not detect decorative dashes as flags",
+		},
+		{
+			name:         "double dash alone",
+			args:         []string{"goalslug", "1", "--"},
+			expectedFlag: "",
+			description:  "Should not detect standalone double dash as flag",
+		},
+		{
+			name:         "comment with username-like pattern",
+			args:         []string{"goalslug", "1", "--username123"},
+			expectedFlag: "",
+			description:  "Should not detect comment text that looks flag-like",
+		},
+		{
+			name:         "no flags",
+			args:         []string{"goalslug", "1", "normal", "comment"},
+			expectedFlag: "",
+			description:  "Should not detect any flags in normal comments",
+		},
+		{
+			name:         "requestid in middle of comment",
+			args:         []string{"goalslug", "1", "comment", "with", "--requestid", "in", "middle"},
+			expectedFlag: "--requestid",
+			description:  "Should detect --requestid even in middle of multi-word comment",
+		},
+		{
+			name:         "multiple flags returns first",
+			args:         []string{"--requestid=123", "--requestid=456"},
+			expectedFlag: "--requestid=123",
+			description:  "Should return the first detected flag",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detectMisplacedFlag(tt.args)
+
+			if result != tt.expectedFlag {
+				t.Errorf("%s: detectMisplacedFlag() = %q, want %q", tt.description, result, tt.expectedFlag)
+			}
+		})
+	}
+}
