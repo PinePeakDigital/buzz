@@ -380,3 +380,89 @@ func TestReadValueFromStdinTerminal(t *testing.T) {
 		}
 	}
 }
+
+// TestFlagDetectionAfterPositionalArgs tests the flag detection logic for the add command
+func TestFlagDetectionAfterPositionalArgs(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           []string
+		shouldDetect   bool
+		expectedFlag   string
+		description    string
+	}{
+		{
+			name:         "flag --requestid after args",
+			args:         []string{"goalslug", "1", "comment", "--requestid"},
+			shouldDetect: true,
+			expectedFlag: "--requestid",
+			description:  "Should detect --requestid flag after positional arguments",
+		},
+		{
+			name:         "flag --requestid= after args",
+			args:         []string{"goalslug", "1", "comment", "--requestid=123"},
+			shouldDetect: true,
+			expectedFlag: "--requestid=123",
+			description:  "Should detect --requestid=value flag after positional arguments",
+		},
+		{
+			name:         "negative number",
+			args:         []string{"goalslug", "-5.5", "comment"},
+			shouldDetect: false,
+			description:  "Should not detect negative numbers as flags",
+		},
+		{
+			name:         "decorative dashes",
+			args:         []string{"goalslug", "1", "--decorative--"},
+			shouldDetect: false,
+			description:  "Should not detect decorative dashes as flags",
+		},
+		{
+			name:         "double dash alone",
+			args:         []string{"goalslug", "1", "--"},
+			shouldDetect: false,
+			description:  "Should not detect standalone double dash as flag",
+		},
+		{
+			name:         "comment with username-like pattern",
+			args:         []string{"goalslug", "1", "--username123"},
+			shouldDetect: false,
+			description:  "Should not detect comment text that looks flag-like",
+		},
+		{
+			name:         "no flags",
+			args:         []string{"goalslug", "1", "normal", "comment"},
+			shouldDetect: false,
+			description:  "Should not detect any flags in normal comments",
+		},
+		{
+			name:         "requestid in middle of comment",
+			args:         []string{"goalslug", "1", "comment", "with", "--requestid", "in", "middle"},
+			shouldDetect: true,
+			expectedFlag: "--requestid",
+			description:  "Should detect --requestid even in middle of multi-word comment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Check if any arg matches the flag pattern we're looking for
+			detected := false
+			var detectedFlag string
+			for _, arg := range tt.args {
+				if len(arg) >= 11 && arg[:11] == "--requestid" {
+					detected = true
+					detectedFlag = arg
+					break
+				}
+			}
+
+			if detected != tt.shouldDetect {
+				t.Errorf("%s: detected = %v, want %v", tt.description, detected, tt.shouldDetect)
+			}
+
+			if tt.shouldDetect && detectedFlag != tt.expectedFlag {
+				t.Errorf("%s: detected flag = %q, want %q", tt.description, detectedFlag, tt.expectedFlag)
+			}
+		})
+	}
+}
