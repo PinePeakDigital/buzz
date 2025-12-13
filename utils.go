@@ -332,3 +332,14 @@ func readValueFromStdin() (string, error) {
 
 	return "", fmt.Errorf("no input from stdin")
 }
+
+// detectMisplacedFlag checks if any known flag appears in the args list
+// Returns the first detected flag string, or empty string if none found
+func detectMisplacedFlag(args []string) string {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--requestid") {
+			return arg
+		}
+	}
+	return ""
+}

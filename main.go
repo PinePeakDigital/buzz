@@ -569,15 +569,11 @@ func handleAddCommand() {
 	args := addFlags.Args()
 
 	// Detect if known flags appear after positional arguments and warn the user
-	// Only check for known flags to avoid false positives
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "--requestid") {
-			fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", arg)
-			fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
-			fmt.Fprintf(os.Stderr, "Correct usage: buzz add --requestid=ID goalslug value comment\n")
-			fmt.Fprintln(os.Stderr, "")
-			break
-		}
+	if misplacedFlag := detectMisplacedFlag(args); misplacedFlag != "" {
+		fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", misplacedFlag)
+		fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
+		fmt.Fprintf(os.Stderr, "Correct usage: buzz add --requestid=ID goalslug value comment\n")
+		fmt.Fprintln(os.Stderr, "")
 	}
 
 	// Check arguments: buzz add <goalslug> <value> [comment]
