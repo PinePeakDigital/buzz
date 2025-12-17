@@ -245,6 +245,47 @@ Creates a charge on your Beeminder account. This is useful for self-imposed pena
 
 **Note:** This creates a real charge on your payment method unless you use the `--dryrun` flag.
 
+**buzz create** - Interactively create a new Beeminder goal:
+
+```bash
+buzz create
+```
+
+Launches an interactive prompt that guides you through creating a new goal:
+- **Goal slug**: Unique identifier (alphanumeric, dashes, underscores)
+- **Goal title**: Display name
+- **Goal type**: hustler, biker, fatloser, gainer, inboxer, drinker (defaults to hustler)
+- **Goal units**: e.g., hours, pages, workouts
+- **Goal parameters**: Provide exactly 2 of 3: goaldate (Unix timestamp), goalval (target value), or rate
+
+Example session:
+```
+$ buzz create
+Create a new Beeminder goal
+===========================
+
+Goal slug (alphanumeric, dashes, underscores): reading
+Goal title: Daily Reading
+Common goal types: hustler, biker, fatloser, gainer, inboxer, drinker
+Goal type (default: hustler): hustler
+Goal units (e.g., hours, pages, workouts): pages
+
+You must provide exactly 2 of the following 3 parameters:
+  - goaldate: Target date as Unix timestamp (e.g., 1735689600)
+  - goalval: Target value (e.g., 100)
+  - rate: Rate per day/week/month (e.g., 1)
+Enter 'null' or leave empty to skip a parameter
+
+Goal date (Unix timestamp or 'null'): null
+Goal value (number or 'null'): 365
+Rate (number or 'null'): 1
+
+Creating goal...
+Successfully created goal: reading
+Title: Daily Reading
+URL: https://www.beeminder.com/username/reading
+```
+
 **buzz review** - Interactive review of all goals:
 
 ```bash
