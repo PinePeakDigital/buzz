@@ -1380,6 +1380,9 @@ func promptUser(prompt string) string {
 	if scanner.Scan() {
 		return strings.TrimSpace(scanner.Text())
 	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+	}
 	return ""
 }
 
@@ -1420,12 +1423,9 @@ func handleCreateCommand() {
 
 	// Prompt for goal type
 	fmt.Printf("Common goal types: %s\n", CommonGoalTypes)
-	goalType := ""
-	for goalType == "" {
-		goalType = promptUser("Goal type (default: hustler): ")
-		if goalType == "" {
-			goalType = "hustler"
-		}
+	goalType := promptUser("Goal type (default: hustler): ")
+	if goalType == "" {
+		goalType = "hustler"
 	}
 
 	// Prompt for units
