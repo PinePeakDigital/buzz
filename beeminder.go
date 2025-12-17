@@ -460,6 +460,28 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	return &goal, nil
 }
 
+// FetchGoalsWithDatapoints fetches all goals with datapoints for each goal
+func FetchGoalsWithDatapoints(config *Config) ([]Goal, error) {
+	// First fetch the list of goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Then fetch datapoints for each goal
+	for i := range goals {
+		goalWithDatapoints, err := FetchGoalWithDatapoints(config, goals[i].Slug)
+		if err != nil {
+			// If we fail to fetch datapoints for a goal, continue with the goal without datapoints
+			// rather than failing the entire operation
+			continue
+		}
+		goals[i].Datapoints = goalWithDatapoints.Datapoints
+	}
+
+	return goals, nil
+}
+
 // FetchGoalRawJSON fetches a goal and returns the raw JSON response
 // This preserves all fields from the API, not just the ones defined in the Goal struct
 func FetchGoalRawJSON(config *Config, goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
