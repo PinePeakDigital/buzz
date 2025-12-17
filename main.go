@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -249,6 +250,7 @@ func printHelp() {
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
+	fmt.Println("  buzz create                       Interactively create a new Beeminder goal")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("OPTIONS:")
@@ -296,6 +298,9 @@ func main() {
 		case "charge":
 			handleChargeCommand()
 			return
+		case "create":
+			handleCreateCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -304,7 +309,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, tomorrow, less, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, less, add, refresh, view, review, charge, create, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -922,6 +927,121 @@ func handleChargeCommand() {
 	} else {
 		fmt.Printf("Successfully created charge %s: $%.2f with note: %q for %s\n", ch.ID, ch.Amount, ch.Note, ch.Username)
 	}
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// promptUser prompts the user with a message and returns their input
+func promptUser(prompt string) string {
+	fmt.Print(prompt)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		return strings.TrimSpace(scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+	}
+	return ""
+}
+
+// handleCreateCommand interactively creates a new Beeminder goal
+func handleCreateCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Create a new Beeminder goal")
+	fmt.Println("===========================")
+	fmt.Println()
+
+	// Prompt for slug
+	slug := ""
+	for slug == "" {
+		slug = promptUser("Goal slug (alphanumeric, dashes, underscores): ")
+		if slug == "" {
+			fmt.Println("Slug cannot be empty. Please try again.")
+		}
+	}
+
+	// Prompt for title
+	title := ""
+	for title == "" {
+		title = promptUser("Goal title: ")
+		if title == "" {
+			fmt.Println("Title cannot be empty. Please try again.")
+		}
+	}
+
+	// Prompt for goal type
+	fmt.Printf("Common goal types: %s\n", CommonGoalTypes)
+	goalType := promptUser("Goal type (default: hustler): ")
+	if goalType == "" {
+		goalType = "hustler"
+	}
+
+	// Prompt for units
+	gunits := ""
+	for gunits == "" {
+		gunits = promptUser("Goal units (e.g., hours, pages, workouts): ")
+		if gunits == "" {
+			fmt.Println("Units cannot be empty. Please try again.")
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("You must provide exactly 2 of the following 3 parameters:")
+	fmt.Println("  - goaldate: Target date as Unix timestamp (e.g., 1735689600)")
+	fmt.Println("  - goalval: Target value (e.g., 100)")
+	fmt.Println("  - rate: Rate per day/week/month (e.g., 1)")
+	fmt.Println("Enter 'null' or leave empty to skip a parameter")
+	fmt.Println()
+
+	// Prompt for goaldate
+	goaldate := promptUser("Goal date (Unix timestamp or 'null'): ")
+	if goaldate == "" {
+		goaldate = "null"
+	}
+
+	// Prompt for goalval
+	goalval := promptUser("Goal value (number or 'null'): ")
+	if goalval == "" {
+		goalval = "null"
+	}
+
+	// Prompt for rate
+	rate := promptUser("Rate (number or 'null'): ")
+	if rate == "" {
+		rate = "null"
+	}
+
+	// Validate input
+	if errMsg := validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, rate); errMsg != "" {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", errMsg)
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println("Creating goal...")
+
+	// Create the goal
+	goal, err := CreateGoal(config, slug, title, goalType, gunits, goaldate, goalval, rate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create goal: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully created goal: %s\n", goal.Slug)
+	fmt.Printf("Title: %s\n", goal.Title)
+	fmt.Printf("URL: https://www.beeminder.com/%s/%s\n", config.Username, goal.Slug)
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
