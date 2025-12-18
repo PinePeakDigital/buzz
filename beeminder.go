@@ -309,7 +309,8 @@ func FormatAbsoluteDeadline(losedate int64) string {
 // FormatAbsoluteDeadlineAt formats the losedate timestamp as an absolute date/time string relative to a given time
 // Returns a compact format suitable for table display
 func FormatAbsoluteDeadlineAt(losedate int64, now time.Time) string {
-	t := time.Unix(losedate, 0)
+	// Convert Unix timestamp to the same timezone as now for accurate comparisons
+	t := time.Unix(losedate, 0).In(now.Location())
 	
 	// Get start of today
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
