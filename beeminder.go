@@ -311,23 +311,23 @@ func FormatAbsoluteDeadline(losedate int64) string {
 func FormatAbsoluteDeadlineAt(losedate int64, now time.Time) string {
 	// Convert Unix timestamp to the same timezone as now for accurate comparisons
 	t := time.Unix(losedate, 0).In(now.Location())
-	
+
 	// Get start of today
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// Get start of tomorrow
 	startOfTomorrow := startOfToday.AddDate(0, 0, 1)
-	
+
 	// If it's today, show time only (e.g., "3:04 PM")
 	if !t.Before(startOfToday) && t.Before(startOfTomorrow) {
 		return t.Format("3:04 PM")
 	}
-	
+
 	// If it's tomorrow, show "tomorrow" + time (e.g., "tomorrow 3:04 PM")
 	startOfDayAfterTomorrow := startOfTomorrow.AddDate(0, 0, 1)
 	if !t.Before(startOfTomorrow) && t.Before(startOfDayAfterTomorrow) {
 		return "tomorrow " + t.Format("3:04 PM")
 	}
-	
+
 	// For other dates, show date and time (e.g., "Jan 2 3:04 PM")
 	return t.Format("Jan 2 3:04 PM")
 }
