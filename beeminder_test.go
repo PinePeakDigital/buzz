@@ -521,6 +521,69 @@ func TestFormatDueDate(t *testing.T) {
 	}
 }
 
+// TestFormatAbsoluteDeadline tests the FormatAbsoluteDeadline function
+func TestFormatAbsoluteDeadline(t *testing.T) {
+	// Use a fixed time for deterministic tests
+	// Jan 1, 2025 at 12:00 PM UTC
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		losedate int64
+		expected string
+	}{
+		{
+			name:     "today afternoon",
+			losedate: time.Date(2025, 1, 1, 15, 30, 0, 0, time.UTC).Unix(),
+			expected: "3:30 PM",
+		},
+		{
+			name:     "today evening",
+			losedate: time.Date(2025, 1, 1, 18, 45, 0, 0, time.UTC).Unix(),
+			expected: "6:45 PM",
+		},
+		{
+			name:     "today late night",
+			losedate: time.Date(2025, 1, 1, 23, 59, 0, 0, time.UTC).Unix(),
+			expected: "11:59 PM",
+		},
+		{
+			name:     "tomorrow morning",
+			losedate: time.Date(2025, 1, 2, 9, 0, 0, 0, time.UTC).Unix(),
+			expected: "tomorrow 9:00 AM",
+		},
+		{
+			name:     "tomorrow afternoon",
+			losedate: time.Date(2025, 1, 2, 15, 30, 0, 0, time.UTC).Unix(),
+			expected: "tomorrow 3:30 PM",
+		},
+		{
+			name:     "day after tomorrow",
+			losedate: time.Date(2025, 1, 3, 10, 0, 0, 0, time.UTC).Unix(),
+			expected: "Jan 3 10:00 AM",
+		},
+		{
+			name:     "next week",
+			losedate: time.Date(2025, 1, 8, 14, 15, 0, 0, time.UTC).Unix(),
+			expected: "Jan 8 2:15 PM",
+		},
+		{
+			name:     "next month",
+			losedate: time.Date(2025, 2, 15, 16, 0, 0, 0, time.UTC).Unix(),
+			expected: "Feb 15 4:00 PM",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatAbsoluteDeadlineAt(tt.losedate, now)
+			if result != tt.expected {
+				t.Errorf("FormatAbsoluteDeadlineAt(%d, %v) = %q, want %q", tt.losedate, now, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestIsDueToday tests the IsDueToday function
 func TestIsDueToday(t *testing.T) {
 	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)

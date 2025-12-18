@@ -518,6 +518,7 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	// Calculate column widths for alignment
 	maxSlugWidth := 0
 	maxBareminWidth := 0
+	maxRelativeWidth := 0
 	for _, goal := range filteredGoals {
 		if len(goal.Slug) > maxSlugWidth {
 			maxSlugWidth = len(goal.Slug)
@@ -525,12 +526,17 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 		if len(goal.Baremin) > maxBareminWidth {
 			maxBareminWidth = len(goal.Baremin)
 		}
+		timeframe := FormatDueDate(goal.Losedate)
+		if len(timeframe) > maxRelativeWidth {
+			maxRelativeWidth = len(timeframe)
+		}
 	}
 
 	// Output each goal on a separate line with aligned columns
 	for _, goal := range filteredGoals {
 		timeframe := FormatDueDate(goal.Losedate)
-		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
+		absoluteDeadline := FormatAbsoluteDeadline(goal.Losedate)
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, maxRelativeWidth, timeframe, absoluteDeadline)
 	}
 
 	// Check for updates and display message if available
