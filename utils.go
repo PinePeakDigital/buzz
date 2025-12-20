@@ -38,11 +38,11 @@ func max(a, b int) int {
 func redactAuthToken(s string) string {
 	// Match auth_token in query parameters (e.g., ?auth_token=abc123 or &auth_token=abc123)
 	s = authTokenQueryParamRegex.ReplaceAllString(s, "${1}***")
-	
+
 	// Match auth_token in form data (e.g., auth_token=abc123 in URL-encoded form bodies)
 	// This second pattern handles cases where auth_token appears without ? or & prefix
 	s = authTokenFormDataRegex.ReplaceAllString(s, "auth_token=***")
-	
+
 	return s
 }
 

@@ -424,7 +424,7 @@ func TestLoggingRedactsAuthToken(t *testing.T) {
 		}
 
 		content := string(data)
-		
+
 		// Verify auth_token is redacted
 		if strings.Contains(content, "secret123") {
 			t.Errorf("Log should not contain actual auth token, got: %s", content)
@@ -454,7 +454,7 @@ func TestLoggingRedactsAuthToken(t *testing.T) {
 		}
 
 		content := string(data)
-		
+
 		// Verify auth_token is redacted
 		if strings.Contains(content, "secret456") {
 			t.Errorf("Log should not contain actual auth token, got: %s", content)
@@ -483,7 +483,7 @@ func TestLoggingRedactsAuthToken(t *testing.T) {
 		}
 
 		content := string(data)
-		
+
 		// Verify auth_token is redacted but other params remain
 		if strings.Contains(content, "mysecret") {
 			t.Errorf("Log should not contain actual auth token, got: %s", content)
