@@ -161,10 +161,10 @@ func logToFile(config *Config, message string) {
 
 // LogRequest logs HTTP request details to the configured log file
 func LogRequest(config *Config, method, url string) {
-	logToFile(config, fmt.Sprintf("REQUEST: %s %s", method, url))
+	logToFile(config, fmt.Sprintf("REQUEST: %s %s", method, redactAuthToken(url)))
 }
 
 // LogResponse logs HTTP response details to the configured log file
 func LogResponse(config *Config, statusCode int, url string) {
-	logToFile(config, fmt.Sprintf("RESPONSE: %d %s", statusCode, url))
+	logToFile(config, fmt.Sprintf("RESPONSE: %d %s", statusCode, redactAuthToken(url)))
 }

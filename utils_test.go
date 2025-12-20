@@ -455,3 +455,77 @@ func TestDetectMisplacedFlag(t *testing.T) {
 		})
 	}
 }
+
+// TestRedactAuthToken tests the redactAuthToken function
+func TestRedactAuthToken(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			"query parameter with ?",
+			"https://example.com/api?auth_token=secret123",
+			"https://example.com/api?auth_token=***",
+		},
+		{
+			"query parameter with &",
+			"https://example.com/api?user=alice&auth_token=secret123&other=value",
+			"https://example.com/api?user=alice&auth_token=***&other=value",
+		},
+		{
+			"multiple occurrences",
+			"url1?auth_token=abc123 and url2?auth_token=xyz789",
+			"url1?auth_token=*** and url2?auth_token=***",
+		},
+		{
+			"form data",
+			"auth_token=secret123&username=alice",
+			"auth_token=***&username=alice",
+		},
+		{
+			"no auth token",
+			"https://example.com/api?user=alice",
+			"https://example.com/api?user=alice",
+		},
+		{
+			"auth_token at end of URL",
+			"https://example.com/api?user=alice&auth_token=secret123",
+			"https://example.com/api?user=alice&auth_token=***",
+		},
+		{
+			"auth_token with special characters",
+			"https://example.com/api?auth_token=abc-123_xyz.789",
+			"https://example.com/api?auth_token=***",
+		},
+		{
+			"empty string",
+			"",
+			"",
+		},
+		{
+			"URL with no query parameters",
+			"https://example.com/api",
+			"https://example.com/api",
+		},
+		{
+			"auth_token in URL path (should not match)",
+			"https://example.com/auth_token/endpoint",
+			"https://example.com/auth_token/endpoint",
+		},
+		{
+			"error message with URL",
+			"failed to fetch: GET https://api.beeminder.com/api/v1/users/alice/goals.json?auth_token=abc123",
+			"failed to fetch: GET https://api.beeminder.com/api/v1/users/alice/goals.json?auth_token=***",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := redactAuthToken(tt.input)
+			if result != tt.expected {
+				t.Errorf("redactAuthToken(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
