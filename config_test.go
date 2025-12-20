@@ -401,3 +401,101 @@ func TestConfigWithLogFile(t *testing.T) {
 		}
 	})
 }
+
+// TestLoggingRedactsAuthToken tests that auth tokens are redacted in logs
+func TestLoggingRedactsAuthToken(t *testing.T) {
+	t.Run("LogRequest redacts auth_token from URL", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logFile := filepath.Join(tmpDir, "test_log.txt")
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "secret123",
+			LogFile:   logFile,
+		}
+
+		// Log a request with auth_token in URL
+		LogRequest(config, "GET", "https://api.example.com/goals?auth_token=secret123")
+
+		// Read log file
+		data, err := os.ReadFile(logFile)
+		if err != nil {
+			t.Fatalf("Failed to read log file: %v", err)
+		}
+
+		content := string(data)
+
+		// Verify auth_token is redacted
+		if strings.Contains(content, "secret123") {
+			t.Errorf("Log should not contain actual auth token, got: %s", content)
+		}
+		if !strings.Contains(content, "auth_token=***") {
+			t.Errorf("Log should contain redacted auth token (auth_token=***), got: %s", content)
+		}
+	})
+
+	t.Run("LogResponse redacts auth_token from URL", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logFile := filepath.Join(tmpDir, "test_log.txt")
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "secret456",
+			LogFile:   logFile,
+		}
+
+		// Log a response with auth_token in URL
+		LogResponse(config, 200, "https://api.example.com/goals?auth_token=secret456")
+
+		// Read log file
+		data, err := os.ReadFile(logFile)
+		if err != nil {
+			t.Fatalf("Failed to read log file: %v", err)
+		}
+
+		content := string(data)
+
+		// Verify auth_token is redacted
+		if strings.Contains(content, "secret456") {
+			t.Errorf("Log should not contain actual auth token, got: %s", content)
+		}
+		if !strings.Contains(content, "auth_token=***") {
+			t.Errorf("Log should contain redacted auth token (auth_token=***), got: %s", content)
+		}
+	})
+
+	t.Run("LogRequest redacts auth_token from middle of URL", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logFile := filepath.Join(tmpDir, "test_log.txt")
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "mysecret",
+			LogFile:   logFile,
+		}
+
+		// Log request with auth_token in middle of query params
+		LogRequest(config, "GET", "https://api.example.com/goals?user=alice&auth_token=mysecret&other=value")
+
+		data, err := os.ReadFile(logFile)
+		if err != nil {
+			t.Fatalf("Failed to read log file: %v", err)
+		}
+
+		content := string(data)
+
+		// Verify auth_token is redacted but other params remain
+		if strings.Contains(content, "mysecret") {
+			t.Errorf("Log should not contain actual auth token, got: %s", content)
+		}
+		if !strings.Contains(content, "user=alice") {
+			t.Errorf("Log should still contain other parameters, got: %s", content)
+		}
+		if !strings.Contains(content, "auth_token=***") {
+			t.Errorf("Log should contain redacted auth token, got: %s", content)
+		}
+		if !strings.Contains(content, "other=value") {
+			t.Errorf("Log should still contain parameters after auth_token, got: %s", content)
+		}
+	})
+}

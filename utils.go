@@ -4,8 +4,17 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
+)
+
+// Compile regex patterns once at package initialization for efficiency
+var (
+	// authTokenQueryParamRegex matches auth_token in query parameters
+	authTokenQueryParamRegex = regexp.MustCompile(`([?&]auth_token=)[^&\s"]+`)
+	// authTokenFormDataRegex matches auth_token in form data
+	authTokenFormDataRegex = regexp.MustCompile(`\bauth_token=([^&\s"]+)`)
 )
 
 // Helper functions for min/max
@@ -21,6 +30,29 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// redactAuthToken redacts auth_token values from strings (URLs, error messages, logs)
+// This prevents accidental exposure of authentication credentials in logs and error output.
+// It replaces auth_token parameter values in URLs and form data with "***"
+func redactAuthToken(s string) string {
+	// Match auth_token in query parameters (e.g., ?auth_token=abc123 or &auth_token=abc123)
+	s = authTokenQueryParamRegex.ReplaceAllString(s, "${1}***")
+
+	// Match auth_token in form data (e.g., auth_token=abc123 in URL-encoded form bodies)
+	// This second pattern handles cases where auth_token appears without ? or & prefix
+	s = authTokenFormDataRegex.ReplaceAllString(s, "auth_token=***")
+
+	return s
+}
+
+// redactError redacts auth tokens from error messages
+// Use this when displaying errors to users to prevent exposing authentication credentials
+func redactError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return redactAuthToken(err.Error())
 }
 
 // calculateColumns determines the optimal number of columns based on terminal width

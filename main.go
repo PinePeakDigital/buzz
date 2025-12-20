@@ -313,7 +313,7 @@ func main() {
 	// No arguments, run the interactive TUI
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+		fmt.Printf("Alas, there's been an error: %s", redactError(err))
 		os.Exit(1)
 	}
 }
@@ -330,7 +330,7 @@ func handleNextCommand() {
 			fmt.Println("Usage: buzz next [-w|--watch]")
 			return
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
 		fmt.Fprintln(os.Stderr, "Usage: buzz next [-w|--watch]")
 		os.Exit(2)
 	}
@@ -348,7 +348,7 @@ func handleNextCommand() {
 	} else {
 		// One-shot mode - display and exit
 		if err := displayNextGoal(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 			os.Exit(1)
 		}
 	}
@@ -440,7 +440,7 @@ func clearScreen() {
 func displayNextGoalWithTimestamp() {
 	fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
 	if err := displayNextGoal(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 	}
 	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
@@ -487,14 +487,14 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
+		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
 	// Fetch goals
 	goals, err := FetchGoals(config)
 	if err != nil {
-		fmt.Printf("Error: Failed to fetch goals: %v\n", err)
+		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
@@ -561,7 +561,7 @@ func handleAddCommand() {
 			fmt.Println("Note: Flags must come BEFORE positional arguments.")
 			return
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
 		printAddUsageAndExit("Invalid flags")
 	}
 
@@ -614,7 +614,7 @@ func handleAddCommand() {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
+		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
@@ -640,14 +640,14 @@ func handleAddCommand() {
 	// Create the datapoint
 	err = CreateDatapoint(config, goalSlug, timestamp, value, comment, *requestid)
 	if err != nil {
-		fmt.Printf("Error: Failed to add datapoint: %v\n", err)
+		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
 	// Signal any running TUI instances to refresh
 	if err := createRefreshFlag(); err != nil {
 		// Don't fail the command if flag creation fails
-		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %s\n", redactError(err))
 	}
 
 	successMsg := fmt.Sprintf("Successfully added datapoint to %s: value=%s, comment=\"%s\"", goalSlug, value, comment)
@@ -663,7 +663,7 @@ func handleAddCommand() {
 	goal, err := FetchGoal(config, goalSlug)
 	if err != nil {
 		// Don't fail the command if fetching limsum fails, just skip displaying it
-		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %s\n", redactError(err))
 	} else {
 		fmt.Printf("Limsum: %s\n", goal.Limsum)
 	}
@@ -691,14 +691,14 @@ func handleRefreshCommand() {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Printf("Error: Failed to load config: %v\n", err)
+		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
 	// Refresh the goal
 	queued, err := RefreshGoal(config, goalSlug)
 	if err != nil {
-		fmt.Printf("Error: Failed to refresh goal: %v\n", err)
+		fmt.Printf("Error: Failed to refresh goal: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
@@ -725,7 +725,7 @@ func handleViewCommand() {
 			fmt.Println("Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
 			return
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
 		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
 		os.Exit(2)
 	}
@@ -769,14 +769,14 @@ func handleViewCommand() {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
 	// If --web flag is present, open in browser and exit
 	if webFlag {
 		if err := openBrowser(config, goalSlug); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to open browser: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: Failed to open browser: %s\n", redactError(err))
 			os.Exit(1)
 		}
 		return
@@ -786,14 +786,14 @@ func handleViewCommand() {
 	if jsonFlag {
 		rawJSON, err := FetchGoalRawJSON(config, goalSlug, datapointsFlag)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 			os.Exit(1)
 		}
 
 		// Pretty print the raw JSON
 		var prettyJSON bytes.Buffer
 		if err := json.Indent(&prettyJSON, rawJSON, "", "  "); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to format JSON: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: Failed to format JSON: %s\n", redactError(err))
 			os.Exit(1)
 		}
 		fmt.Println(prettyJSON.String())
@@ -808,7 +808,7 @@ func handleViewCommand() {
 	// Fetch the goal for human-readable output
 	goal, err := FetchGoal(config, goalSlug)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
@@ -830,14 +830,14 @@ func handleReviewCommand() {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
 	// Fetch goals
 	goals, err := FetchGoals(config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
@@ -852,7 +852,7 @@ func handleReviewCommand() {
 	// Launch the interactive review TUI
 	p := tea.NewProgram(initialReviewModel(goals, config), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
 	}
 }
@@ -906,14 +906,14 @@ func handleChargeCommand() {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
 	// Create the charge (API returns the created/dry-run charge)
 	ch, err := CreateCharge(config, amount, note, dryrun)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to create charge: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to create charge: %s\n", redactError(err))
 		os.Exit(1)
 	}
 
