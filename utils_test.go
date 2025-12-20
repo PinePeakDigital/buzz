@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -525,6 +526,45 @@ func TestRedactAuthToken(t *testing.T) {
 			result := redactAuthToken(tt.input)
 			if result != tt.expected {
 				t.Errorf("redactAuthToken(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestRedactError tests the redactError function
+func TestRedactError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			"nil error",
+			nil,
+			"",
+		},
+		{
+			"error without auth token",
+			fmt.Errorf("failed to connect"),
+			"failed to connect",
+		},
+		{
+			"error with auth token in URL",
+			fmt.Errorf("Get \"https://example.com/api?auth_token=secret123\": connection failed"),
+			"Get \"https://example.com/api?auth_token=***\": connection failed",
+		},
+		{
+			"wrapped error with auth token",
+			fmt.Errorf("failed to fetch: %w", fmt.Errorf("Get \"https://api.com/v1/users/alice/goals.json?auth_token=abc123\": dial tcp: timeout")),
+			"failed to fetch: Get \"https://api.com/v1/users/alice/goals.json?auth_token=***\": dial tcp: timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := redactError(tt.err)
+			if result != tt.expected {
+				t.Errorf("redactError(%v) = %q, want %q", tt.err, result, tt.expected)
 			}
 		})
 	}

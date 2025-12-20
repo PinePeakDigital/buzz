@@ -29,16 +29,26 @@ func max(a, b int) int {
 // It replaces auth_token parameter values in URLs and form data with "***"
 func redactAuthToken(s string) string {
 	// Match auth_token in query parameters (e.g., ?auth_token=abc123 or &auth_token=abc123)
-	re := regexp.MustCompile(`([?&]auth_token=)[^&\s]+`)
+	// Allow for various terminators: &, whitespace, quotes, or end of string
+	re := regexp.MustCompile(`([?&]auth_token=)[^&\s"]+`)
 	s = re.ReplaceAllString(s, "${1}***")
 	
 	// Match auth_token in form data (e.g., auth_token=abc123 in URL-encoded form bodies)
-	// This pattern looks for auth_token= followed by characters that aren't whitespace or &
+	// This pattern looks for auth_token= followed by characters that aren't whitespace, &, or quotes
 	// at word boundaries to avoid matching within other parameter names
-	re2 := regexp.MustCompile(`\bauth_token=([^&\s]+)`)
+	re2 := regexp.MustCompile(`\bauth_token=([^&\s"]+)`)
 	s = re2.ReplaceAllString(s, "auth_token=***")
 	
 	return s
+}
+
+// redactError redacts auth tokens from error messages
+// Use this when displaying errors to users to prevent exposing authentication credentials
+func redactError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return redactAuthToken(err.Error())
 }
 
 // calculateColumns determines the optimal number of columns based on terminal width
