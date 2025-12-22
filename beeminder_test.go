@@ -1522,6 +1522,12 @@ expected: 0,
 valid:    false,
 },
 {
+			name:     "single character - just unit",
+			input:    "h",
+			expected: 0,
+			valid:    false,
+		},
+{
 name:     "invalid unit",
 input:    "5m",
 expected: 0,

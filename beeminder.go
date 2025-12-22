@@ -237,7 +237,8 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 // Supported formats: Nh (hours), Nd (days), Nw (weeks) where N is a number
 // Returns the duration and true on success, 0 and false on error
 func ParseDuration(durationStr string) (time.Duration, bool) {
-	if durationStr == "" {
+	if len(durationStr) < 2 {
+		// Need at least one character for number and one for unit
 		return 0, false
 	}
 
@@ -276,8 +277,8 @@ func IsDueWithinAt(losedate int64, duration time.Duration, now time.Time) bool {
 	goalTime := time.Unix(losedate, 0)
 	cutoffTime := now.Add(duration)
 	
-	// Goal is due within the duration if it's due before or at the cutoff time
-	return goalTime.Before(cutoffTime) || goalTime.Equal(cutoffTime)
+	// Goal is due within the duration if it's not after the cutoff time
+	return !goalTime.After(cutoffTime)
 }
 
 // IsDoLess checks if a goal is a "do-less" type goal based on goal_type string.
