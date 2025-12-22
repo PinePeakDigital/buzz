@@ -49,39 +49,33 @@ jobs:
             echo "Using manual version override: ${{ github.event.inputs.version }}"
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Version to release: ${{ github.event.inputs.version }}"
           elif [ -n "${{ steps.semver.outputs.next }}" ]; then
             echo "Using auto-calculated version: ${{ steps.semver.outputs.next }}"
             echo "version=${{ steps.semver.outputs.next }}" >> $GITHUB_OUTPUT
             echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Version to release: ${{ steps.semver.outputs.next }}"
           else
             echo "No conventional commits found and no manual version provided - skipping release"
             echo "version=" >> $GITHUB_OUTPUT
             echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check if release is needed
-        id: check
-        run: |
-          echo "skip=${{ steps.version.outputs.skip }}" >> $GITHUB_OUTPUT
-          if [ "${{ steps.version.outputs.skip }}" = "false" ]; then
-            echo "Version to release: ${{ steps.version.outputs.version }}"
-          fi
-
       - name: Set up Go
-        if: steps.check.outputs.skip == 'false'
+        if: steps.version.outputs.skip == 'false'
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Build cross-platform binaries
-        if: steps.check.outputs.skip == 'false'
+        if: steps.version.outputs.skip == 'false'
         run: ./scripts/build.sh
         env:
           VERSION: ${{ steps.version.outputs.version }}
 
       - name: Create Release
-        if: steps.check.outputs.skip == 'false'
+        if: steps.version.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.version }}
