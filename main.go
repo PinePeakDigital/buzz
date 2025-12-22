@@ -515,22 +515,45 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 		return
 	}
 
-	// Calculate column widths for alignment
+	// Pre-calculate formatted values to avoid redundant formatting calls
+	type goalDisplay struct {
+		goal             Goal
+		timeframe        string
+		absoluteDeadline string
+	}
+
+	displays := make([]goalDisplay, len(filteredGoals))
 	maxSlugWidth := 0
 	maxBareminWidth := 0
-	for _, goal := range filteredGoals {
+	maxRelativeWidth := 0
+
+	for i, goal := range filteredGoals {
+		timeframe := FormatDueDate(goal.Losedate)
+		absoluteDeadline := FormatAbsoluteDeadline(goal.Losedate)
+		displays[i] = goalDisplay{
+			goal:             goal,
+			timeframe:        timeframe,
+			absoluteDeadline: absoluteDeadline,
+		}
+
 		if len(goal.Slug) > maxSlugWidth {
 			maxSlugWidth = len(goal.Slug)
 		}
 		if len(goal.Baremin) > maxBareminWidth {
 			maxBareminWidth = len(goal.Baremin)
 		}
+		if len(timeframe) > maxRelativeWidth {
+			maxRelativeWidth = len(timeframe)
+		}
 	}
 
 	// Output each goal on a separate line with aligned columns
-	for _, goal := range filteredGoals {
-		timeframe := FormatDueDate(goal.Losedate)
-		fmt.Printf("%-*s  %-*s  %s\n", maxSlugWidth, goal.Slug, maxBareminWidth, goal.Baremin, timeframe)
+	for _, display := range displays {
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+			maxSlugWidth, display.goal.Slug,
+			maxBareminWidth, display.goal.Baremin,
+			maxRelativeWidth, display.timeframe,
+			display.absoluteDeadline)
 	}
 
 	// Check for updates and display message if available

@@ -521,6 +521,139 @@ func TestFormatDueDate(t *testing.T) {
 	}
 }
 
+// TestFormatAbsoluteDeadline tests the FormatAbsoluteDeadline function
+func TestFormatAbsoluteDeadline(t *testing.T) {
+	// Use a fixed time for deterministic tests
+	// Jan 1, 2025 at 12:00 PM UTC
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		losedate int64
+		expected string
+	}{
+		{
+			name:     "today afternoon",
+			losedate: time.Date(2025, 1, 1, 15, 30, 0, 0, time.UTC).Unix(),
+			expected: "3:30 PM",
+		},
+		{
+			name:     "today evening",
+			losedate: time.Date(2025, 1, 1, 18, 45, 0, 0, time.UTC).Unix(),
+			expected: "6:45 PM",
+		},
+		{
+			name:     "today late night",
+			losedate: time.Date(2025, 1, 1, 23, 59, 0, 0, time.UTC).Unix(),
+			expected: "11:59 PM",
+		},
+		{
+			name:     "tomorrow morning",
+			losedate: time.Date(2025, 1, 2, 9, 0, 0, 0, time.UTC).Unix(),
+			expected: "tomorrow 9:00 AM",
+		},
+		{
+			name:     "tomorrow afternoon",
+			losedate: time.Date(2025, 1, 2, 15, 30, 0, 0, time.UTC).Unix(),
+			expected: "tomorrow 3:30 PM",
+		},
+		{
+			name:     "day after tomorrow",
+			losedate: time.Date(2025, 1, 3, 10, 0, 0, 0, time.UTC).Unix(),
+			expected: "Jan 3 10:00 AM",
+		},
+		{
+			name:     "next week",
+			losedate: time.Date(2025, 1, 8, 14, 15, 0, 0, time.UTC).Unix(),
+			expected: "Jan 8 2:15 PM",
+		},
+		{
+			name:     "next month",
+			losedate: time.Date(2025, 2, 15, 16, 0, 0, 0, time.UTC).Unix(),
+			expected: "Feb 15 4:00 PM",
+		},
+		{
+			name:     "overdue by hours",
+			losedate: time.Date(2025, 1, 1, 8, 30, 0, 0, time.UTC).Unix(),
+			expected: "8:30 AM",
+		},
+		{
+			name:     "overdue by 1 day",
+			losedate: time.Date(2024, 12, 31, 14, 0, 0, 0, time.UTC).Unix(),
+			expected: "Dec 31 2:00 PM",
+		},
+		{
+			name:     "overdue by several days",
+			losedate: time.Date(2024, 12, 25, 10, 0, 0, 0, time.UTC).Unix(),
+			expected: "Dec 25 10:00 AM",
+		},
+		{
+			name:     "overdue by weeks",
+			losedate: time.Date(2024, 12, 1, 9, 0, 0, 0, time.UTC).Unix(),
+			expected: "Dec 1 9:00 AM",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatAbsoluteDeadlineAt(tt.losedate, now)
+			if result != tt.expected {
+				t.Errorf("FormatAbsoluteDeadlineAt(%d, %v) = %q, want %q", tt.losedate, now, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatAbsoluteDeadlineYearBoundary tests edge cases around year boundaries
+func TestFormatAbsoluteDeadlineYearBoundary(t *testing.T) {
+	tests := []struct {
+		name     string
+		now      time.Time
+		losedate time.Time
+		expected string
+	}{
+		{
+			name:     "Dec 31 today, Jan 1 tomorrow",
+			now:      time.Date(2024, 12, 31, 12, 0, 0, 0, time.UTC),
+			losedate: time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC),
+			expected: "tomorrow 10:00 AM",
+		},
+		{
+			name:     "Dec 31 evening is today",
+			now:      time.Date(2024, 12, 31, 12, 0, 0, 0, time.UTC),
+			losedate: time.Date(2024, 12, 31, 18, 30, 0, 0, time.UTC),
+			expected: "6:30 PM",
+		},
+		{
+			name:     "Jan 1 is day after tomorrow when now is Dec 30",
+			now:      time.Date(2024, 12, 30, 12, 0, 0, 0, time.UTC),
+			losedate: time.Date(2025, 1, 1, 14, 0, 0, 0, time.UTC),
+			expected: "Jan 1 2:00 PM",
+		},
+		{
+			name:     "next year date shows correctly",
+			now:      time.Date(2024, 12, 15, 12, 0, 0, 0, time.UTC),
+			losedate: time.Date(2025, 1, 15, 9, 0, 0, 0, time.UTC),
+			expected: "Jan 15 9:00 AM",
+		},
+		{
+			name:     "previous year overdue shows correctly",
+			now:      time.Date(2025, 1, 5, 12, 0, 0, 0, time.UTC),
+			losedate: time.Date(2024, 12, 28, 10, 0, 0, 0, time.UTC),
+			expected: "Dec 28 10:00 AM",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatAbsoluteDeadlineAt(tt.losedate.Unix(), tt.now)
+			if result != tt.expected {
+				t.Errorf("FormatAbsoluteDeadlineAt(%v, %v) = %q, want %q", tt.losedate, tt.now, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestIsDueToday tests the IsDueToday function
 func TestIsDueToday(t *testing.T) {
 	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)

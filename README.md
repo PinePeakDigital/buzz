@@ -128,20 +128,24 @@ In watch mode, the display updates automatically and shows a timestamp. Press Ct
 ```bash
 buzz today
 # Example output:
-# exercise  +1 in 0 days  5h
-# reading   +1 in 0 days  8h
-# water     +3 in 0 days  10h
+# exercise  +1 in 0 days  5h       5:30 PM
+# reading   +1 in 0 days  8h       8:45 PM
+# water     +3 in 0 days  10h      11:00 PM
 ```
 
-Displays goals in a table format with columns aligned for easy scanning. Goals are sorted by due date, then by stakes, then by name.
+Displays goals in a table format with columns aligned for easy scanning. Goals are sorted by due date, then by stakes, then by name. The output includes:
+- Goal slug (name)
+- Amount needed (delta value)
+- Relative deadline (time remaining)
+- Absolute deadline (date and time)
 
 **buzz tomorrow** - Output all goals due tomorrow:
 
 ```bash
 buzz tomorrow
 # Example output:
-# coding    +2 within 1 day  1d 2h
-# writing   +1 within 1 day  1d 5h
+# coding    +2 within 1 day  1d   tomorrow 2:30 PM
+# writing   +1 within 1 day  1d   tomorrow 5:45 PM
 ```
 
 Shows all goals that are due tomorrow in the same format as `buzz today`.
