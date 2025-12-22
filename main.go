@@ -235,6 +235,7 @@ func printHelp() {
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
+	fmt.Println("  buzz due <duration>               Output all goals due within duration (e.g., 1h, 5d, 1w)")
 	fmt.Println("  buzz less                         Output all do-less type goals")
 	fmt.Println("  buzz add [--requestid=<id>] <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
@@ -278,6 +279,9 @@ func main() {
 		case "tomorrow":
 			handleTomorrowCommand()
 			return
+		case "due":
+			handleDueCommand()
+			return
 		case "less":
 			handleLessCommand()
 			return
@@ -304,7 +308,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, tomorrow, less, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, today, tomorrow, due, less, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -473,6 +477,39 @@ func handleTomorrowCommand() {
 // handleLessCommand outputs all do-less type goals
 func handleLessCommand() {
 	handleFilteredCommand("do-less", isDoLessFilter)
+}
+
+// handleDueCommand outputs all goals due within the specified duration
+func handleDueCommand() {
+	// Check arguments: buzz due <duration>
+	if len(os.Args) < 3 {
+		fmt.Println("Error: Missing required duration argument")
+		fmt.Println("Usage: buzz due <duration>")
+		fmt.Println("  Examples: buzz due 1h, buzz due 5d, buzz due 1w")
+		fmt.Println("  Supported units: h (hours), d (days), w (weeks)")
+		os.Exit(1)
+	}
+
+	durationStr := os.Args[2]
+
+	// Parse the duration
+	duration, ok := ParseDuration(durationStr)
+	if !ok {
+		fmt.Printf("Error: Invalid duration format: %s\n", durationStr)
+		fmt.Println("Usage: buzz due <duration>")
+		fmt.Println("  Examples: buzz due 1h, buzz due 5d, buzz due 1w")
+		fmt.Println("  Supported units: h (hours), d (days), w (weeks)")
+		os.Exit(1)
+	}
+
+	// Create filter function that captures the duration
+	isDueWithinFilter := func(g Goal) bool {
+		return IsDueWithin(g.Losedate, duration)
+	}
+
+	// Format the filter name for display
+	filterName := fmt.Sprintf("due within %s", durationStr)
+	handleFilteredCommand(filterName, isDueWithinFilter)
 }
 
 // handleFilteredCommand is a shared helper that outputs all goals matching the given filter
