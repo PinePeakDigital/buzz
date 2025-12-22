@@ -233,6 +233,53 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 	return !goalTime.Before(startOfTomorrow) && goalTime.Before(startOfDayAfterTomorrow)
 }
 
+// ParseDuration parses a duration string (e.g., "1h", "5d", "1w") and returns time.Duration
+// Supported formats: Nh (hours), Nd (days), Nw (weeks) where N is a number
+// Returns the duration and true on success, 0 and false on error
+func ParseDuration(durationStr string) (time.Duration, bool) {
+	if durationStr == "" {
+		return 0, false
+	}
+
+	// Get the unit (last character)
+	unit := durationStr[len(durationStr)-1]
+	
+	// Get the numeric part
+	numStr := durationStr[:len(durationStr)-1]
+	
+	// Parse the number
+	var num float64
+	if _, err := fmt.Sscanf(numStr, "%f", &num); err != nil {
+		return 0, false
+	}
+
+	// Convert to duration based on unit
+	switch unit {
+	case 'h', 'H':
+		return time.Duration(num * float64(time.Hour)), true
+	case 'd', 'D':
+		return time.Duration(num * 24 * float64(time.Hour)), true
+	case 'w', 'W':
+		return time.Duration(num * 7 * 24 * float64(time.Hour)), true
+	default:
+		return 0, false
+	}
+}
+
+// IsDueWithin checks if a goal is due within the specified duration from now
+func IsDueWithin(losedate int64, duration time.Duration) bool {
+	return IsDueWithinAt(losedate, duration, time.Now())
+}
+
+// IsDueWithinAt checks if a goal is due within the specified duration from the given time
+func IsDueWithinAt(losedate int64, duration time.Duration, now time.Time) bool {
+	goalTime := time.Unix(losedate, 0)
+	cutoffTime := now.Add(duration)
+	
+	// Goal is due within the duration if it's due before or at the cutoff time
+	return goalTime.Before(cutoffTime) || goalTime.Equal(cutoffTime)
+}
+
 // IsDoLess checks if a goal is a "do-less" type goal based on goal_type string.
 // In Beeminder, do-less goals have goal_type "drinker".
 // The naming comes from Beeminder's internal convention where goal types
