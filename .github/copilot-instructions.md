@@ -1,5 +1,51 @@
 # GitHub Copilot Instructions
 
+## Check Issue Comments Before Implementation
+
+When you are assigned to an issue, **ALWAYS** check all comments on the issue before proceeding with implementation. This ensures you have the complete context and latest requirements.
+
+### How to Check Issue Comments
+
+Use the GitHub MCP tools to retrieve all comments on the issue:
+
+```
+github-mcp-server-issue_read
+  method: get_comments
+  owner: <repo-owner>
+  repo: <repo-name>
+  issue_number: <issue-number>
+```
+
+### Important Guidelines
+
+- **Read all comments** from newest to oldest to understand the full conversation
+- Look for:
+  - Clarifications of the original requirements
+  - Additional context or edge cases to consider
+  - User feedback or suggestions
+  - Changes to the scope or priorities
+  - Related issues or PRs that might be relevant
+- If there are many comments, pay special attention to:
+  - Comments from the issue author or repository maintainers
+  - Recent comments (within the last few days)
+  - Comments that explicitly mention implementation details or requirements
+- **Ask for clarification** if comments contradict each other or if requirements are unclear
+- Update your implementation plan based on insights from the comments
+
+### Example Usage
+
+For the repository `PinePeakDigital/buzz` with issue #123:
+
+```
+github-mcp-server-issue_read
+  method: get_comments
+  owner: PinePeakDigital
+  repo: buzz
+  issue_number: 123
+```
+
+This will return all comments on the issue, which you should review before starting implementation.
+
 ## Commit Message Format
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages. When suggesting commit messages, always follow this format:
