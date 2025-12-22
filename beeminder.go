@@ -244,10 +244,10 @@ func ParseDuration(durationStr string) (time.Duration, bool) {
 
 	// Get the unit (last character)
 	unit := durationStr[len(durationStr)-1]
-	
+
 	// Get the numeric part
 	numStr := durationStr[:len(durationStr)-1]
-	
+
 	// Parse the number
 	var num float64
 	if _, err := fmt.Sscanf(numStr, "%f", &num); err != nil {
@@ -276,7 +276,7 @@ func IsDueWithin(losedate int64, duration time.Duration) bool {
 func IsDueWithinAt(losedate int64, duration time.Duration, now time.Time) bool {
 	goalTime := time.Unix(losedate, 0)
 	cutoffTime := now.Add(duration)
-	
+
 	// Goal is due within the duration if it's not after the cutoff time
 	return !goalTime.After(cutoffTime)
 }

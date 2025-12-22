@@ -1455,185 +1455,185 @@ func TestCreateDatapointWithRequestID(t *testing.T) {
 
 // TestParseDuration tests the ParseDuration function
 func TestParseDuration(t *testing.T) {
-tests := []struct {
-name     string
-input    string
-expected time.Duration
-valid    bool
-}{
-{
-name:     "1 hour",
-input:    "1h",
-expected: 1 * time.Hour,
-valid:    true,
-},
-{
-name:     "5 days",
-input:    "5d",
-expected: 5 * 24 * time.Hour,
-valid:    true,
-},
-{
-name:     "1 week",
-input:    "1w",
-expected: 7 * 24 * time.Hour,
-valid:    true,
-},
-{
-name:     "2 weeks",
-input:    "2w",
-expected: 14 * 24 * time.Hour,
-valid:    true,
-},
-{
-name:     "24 hours",
-input:    "24h",
-expected: 24 * time.Hour,
-valid:    true,
-},
-{
-name:     "0.5 hours",
-input:    "0.5h",
-expected: 30 * time.Minute,
-valid:    true,
-},
-{
-name:     "uppercase H",
-input:    "2H",
-expected: 2 * time.Hour,
-valid:    true,
-},
-{
-name:     "uppercase D",
-input:    "3D",
-expected: 3 * 24 * time.Hour,
-valid:    true,
-},
-{
-name:     "uppercase W",
-input:    "1W",
-expected: 7 * 24 * time.Hour,
-valid:    true,
-},
-{
-name:     "empty string",
-input:    "",
-expected: 0,
-valid:    false,
-},
-{
+	tests := []struct {
+		name     string
+		input    string
+		expected time.Duration
+		valid    bool
+	}{
+		{
+			name:     "1 hour",
+			input:    "1h",
+			expected: 1 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "5 days",
+			input:    "5d",
+			expected: 5 * 24 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "1 week",
+			input:    "1w",
+			expected: 7 * 24 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "2 weeks",
+			input:    "2w",
+			expected: 14 * 24 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "24 hours",
+			input:    "24h",
+			expected: 24 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "0.5 hours",
+			input:    "0.5h",
+			expected: 30 * time.Minute,
+			valid:    true,
+		},
+		{
+			name:     "uppercase H",
+			input:    "2H",
+			expected: 2 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "uppercase D",
+			input:    "3D",
+			expected: 3 * 24 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "uppercase W",
+			input:    "1W",
+			expected: 7 * 24 * time.Hour,
+			valid:    true,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: 0,
+			valid:    false,
+		},
+		{
 			name:     "single character - just unit",
 			input:    "h",
 			expected: 0,
 			valid:    false,
 		},
-{
-name:     "invalid unit",
-input:    "5m",
-expected: 0,
-valid:    false,
-},
-{
-name:     "no unit",
-input:    "5",
-expected: 0,
-valid:    false,
-},
-{
-name:     "invalid number",
-input:    "xh",
-expected: 0,
-valid:    false,
-},
-}
+		{
+			name:     "invalid unit",
+			input:    "5m",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "no unit",
+			input:    "5",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "invalid number",
+			input:    "xh",
+			expected: 0,
+			valid:    false,
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-result, ok := ParseDuration(tt.input)
-if ok != tt.valid {
-t.Errorf("ParseDuration(%q) valid = %v, want %v", tt.input, ok, tt.valid)
-}
-if ok && result != tt.expected {
-t.Errorf("ParseDuration(%q) = %v, want %v", tt.input, result, tt.expected)
-}
-})
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := ParseDuration(tt.input)
+			if ok != tt.valid {
+				t.Errorf("ParseDuration(%q) valid = %v, want %v", tt.input, ok, tt.valid)
+			}
+			if ok && result != tt.expected {
+				t.Errorf("ParseDuration(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
 }
 
 // TestIsDueWithin tests the IsDueWithin function
 func TestIsDueWithin(t *testing.T) {
-// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
-now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	// Use a fixed time for deterministic tests (2025-01-15 14:00:00 UTC)
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
 
-tests := []struct {
-name     string
-losedate int64
-duration time.Duration
-expected bool
-}{
-{
-name:     "due in 30 minutes within 1 hour",
-losedate: now.Add(30 * time.Minute).Unix(),
-duration: 1 * time.Hour,
-expected: true,
-},
-{
-name:     "due in 2 hours NOT within 1 hour",
-losedate: now.Add(2 * time.Hour).Unix(),
-duration: 1 * time.Hour,
-expected: false,
-},
-{
-name:     "due exactly at cutoff",
-losedate: now.Add(1 * time.Hour).Unix(),
-duration: 1 * time.Hour,
-expected: true,
-},
-{
-name:     "due tomorrow within 2 days",
-losedate: now.Add(24 * time.Hour).Unix(),
-duration: 2 * 24 * time.Hour,
-expected: true,
-},
-{
-name:     "due in 3 days NOT within 2 days",
-losedate: now.Add(3 * 24 * time.Hour).Unix(),
-duration: 2 * 24 * time.Hour,
-expected: false,
-},
-{
-name:     "due in 1 week within 2 weeks",
-losedate: now.Add(7 * 24 * time.Hour).Unix(),
-duration: 14 * 24 * time.Hour,
-expected: true,
-},
-{
-name:     "overdue goal within 1 hour",
-losedate: now.Add(-1 * time.Hour).Unix(),
-duration: 1 * time.Hour,
-expected: true,
-},
-{
-name:     "overdue goal within 1 day",
-losedate: now.Add(-12 * time.Hour).Unix(),
-duration: 24 * time.Hour,
-expected: true,
-},
-{
-name:     "due now within 1 hour",
-losedate: now.Unix(),
-duration: 1 * time.Hour,
-expected: true,
-},
-}
+	tests := []struct {
+		name     string
+		losedate int64
+		duration time.Duration
+		expected bool
+	}{
+		{
+			name:     "due in 30 minutes within 1 hour",
+			losedate: now.Add(30 * time.Minute).Unix(),
+			duration: 1 * time.Hour,
+			expected: true,
+		},
+		{
+			name:     "due in 2 hours NOT within 1 hour",
+			losedate: now.Add(2 * time.Hour).Unix(),
+			duration: 1 * time.Hour,
+			expected: false,
+		},
+		{
+			name:     "due exactly at cutoff",
+			losedate: now.Add(1 * time.Hour).Unix(),
+			duration: 1 * time.Hour,
+			expected: true,
+		},
+		{
+			name:     "due tomorrow within 2 days",
+			losedate: now.Add(24 * time.Hour).Unix(),
+			duration: 2 * 24 * time.Hour,
+			expected: true,
+		},
+		{
+			name:     "due in 3 days NOT within 2 days",
+			losedate: now.Add(3 * 24 * time.Hour).Unix(),
+			duration: 2 * 24 * time.Hour,
+			expected: false,
+		},
+		{
+			name:     "due in 1 week within 2 weeks",
+			losedate: now.Add(7 * 24 * time.Hour).Unix(),
+			duration: 14 * 24 * time.Hour,
+			expected: true,
+		},
+		{
+			name:     "overdue goal within 1 hour",
+			losedate: now.Add(-1 * time.Hour).Unix(),
+			duration: 1 * time.Hour,
+			expected: true,
+		},
+		{
+			name:     "overdue goal within 1 day",
+			losedate: now.Add(-12 * time.Hour).Unix(),
+			duration: 24 * time.Hour,
+			expected: true,
+		},
+		{
+			name:     "due now within 1 hour",
+			losedate: now.Unix(),
+			duration: 1 * time.Hour,
+			expected: true,
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-result := IsDueWithinAt(tt.losedate, tt.duration, now)
-if result != tt.expected {
-goalTime := time.Unix(tt.losedate, 0)
-t.Errorf("IsDueWithinAt(%v, %v, %v) = %v, want %v", goalTime, tt.duration, now, result, tt.expected)
-}
-})
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsDueWithinAt(tt.losedate, tt.duration, now)
+			if result != tt.expected {
+				goalTime := time.Unix(tt.losedate, 0)
+				t.Errorf("IsDueWithinAt(%v, %v, %v) = %v, want %v", goalTime, tt.duration, now, result, tt.expected)
+			}
+		})
+	}
 }
