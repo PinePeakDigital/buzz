@@ -33,7 +33,7 @@ jobs:
 
       - name: Calculate semantic version
         id: semver
-        if: github.event.inputs.version == ''
+        if: github.event.inputs.version == null || github.event.inputs.version == ''
         uses: ietf-tools/semver-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -46,10 +46,16 @@ jobs:
         id: version
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "Using manual version override: ${{ github.event.inputs.version }}"
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.inputs.version }}"
+            # Validate version format (must start with v and follow semver pattern)
+            if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$ ]]; then
+              echo "Error: Invalid version format '$VERSION'. Must follow semantic versioning (e.g., v1.2.3)"
+              exit 1
+            fi
+            echo "Using manual version override: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Version to release: ${{ github.event.inputs.version }}"
+            echo "Version to release: $VERSION"
           elif [ -n "${{ steps.semver.outputs.next }}" ]; then
             echo "Using auto-calculated version: ${{ steps.semver.outputs.next }}"
             echo "version=${{ steps.semver.outputs.next }}" >> $GITHUB_OUTPUT
