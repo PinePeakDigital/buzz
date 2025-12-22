@@ -521,12 +521,12 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 		timeframe        string
 		absoluteDeadline string
 	}
-	
+
 	displays := make([]goalDisplay, len(filteredGoals))
 	maxSlugWidth := 0
 	maxBareminWidth := 0
 	maxRelativeWidth := 0
-	
+
 	for i, goal := range filteredGoals {
 		timeframe := FormatDueDate(goal.Losedate)
 		absoluteDeadline := FormatAbsoluteDeadline(goal.Losedate)
@@ -535,7 +535,7 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 			timeframe:        timeframe,
 			absoluteDeadline: absoluteDeadline,
 		}
-		
+
 		if len(goal.Slug) > maxSlugWidth {
 			maxSlugWidth = len(goal.Slug)
 		}
@@ -549,10 +549,10 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 
 	// Output each goal on a separate line with aligned columns
 	for _, display := range displays {
-		fmt.Printf("%-*s  %-*s  %-*s  %s\n", 
-			maxSlugWidth, display.goal.Slug, 
-			maxBareminWidth, display.goal.Baremin, 
-			maxRelativeWidth, display.timeframe, 
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+			maxSlugWidth, display.goal.Slug,
+			maxBareminWidth, display.goal.Baremin,
+			maxRelativeWidth, display.timeframe,
 			display.absoluteDeadline)
 	}
 
