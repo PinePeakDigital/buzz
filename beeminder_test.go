@@ -1545,6 +1545,54 @@ func TestParseDuration(t *testing.T) {
 			expected: 0,
 			valid:    false,
 		},
+		{
+			name:     "negative hours",
+			input:    "-1h",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "negative days",
+			input:    "-5d",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "negative weeks",
+			input:    "-1w",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "zero hours",
+			input:    "0h",
+			expected: 0,
+			valid:    true,
+		},
+		{
+			name:     "zero days",
+			input:    "0d",
+			expected: 0,
+			valid:    true,
+		},
+		{
+			name:     "zero weeks",
+			input:    "0w",
+			expected: 0,
+			valid:    true,
+		},
+		{
+			name:     "very large hours (overflow test)",
+			input:    "1e10h",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "very large weeks",
+			input:    "999999w",
+			expected: 0,
+			valid:    false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -254,17 +254,32 @@ func ParseDuration(durationStr string) (time.Duration, bool) {
 		return 0, false
 	}
 
+	// Reject negative durations, which don't make sense for "due within" semantics
+	if num < 0 {
+		return 0, false
+	}
+
 	// Convert to duration based on unit
+	var duration time.Duration
 	switch unit {
 	case 'h', 'H':
-		return time.Duration(num * float64(time.Hour)), true
+		duration = time.Duration(num * float64(time.Hour))
 	case 'd', 'D':
-		return time.Duration(num * 24 * float64(time.Hour)), true
+		duration = time.Duration(num * 24 * float64(time.Hour))
 	case 'w', 'W':
-		return time.Duration(num * 7 * 24 * float64(time.Hour)), true
+		duration = time.Duration(num * 7 * 24 * float64(time.Hour))
 	default:
 		return 0, false
 	}
+
+	// Check for overflow: time.Duration is int64 nanoseconds
+	// Maximum duration is ~290 years (math.MaxInt64 nanoseconds)
+	// If the result is negative, it overflowed
+	if duration < 0 {
+		return 0, false
+	}
+
+	return duration, true
 }
 
 // IsDueWithin checks if a goal is due within the specified duration from now

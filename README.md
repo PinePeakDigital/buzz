@@ -163,7 +163,7 @@ Supported duration units:
 - `d` or `D` - days (e.g., `1d`, `5d`, `7d`)
 - `w` or `W` - weeks (e.g., `1w`, `2w`)
 
-Displays goals in the same table format as `buzz today` and `buzz tomorrow`. This command is useful for planning ahead and seeing what goals are coming up in a custom time window.
+Displays goals in the same table format as `buzz today` and `buzz tomorrow`. Includes overdue goals (those past their deadline) in the results. This command is useful for planning ahead and seeing what goals are coming up in a custom time window.
 
 **buzz less** - Output all do-less type goals:
 
