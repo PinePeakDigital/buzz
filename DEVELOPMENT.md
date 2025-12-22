@@ -112,6 +112,34 @@ docs: update README with installation steps
 refactor(db): simplify connection pooling
 ```
 
+## Release Process
+
+The project uses automated releases based on conventional commits. Releases are automatically created when changes are pushed to the `main` branch if there are conventional commits that trigger a version bump.
+
+### Automatic Releases
+
+When changes are merged to `main`, the Release workflow:
+1. Analyzes commit messages for conventional commit types
+2. Calculates the next semantic version (patch, minor, or major)
+3. Builds cross-platform binaries
+4. Creates a GitHub release with the new version tag
+
+### Manual Releases
+
+You can also manually trigger a release with a specific version:
+
+1. Go to the [Actions tab](https://github.com/PinePeakDigital/buzz/actions/workflows/release.yml)
+2. Click "Run workflow"
+3. Optionally enter a version override (e.g., `v1.2.3`)
+   - If left empty, the version will be auto-calculated from conventional commits
+   - If provided, the specified version will be used regardless of commit messages
+4. Click "Run workflow" to start the release
+
+This is useful for:
+- Creating hotfix releases
+- Manually controlling version numbers
+- Creating releases when conventional commits are not sufficient
+
 ## Contributing
 
 1. Fork the repository
