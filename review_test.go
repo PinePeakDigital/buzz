@@ -571,3 +571,226 @@ func TestReviewModelViewWithURL(t *testing.T) {
 		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedURL, view)
 	}
 }
+
+func TestFormatGoalDetailsWithDatapoints(t *testing.T) {
+	// Test that formatGoalDetails includes datapoints when present
+	datapoints := []Datapoint{
+		{
+			ID:        "1",
+			Timestamp: 1609459200, // 2021-01-01
+			Daystamp:  "20210101",
+			Value:     5.0,
+			Comment:   "First datapoint",
+		},
+		{
+			ID:        "2",
+			Timestamp: 1609545600, // 2021-01-02
+			Daystamp:  "20210102",
+			Value:     7.5,
+			Comment:   "Second datapoint",
+		},
+	}
+
+	goal := &Goal{
+		Slug:       "testgoal",
+		Title:      "Test Goal",
+		Limsum:     "+2 in 3 days",
+		Losedate:   1234567890,
+		Deadline:   0,
+		Pledge:     5.0,
+		Autodata:   "none",
+		Datapoints: datapoints,
+	}
+
+	config := &Config{
+		Username: "testuser",
+	}
+
+	result := formatGoalDetails(goal, config)
+
+	// Check that the result contains datapoint information
+	if !strings.Contains(result, "Recent datapoints:") {
+		t.Error("Expected result to contain 'Recent datapoints:' header")
+	}
+
+	if !strings.Contains(result, "2021-01-01") {
+		t.Error("Expected result to contain first datapoint date '2021-01-01'")
+	}
+
+	if !strings.Contains(result, "5") {
+		t.Error("Expected result to contain first datapoint value '5'")
+	}
+
+	if !strings.Contains(result, "First datapoint") {
+		t.Error("Expected result to contain first datapoint comment 'First datapoint'")
+	}
+
+	if !strings.Contains(result, "2021-01-02") {
+		t.Error("Expected result to contain second datapoint date '2021-01-02'")
+	}
+
+	if !strings.Contains(result, "7.5") {
+		t.Error("Expected result to contain second datapoint value '7.5'")
+	}
+
+	if !strings.Contains(result, "Second datapoint") {
+		t.Error("Expected result to contain second datapoint comment 'Second datapoint'")
+	}
+}
+
+func TestFormatGoalDetailsWithoutDatapoints(t *testing.T) {
+	// Test that formatGoalDetails works correctly when no datapoints are present
+	goal := &Goal{
+		Slug:       "testgoal",
+		Title:      "Test Goal",
+		Limsum:     "+2 in 3 days",
+		Losedate:   1234567890,
+		Deadline:   0,
+		Pledge:     5.0,
+		Autodata:   "none",
+		Datapoints: []Datapoint{}, // Empty datapoints
+	}
+
+	config := &Config{
+		Username: "testuser",
+	}
+
+	result := formatGoalDetails(goal, config)
+
+	// Check that the result does NOT contain datapoint information
+	if strings.Contains(result, "Recent datapoints:") {
+		t.Error("Expected result to NOT contain 'Recent datapoints:' header when no datapoints present")
+	}
+
+	// Check that it still contains basic goal information
+	if !strings.Contains(result, "Test Goal") {
+		t.Error("Expected result to contain goal title 'Test Goal'")
+	}
+
+	if !strings.Contains(result, "+2 in 3 days") {
+		t.Error("Expected result to contain limsum '+2 in 3 days'")
+	}
+}
+
+func TestFormatRecentDatapoints(t *testing.T) {
+	tests := []struct {
+		name       string
+		datapoints []Datapoint
+		wantEmpty  bool
+		wantCount  int
+		checkFor   []string
+	}{
+		{
+			name:       "empty datapoints",
+			datapoints: []Datapoint{},
+			wantEmpty:  true,
+		},
+		{
+			name: "single datapoint with comment",
+			datapoints: []Datapoint{
+				{
+					ID:        "1",
+					Timestamp: 1609459200, // 2021-01-01
+					Daystamp:  "20210101",
+					Value:     5.0,
+					Comment:   "Test comment",
+				},
+			},
+			wantEmpty: false,
+			wantCount: 1,
+			checkFor:  []string{"Recent datapoints:", "2021-01-01", "5", "Test comment"},
+		},
+		{
+			name: "single datapoint without comment",
+			datapoints: []Datapoint{
+				{
+					ID:        "1",
+					Timestamp: 1609459200, // 2021-01-01
+					Daystamp:  "20210101",
+					Value:     10.5,
+					Comment:   "",
+				},
+			},
+			wantEmpty: false,
+			wantCount: 1,
+			checkFor:  []string{"Recent datapoints:", "2021-01-01", "10.5"},
+		},
+		{
+			name: "multiple datapoints",
+			datapoints: []Datapoint{
+				{
+					ID:        "1",
+					Timestamp: 1609459200, // 2021-01-01
+					Daystamp:  "20210101",
+					Value:     5.0,
+					Comment:   "First",
+				},
+				{
+					ID:        "2",
+					Timestamp: 1609545600, // 2021-01-02
+					Daystamp:  "20210102",
+					Value:     7.5,
+					Comment:   "Second",
+				},
+				{
+					ID:        "3",
+					Timestamp: 1609632000, // 2021-01-03
+					Daystamp:  "20210103",
+					Value:     3.0,
+					Comment:   "Third",
+				},
+			},
+			wantEmpty: false,
+			wantCount: 3,
+			checkFor:  []string{"Recent datapoints:", "2021-01-01", "2021-01-02", "2021-01-03", "5", "7.5", "3", "First", "Second", "Third"},
+		},
+		{
+			name: "more than 5 datapoints shows only 5",
+			datapoints: []Datapoint{
+				{ID: "1", Timestamp: 1609459200, Daystamp: "20210101", Value: 1.0, Comment: "One"},
+				{ID: "2", Timestamp: 1609545600, Daystamp: "20210102", Value: 2.0, Comment: "Two"},
+				{ID: "3", Timestamp: 1609632000, Daystamp: "20210103", Value: 3.0, Comment: "Three"},
+				{ID: "4", Timestamp: 1609718400, Daystamp: "20210104", Value: 4.0, Comment: "Four"},
+				{ID: "5", Timestamp: 1609804800, Daystamp: "20210105", Value: 5.0, Comment: "Five"},
+				{ID: "6", Timestamp: 1609891200, Daystamp: "20210106", Value: 6.0, Comment: "Six"},
+				{ID: "7", Timestamp: 1609977600, Daystamp: "20210107", Value: 7.0, Comment: "Seven"},
+			},
+			wantEmpty: false,
+			wantCount: 5,
+			checkFor:  []string{"Recent datapoints:", "2021-01-01", "2021-01-05", "One", "Five"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatRecentDatapoints(tt.datapoints)
+
+			if tt.wantEmpty {
+				if result != "" {
+					t.Errorf("Expected empty string for empty datapoints, got: %s", result)
+				}
+				return
+			}
+
+			// Check all required strings are present
+			for _, check := range tt.checkFor {
+				if !strings.Contains(result, check) {
+					t.Errorf("Expected output to contain %q, but it didn't.\nOutput:\n%s", check, result)
+				}
+			}
+
+			// Count lines (excluding header and empty lines)
+			lines := strings.Split(result, "\n")
+			datapointLines := 0
+			for _, line := range lines {
+				// Count lines that start with "  " (datapoint lines)
+				if strings.HasPrefix(line, "  ") && strings.TrimSpace(line) != "" {
+					datapointLines++
+				}
+			}
+			if datapointLines != tt.wantCount {
+				t.Errorf("Expected %d datapoint lines, got %d.\nOutput:\n%s", tt.wantCount, datapointLines, result)
+			}
+		})
+	}
+}

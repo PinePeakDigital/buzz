@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -553,6 +554,49 @@ func FetchGoalWithDatapoints(config *Config, goalSlug string) (*Goal, error) {
 	}
 
 	return &goal, nil
+}
+
+// FetchGoalsWithDatapoints fetches all goals with datapoints for each goal
+// Uses concurrent fetching with a worker pool to improve performance
+func FetchGoalsWithDatapoints(config *Config) ([]Goal, error) {
+	// First fetch the list of goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use concurrent fetching with a limited number of workers
+	const maxWorkers = 5
+	var wg sync.WaitGroup
+	goalsChan := make(chan int, len(goals))
+	
+	// Start worker goroutines
+	for w := 0; w < maxWorkers && w < len(goals); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range goalsChan {
+				goalWithDatapoints, err := FetchGoalWithDatapoints(config, goals[i].Slug)
+				if err != nil {
+					// If we fail to fetch datapoints for a goal, continue with the goal without datapoints
+					// rather than failing the entire operation
+					continue
+				}
+				goals[i].Datapoints = goalWithDatapoints.Datapoints
+			}
+		}()
+	}
+
+	// Send work to workers
+	for i := range goals {
+		goalsChan <- i
+	}
+	close(goalsChan)
+
+	// Wait for all workers to finish
+	wg.Wait()
+
+	return goals, nil
 }
 
 // FetchGoalRawJSON fetches a goal and returns the raw JSON response

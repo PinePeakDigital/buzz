@@ -220,6 +220,40 @@ func formatDueTime(deadlineOffset int) string {
 	return t.Format("3:04 PM")
 }
 
+// formatRecentDatapoints formats up to 5 most recent datapoints for display
+func formatRecentDatapoints(datapoints []Datapoint) string {
+	if len(datapoints) == 0 {
+		return ""
+	}
+
+	var output string
+	output += "\nRecent datapoints:\n"
+
+	// Show up to 5 most recent datapoints
+	count := len(datapoints)
+	if count > 5 {
+		count = 5
+	}
+
+	for i := 0; i < count; i++ {
+		dp := datapoints[i]
+		timestamp := time.Unix(dp.Timestamp, 0)
+		dateStr := timestamp.Format("2006-01-02")
+		
+		// Format value with appropriate precision
+		valueStr := fmt.Sprintf("%.6g", dp.Value)
+		
+		// Format the line with daystamp, value, and comment
+		if dp.Comment != "" {
+			output += fmt.Sprintf("  %s: %s (%s)\n", dateStr, valueStr, dp.Comment)
+		} else {
+			output += fmt.Sprintf("  %s: %s\n", dateStr, valueStr)
+		}
+	}
+
+	return output
+}
+
 // formatGoalDetails formats the goal details in a consistent way for both view and review commands
 func formatGoalDetails(goal *Goal, config *Config) string {
 	var details string
@@ -259,6 +293,11 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	baseURL := getBaseURL(config)
 	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
 	details += fmt.Sprintf("URL:         %s\n", goalURL)
+
+	// Display recent datapoints if available
+	if len(goal.Datapoints) > 0 {
+		details += formatRecentDatapoints(goal.Datapoints)
+	}
 
 	return details
 }

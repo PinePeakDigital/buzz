@@ -865,8 +865,8 @@ func handleViewCommand() {
 		fmt.Fprintln(os.Stderr, "Warning: --datapoints flag has no effect without --json")
 	}
 
-	// Fetch the goal for human-readable output
-	goal, err := FetchGoal(config, goalSlug)
+	// Fetch the goal with datapoints for human-readable output
+	goal, err := FetchGoalWithDatapoints(config, goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
@@ -894,8 +894,8 @@ func handleReviewCommand() {
 		os.Exit(1)
 	}
 
-	// Fetch goals
-	goals, err := FetchGoals(config)
+	// Fetch goals with datapoints
+	goals, err := FetchGoalsWithDatapoints(config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
