@@ -225,12 +225,6 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	var details string
 
 	details += fmt.Sprintf("Title:       %s\n", goal.Title)
-
-	// Display fine print if it exists
-	if goal.Fineprint != "" {
-		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
-	}
-
 	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
 
 	// Display deadline (formatted timestamp)
@@ -259,6 +253,11 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	baseURL := getBaseURL(config)
 	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
 	details += fmt.Sprintf("URL:         %s\n", goalURL)
+
+	// Display fine print if it exists (at the end)
+	if goal.Fineprint != "" {
+		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
+	}
 
 	return details
 }
