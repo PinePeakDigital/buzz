@@ -571,3 +571,41 @@ func TestReviewModelViewWithURL(t *testing.T) {
 		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedURL, view)
 	}
 }
+
+// TestFineprintOrderInOutput verifies that fineprint appears after URL in the output
+func TestFineprintOrderInOutput(t *testing.T) {
+	goal := Goal{
+		Slug:      "testgoal",
+		Title:     "Test Goal",
+		Fineprint: "This is the fine print",
+		Limsum:    "+1 in 2 days",
+		Losedate:  1234567890,
+		Deadline:  0,
+		Pledge:    10.0,
+		Autodata:  "manual",
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	output := formatGoalDetails(&goal, config)
+
+	// Find positions of URL and Fine print in the output
+	urlIndex := strings.Index(output, "URL:")
+	fineprintIndex := strings.Index(output, "Fine print:")
+
+	if urlIndex == -1 {
+		t.Error("URL not found in output")
+	}
+
+	if fineprintIndex == -1 {
+		t.Error("Fine print not found in output")
+	}
+
+	// Verify that Fine print comes after URL
+	if fineprintIndex <= urlIndex {
+		t.Errorf("Expected Fine print to come after URL, but Fine print is at position %d and URL is at position %d", fineprintIndex, urlIndex)
+	}
+}
