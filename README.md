@@ -156,6 +156,7 @@ Shows all goals that are due tomorrow in the same format as `buzz today`.
 buzz due <duration>
 
 # Examples:
+buzz due 10m    # Goals due within the next 10 minutes
 buzz due 1h     # Goals due within the next hour
 buzz due 5d     # Goals due within the next 5 days
 buzz due 1w     # Goals due within the next week
@@ -163,6 +164,7 @@ buzz due 2w     # Goals due within the next 2 weeks
 ```
 
 Supported duration units:
+- `m` or `M` - minutes (e.g., `10m`, `30m`, `0.5m`)
 - `h` or `H` - hours (e.g., `1h`, `24h`, `0.5h`)
 - `d` or `D` - days (e.g., `1d`, `5d`, `7d`)
 - `w` or `W` - weeks (e.g., `1w`, `2w`)
