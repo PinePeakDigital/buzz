@@ -233,8 +233,8 @@ func IsDueTomorrowAt(losedate int64, now time.Time) bool {
 	return !goalTime.Before(startOfTomorrow) && goalTime.Before(startOfDayAfterTomorrow)
 }
 
-// ParseDuration parses a duration string (e.g., "1h", "5d", "1w") and returns time.Duration
-// Supported formats: Nh (hours), Nd (days), Nw (weeks) where N is a number
+// ParseDuration parses a duration string (e.g., "10m", "1h", "5d", "1w") and returns time.Duration
+// Supported formats: Nm (minutes), Nh (hours), Nd (days), Nw (weeks) where N is a number
 // Returns the duration and true on success, 0 and false on error
 func ParseDuration(durationStr string) (time.Duration, bool) {
 	if len(durationStr) < 2 {
@@ -262,6 +262,8 @@ func ParseDuration(durationStr string) (time.Duration, bool) {
 	// Convert to duration based on unit
 	var duration time.Duration
 	switch unit {
+	case 'm', 'M':
+		duration = time.Duration(num * float64(time.Minute))
 	case 'h', 'H':
 		duration = time.Duration(num * float64(time.Hour))
 	case 'd', 'D':

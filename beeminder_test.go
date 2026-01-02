@@ -1649,6 +1649,30 @@ func TestParseDuration(t *testing.T) {
 			valid:    true,
 		},
 		{
+			name:     "1 minute",
+			input:    "1m",
+			expected: 1 * time.Minute,
+			valid:    true,
+		},
+		{
+			name:     "30 minutes",
+			input:    "30m",
+			expected: 30 * time.Minute,
+			valid:    true,
+		},
+		{
+			name:     "0.5 minutes",
+			input:    "0.5m",
+			expected: 30 * time.Second,
+			valid:    true,
+		},
+		{
+			name:     "uppercase M",
+			input:    "15M",
+			expected: 15 * time.Minute,
+			valid:    true,
+		},
+		{
 			name:     "empty string",
 			input:    "",
 			expected: 0,
@@ -1661,8 +1685,14 @@ func TestParseDuration(t *testing.T) {
 			valid:    false,
 		},
 		{
+			name:     "10 minutes",
+			input:    "10m",
+			expected: 10 * time.Minute,
+			valid:    true,
+		},
+		{
 			name:     "invalid unit",
-			input:    "5m",
+			input:    "5s",
 			expected: 0,
 			valid:    false,
 		},
@@ -1697,6 +1727,12 @@ func TestParseDuration(t *testing.T) {
 			valid:    false,
 		},
 		{
+			name:     "negative minutes",
+			input:    "-10m",
+			expected: 0,
+			valid:    false,
+		},
+		{
 			name:     "zero hours",
 			input:    "0h",
 			expected: 0,
@@ -1711,6 +1747,12 @@ func TestParseDuration(t *testing.T) {
 		{
 			name:     "zero weeks",
 			input:    "0w",
+			expected: 0,
+			valid:    true,
+		},
+		{
+			name:     "zero minutes",
+			input:    "0m",
 			expected: 0,
 			valid:    true,
 		},

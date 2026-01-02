@@ -235,7 +235,7 @@ func printHelp() {
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
-	fmt.Println("  buzz due <duration>               Output all goals due within duration (e.g., 1h, 5d, 1w)")
+	fmt.Println("  buzz due <duration>               Output all goals due within duration (e.g., 10m, 1h, 5d, 1w)")
 	fmt.Println("  buzz less                         Output all do-less type goals")
 	fmt.Println("  buzz add [--requestid=<id>] <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
@@ -485,8 +485,8 @@ func handleDueCommand() {
 	if len(os.Args) < 3 {
 		fmt.Println("Error: Missing required duration argument")
 		fmt.Println("Usage: buzz due <duration>")
-		fmt.Println("  Examples: buzz due 1h, buzz due 5d, buzz due 1w")
-		fmt.Println("  Supported units: h (hours), d (days), w (weeks)")
+		fmt.Println("  Examples: buzz due 10m, buzz due 1h, buzz due 5d, buzz due 1w")
+		fmt.Println("  Supported units: m (minutes), h (hours), d (days), w (weeks)")
 		os.Exit(1)
 	}
 
@@ -497,8 +497,8 @@ func handleDueCommand() {
 	if !ok {
 		fmt.Printf("Error: Invalid duration format: %s\n", durationStr)
 		fmt.Println("Usage: buzz due <duration>")
-		fmt.Println("  Examples: buzz due 1h, buzz due 5d, buzz due 1w")
-		fmt.Println("  Supported units: h (hours), d (days), w (weeks)")
+		fmt.Println("  Examples: buzz due 10m, buzz due 1h, buzz due 5d, buzz due 1w")
+		fmt.Println("  Supported units: m (minutes), h (hours), d (days), w (weeks)")
 		os.Exit(1)
 	}
 
