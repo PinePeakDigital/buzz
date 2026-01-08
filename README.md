@@ -139,6 +139,13 @@ Displays goals in a table format with columns aligned for easy scanning. Goals a
 - Relative deadline (time remaining)
 - Absolute deadline (date and time)
 
+Goals are color-coded by urgency (same as the TUI grid):
+- **Red** - Overdue or due today (safebuf < 1)
+- **Orange** - Due within 1 day (safebuf < 2)
+- **Blue** - Due within 2 days (safebuf < 3)
+- **Green** - Due within 3-6 days (safebuf < 7)
+- **Gray** - Due in 7+ days
+
 **buzz tomorrow** - Output all goals due tomorrow:
 
 ```bash
@@ -148,7 +155,7 @@ buzz tomorrow
 # writing   +1 within 1 day  1d   tomorrow 5:45 PM
 ```
 
-Shows all goals that are due tomorrow in the same format as `buzz today`.
+Shows all goals that are due tomorrow in the same format as `buzz today`, with color coding based on urgency.
 
 **buzz due** - Output all goals due within a specified duration:
 
@@ -169,7 +176,7 @@ Supported duration units:
 - `d` or `D` - days (e.g., `1d`, `5d`, `7d`)
 - `w` or `W` - weeks (e.g., `1w`, `2w`)
 
-Displays goals in the same table format as `buzz today` and `buzz tomorrow`. Includes overdue goals (those past their deadline) in the results. This command is useful for planning ahead and seeing what goals are coming up in a custom time window.
+Displays goals in the same table format as `buzz today` and `buzz tomorrow`, with color coding based on urgency. Includes overdue goals (those past their deadline) in the results. This command is useful for planning ahead and seeing what goals are coming up in a custom time window.
 
 **buzz less** - Output all do-less type goals:
 
@@ -180,7 +187,7 @@ buzz less
 # procrastinate  -2 by 5pm  8h
 ```
 
-Lists all goals where you're trying to do less of something (weight loss, habit breaking, etc.). Useful for reviewing negative goals separately from positive ones.
+Lists all goals where you're trying to do less of something (weight loss, habit breaking, etc.), with color coding based on urgency. Useful for reviewing negative goals separately from positive ones.
 
 **buzz add** - Add a datapoint to a goal without opening the TUI:
 
@@ -301,11 +308,11 @@ Running `buzz` without arguments launches the interactive TUI.
 
 ### Goal Grid
 Goals are displayed in a colorful grid based on their deadline urgency:
-- **Red** - Overdue or due today
-- **Orange** - Due within 1-2 days  
-- **Blue** - Due within 3-6 days
-- **Green** - Due within 7+ days
-- **Gray** - Far future deadlines
+- **Red** - Overdue or due today (safebuf < 1)
+- **Orange** - Due within 1 day (safebuf < 2)
+- **Blue** - Due within 2 days (safebuf < 3)
+- **Green** - Due within 3-6 days (safebuf < 7)
+- **Gray** - Due in 7+ days
 
 ### Creating Goals
 1. Press **n** to open the goal creation modal
