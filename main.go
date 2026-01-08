@@ -14,6 +14,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // version is set via ldflags during build
@@ -584,13 +585,30 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 		}
 	}
 
-	// Output each goal on a separate line with aligned columns
+	// Define color styles based on GetBufferColor logic
+	colorStyles := map[string]lipgloss.Style{
+		"red":    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+		"orange": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
+		"blue":   lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
+		"green":  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		"gray":   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+	}
+
+	// Output each goal on a separate line with aligned columns and color coding
 	for _, display := range displays {
-		fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+		// Get the color for this goal based on its safebuf
+		color := GetBufferColor(display.goal.Safebuf)
+		style := colorStyles[color]
+
+		// Format the line with proper spacing
+		line := fmt.Sprintf("%-*s  %-*s  %-*s  %s",
 			maxSlugWidth, display.goal.Slug,
 			maxBareminWidth, display.goal.Baremin,
 			maxRelativeWidth, display.timeframe,
 			display.absoluteDeadline)
+
+		// Apply color and print
+		fmt.Println(style.Render(line))
 	}
 
 	// Check for updates and display message if available
