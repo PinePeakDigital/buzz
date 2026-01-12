@@ -55,16 +55,8 @@ func TestNoColorFlag(t *testing.T) {
 			// Set test args
 			os.Args = tt.args
 
-			// Process the --no-color flag like main() does
-			noColor := false
-			filteredArgs := []string{os.Args[0]}
-			for i := 1; i < len(os.Args); i++ {
-				if os.Args[i] == "--no-color" {
-					noColor = true
-				} else {
-					filteredArgs = append(filteredArgs, os.Args[i])
-				}
-			}
+			// Process the --no-color flag using the shared function
+			noColor, filteredArgs := parseNoColorFlag(os.Args)
 			os.Args = filteredArgs
 
 			if noColor {

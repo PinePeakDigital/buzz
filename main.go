@@ -269,17 +269,23 @@ func printVersion() {
 	fmt.Print(getUpdateMessage())
 }
 
-func main() {
-	// Check for global --no-color flag before processing other commands
-	noColor := false
-	filteredArgs := []string{os.Args[0]} // Keep program name
-	for i := 1; i < len(os.Args); i++ {
-		if os.Args[i] == "--no-color" {
+// parseNoColorFlag extracts the --no-color flag from the provided arguments
+// and returns whether the flag was found and the filtered arguments without the flag
+func parseNoColorFlag(args []string) (noColor bool, filteredArgs []string) {
+	filteredArgs = []string{args[0]} // Keep program name
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--no-color" {
 			noColor = true
 		} else {
-			filteredArgs = append(filteredArgs, os.Args[i])
+			filteredArgs = append(filteredArgs, args[i])
 		}
 	}
+	return noColor, filteredArgs
+}
+
+func main() {
+	// Check for global --no-color flag before processing other commands
+	noColor, filteredArgs := parseNoColorFlag(os.Args)
 	os.Args = filteredArgs
 
 	// Disable colors if --no-color flag is present
