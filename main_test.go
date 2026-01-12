@@ -11,10 +11,10 @@ import (
 // TestNoColorFlag tests that the --no-color flag is properly parsed
 func TestNoColorFlag(t *testing.T) {
 	tests := []struct {
-		name           string
-		args           []string
-		expectNoColor  bool
-		expectedArgs   []string
+		name          string
+		args          []string
+		expectNoColor bool
+		expectedArgs  []string
 	}{
 		{
 			name:          "no flag",
