@@ -343,6 +343,29 @@ Goals are displayed in a colorful grid based on their deadline urgency:
 - Press **r** to manually refresh goals
 - The TUI also automatically refreshes when you use `buzz add` in another terminal
 
+### Disabling Colors
+
+If you prefer plain text output without colors, you can use the global `--no-color` flag with any command:
+
+```bash
+buzz --no-color next
+buzz --no-color today
+buzz --no-color view mygoal
+buzz --no-color            # Even works with the TUI
+```
+
+The `--no-color` flag can be placed anywhere in the command line and works with all buzz commands. This is useful for:
+- Terminal environments with limited color support
+- Scripts or automation where colored output is not desired
+- Screen readers or accessibility tools
+- Logging output to files
+
+Alternatively, you can set the `NO_COLOR` environment variable, which buzz also respects:
+```bash
+export NO_COLOR=1
+buzz next  # Will output without colors
+```
+
 ## Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and contribution guidelines.
