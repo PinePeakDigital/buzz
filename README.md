@@ -360,12 +360,6 @@ The `--no-color` flag can be placed anywhere in the command line and works with 
 - Screen readers or accessibility tools
 - Logging output to files
 
-Alternatively, you can set the `NO_COLOR` environment variable, which buzz also respects:
-```bash
-export NO_COLOR=1
-buzz next  # Will output without colors
-```
-
 ## Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and contribution guidelines.
