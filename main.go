@@ -234,6 +234,7 @@ func printHelp() {
 	fmt.Println("  buzz next                         Output a terse summary of the next due goal")
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
+	fmt.Println("  buzz all                          Output all goals")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
 	fmt.Println("  buzz due <duration>               Output all goals due within duration (e.g., 10m, 1h, 5d, 1w)")
@@ -274,6 +275,9 @@ func main() {
 		case "next":
 			handleNextCommand()
 			return
+		case "all":
+			handleAllCommand()
+			return
 		case "today":
 			handleTodayCommand()
 			return
@@ -309,7 +313,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, today, tomorrow, due, less, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, all, today, tomorrow, due, less, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -463,6 +467,16 @@ func isDueTomorrowFilter(g Goal) bool {
 // isDoLessFilter returns true if the goal is a do-less type goal
 func isDoLessFilter(g Goal) bool {
 	return IsDoLessGoal(g)
+}
+
+// allGoalsFilter returns true for all goals
+func allGoalsFilter(g Goal) bool {
+	return true
+}
+
+// handleAllCommand outputs all goals
+func handleAllCommand() {
+	handleFilteredCommand("all", allGoalsFilter)
 }
 
 // handleTodayCommand outputs all goals that are due today
