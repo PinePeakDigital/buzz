@@ -64,3 +64,37 @@ func TestFormatListRate(t *testing.T) {
 func float64Ptr(f float64) *float64 {
 	return &f
 }
+
+// TestGetDisplayUnits tests the getDisplayUnits function
+func TestGetDisplayUnits(t *testing.T) {
+	tests := []struct {
+		name     string
+		gunits   string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			gunits:   "",
+			expected: "-",
+		},
+		{
+			name:     "with units",
+			gunits:   "hours",
+			expected: "hours",
+		},
+		{
+			name:     "single character",
+			gunits:   "x",
+			expected: "x",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getDisplayUnits(tt.gunits)
+			if result != tt.expected {
+				t.Errorf("getDisplayUnits(%q) = %q, want %q", tt.gunits, result, tt.expected)
+			}
+		})
+	}
+}

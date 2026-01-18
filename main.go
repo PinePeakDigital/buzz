@@ -551,10 +551,7 @@ func handleListCommand() {
 			maxTitleWidth = len(goal.Title)
 		}
 		// Calculate units width
-		units := goal.Gunits
-		if units == "" {
-			units = "-"
-		}
+		units := getDisplayUnits(goal.Gunits)
 		if len(units) > maxUnitsWidth {
 			maxUnitsWidth = len(units)
 		}
@@ -592,10 +589,7 @@ func handleListCommand() {
 		if title == "" {
 			title = "-"
 		}
-		units := goal.Gunits
-		if units == "" {
-			units = "-"
-		}
+		units := getDisplayUnits(goal.Gunits)
 		rateStr := formatListRate(goal.Rate, goal.Runits)
 		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
 
@@ -609,6 +603,14 @@ func handleListCommand() {
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
+}
+
+// getDisplayUnits returns the display value for goal units, using "-" if empty
+func getDisplayUnits(gunits string) string {
+	if gunits == "" {
+		return "-"
+	}
+	return gunits
 }
 
 // formatListRate formats the rate value with its units for the list command
