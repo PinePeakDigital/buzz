@@ -235,6 +235,7 @@ func printHelp() {
 	fmt.Println("  buzz next                         Output a terse summary of the next due goal")
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
+	fmt.Println("  buzz list                         List all goals with slug, title, units, rate, and stakes")
 	fmt.Println("  buzz all                          Output all goals")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
@@ -300,6 +301,9 @@ func main() {
 		case "next":
 			handleNextCommand()
 			return
+		case "list":
+			handleListCommand()
+			return
 		case "all":
 			handleAllCommand()
 			return
@@ -338,7 +342,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, all, today, tomorrow, due, less, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -497,6 +501,131 @@ func isDoLessFilter(g Goal) bool {
 // allGoalsFilter returns true for all goals
 func allGoalsFilter(g Goal) bool {
 	return true
+}
+
+// handleListCommand outputs a summary list of all goals with slug, title, rate, and stakes
+func handleListCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	// Fetch goals
+	goals, err := FetchGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	// Sort goals alphabetically by slug for easy scanning
+	SortGoalsBySlug(goals)
+
+	// If no goals, exit
+	if len(goals) == 0 {
+		fmt.Println("No goals found.")
+		return
+	}
+
+	// Print summary header
+	fmt.Printf("Total goals: %d\n\n", len(goals))
+
+	// Calculate column widths
+	maxSlugWidth := 4   // minimum for "Slug" header
+	maxTitleWidth := 5  // minimum for "Title" header
+	maxUnitsWidth := 5  // minimum for "Units" header
+	maxRateWidth := 4   // minimum for "Rate" header
+	maxStakesWidth := 6 // minimum for "Stakes" header
+
+	for _, goal := range goals {
+		if len(goal.Slug) > maxSlugWidth {
+			maxSlugWidth = len(goal.Slug)
+		}
+		if len(goal.Title) > maxTitleWidth {
+			maxTitleWidth = len(goal.Title)
+		}
+		// Calculate units width
+		units := getDisplayUnits(goal.Gunits)
+		if len(units) > maxUnitsWidth {
+			maxUnitsWidth = len(units)
+		}
+		// Format rate to calculate its width
+		rateStr := formatListRate(goal.Rate, goal.Runits)
+		if len(rateStr) > maxRateWidth {
+			maxRateWidth = len(rateStr)
+		}
+		// Format stakes to calculate its width
+		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
+		if len(stakesStr) > maxStakesWidth {
+			maxStakesWidth = len(stakesStr)
+		}
+	}
+
+	// Print header
+	fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
+		maxSlugWidth, "Slug",
+		maxTitleWidth, "Title",
+		maxUnitsWidth, "Units",
+		maxRateWidth, "Rate",
+		"Stakes")
+
+	// Print separator
+	fmt.Printf("%s  %s  %s  %s  %s\n",
+		strings.Repeat("-", maxSlugWidth),
+		strings.Repeat("-", maxTitleWidth),
+		strings.Repeat("-", maxUnitsWidth),
+		strings.Repeat("-", maxRateWidth),
+		strings.Repeat("-", maxStakesWidth))
+
+	// Print each goal
+	for _, goal := range goals {
+		title := goal.Title
+		if title == "" {
+			title = "-"
+		}
+		units := getDisplayUnits(goal.Gunits)
+		rateStr := formatListRate(goal.Rate, goal.Runits)
+		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
+
+		fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
+			maxSlugWidth, goal.Slug,
+			maxTitleWidth, title,
+			maxUnitsWidth, units,
+			maxRateWidth, rateStr,
+			stakesStr)
+	}
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// getDisplayUnits returns the display value for goal units, using "-" if empty
+func getDisplayUnits(gunits string) string {
+	if gunits == "" {
+		return "-"
+	}
+	return gunits
+}
+
+// formatListRate formats the rate value with its units for the list command
+func formatListRate(rate *float64, runits string) string {
+	if rate == nil {
+		return "-"
+	}
+	// Format rate to remove unnecessary decimal places
+	rateVal := *rate
+	if rateVal == float64(int(rateVal)) {
+		// Integer value - no decimal places
+		return fmt.Sprintf("%d/%s", int(rateVal), runits)
+	}
+	// Has decimal - use %.6g to show up to 6 significant digits, trimming trailing zeros
+	return fmt.Sprintf("%.6g/%s", rateVal, runits)
 }
 
 // handleAllCommand outputs all goals

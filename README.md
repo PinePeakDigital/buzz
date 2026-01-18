@@ -123,6 +123,29 @@ buzz next -w         # Shorthand for --watch
 
 In watch mode, the display updates automatically and shows a timestamp. Press Ctrl+C to exit.
 
+**buzz list** - List all goals with a summary overview:
+
+```bash
+buzz list
+# Example output:
+# Total goals: 3
+# 
+# Slug      Title           Units     Rate     Stakes
+# --------  --------------  --------  -------  ------
+# coding    Code Daily      lines     5/d      $10.00
+# exercise  Daily Exercise  workouts  1/d      $5.00
+# reading   Read Books      pages     -        $0.00
+```
+
+Displays a table with the following information for each goal:
+- **Slug** - The goal's unique identifier
+- **Title** - The goal's display name (or "-" if not set)
+- **Units** - The unit being measured (e.g., "hours", "pages", "workouts", or "-" if not set)
+- **Rate** - The commitment rate (e.g., "5/d" for 5 per day, "1/w" for 1 per week, or "-" if not set)
+- **Stakes** - The current pledge amount
+
+Goals are sorted alphabetically by slug. The command also shows the total number of goals at the top. This command is useful for getting a quick overview of all your goals without focusing on deadlines.
+
 **buzz today** - Output all goals due today:
 
 ```bash
