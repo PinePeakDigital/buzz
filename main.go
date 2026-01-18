@@ -540,6 +540,7 @@ func handleListCommand() {
 	maxSlugWidth := 4 // minimum for "Slug" header
 	maxTitleWidth := 5 // minimum for "Title" header
 	maxRateWidth := 4 // minimum for "Rate" header
+	maxStakesWidth := 6 // minimum for "Stakes" header
 
 	for _, goal := range goals {
 		if len(goal.Slug) > maxSlugWidth {
@@ -552,6 +553,11 @@ func handleListCommand() {
 		rateStr := formatListRate(goal.Rate, goal.Runits)
 		if len(rateStr) > maxRateWidth {
 			maxRateWidth = len(rateStr)
+		}
+		// Format stakes to calculate its width
+		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
+		if len(stakesStr) > maxStakesWidth {
+			maxStakesWidth = len(stakesStr)
 		}
 	}
 
@@ -567,7 +573,7 @@ func handleListCommand() {
 		strings.Repeat("-", maxSlugWidth),
 		strings.Repeat("-", maxTitleWidth),
 		strings.Repeat("-", maxRateWidth),
-		strings.Repeat("-", 6))
+		strings.Repeat("-", maxStakesWidth))
 
 	// Print each goal
 	for _, goal := range goals {
@@ -600,7 +606,7 @@ func formatListRate(rate *float64, runits string) string {
 		// Integer value - no decimal places
 		return fmt.Sprintf("%d/%s", int(rateVal), runits)
 	}
-	// Has decimal - show up to 2 decimal places, trimming trailing zeros
+	// Has decimal - use %.6g to show up to 6 significant digits, trimming trailing zeros
 	return fmt.Sprintf("%.6g/%s", rateVal, runits)
 }
 
