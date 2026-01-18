@@ -19,6 +19,12 @@ func TestFormatListRate(t *testing.T) {
 			expected: "-",
 		},
 		{
+			name:     "zero rate",
+			rate:     float64Ptr(0.0),
+			runits:   "d",
+			expected: "0/d",
+		},
+		{
 			name:     "integer rate",
 			rate:     float64Ptr(1.0),
 			runits:   "d",
