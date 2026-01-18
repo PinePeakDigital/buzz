@@ -235,7 +235,7 @@ func printHelp() {
 	fmt.Println("  buzz next                         Output a terse summary of the next due goal")
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
-	fmt.Println("  buzz list                         List all goals with slug, title, rate, and stakes")
+	fmt.Println("  buzz list                         List all goals with slug, title, units, rate, and stakes")
 	fmt.Println("  buzz all                          Output all goals")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
@@ -539,6 +539,7 @@ func handleListCommand() {
 	// Calculate column widths
 	maxSlugWidth := 4   // minimum for "Slug" header
 	maxTitleWidth := 5  // minimum for "Title" header
+	maxUnitsWidth := 5  // minimum for "Units" header
 	maxRateWidth := 4   // minimum for "Rate" header
 	maxStakesWidth := 6 // minimum for "Stakes" header
 
@@ -548,6 +549,14 @@ func handleListCommand() {
 		}
 		if len(goal.Title) > maxTitleWidth {
 			maxTitleWidth = len(goal.Title)
+		}
+		// Calculate units width
+		units := goal.Gunits
+		if units == "" {
+			units = "-"
+		}
+		if len(units) > maxUnitsWidth {
+			maxUnitsWidth = len(units)
 		}
 		// Format rate to calculate its width
 		rateStr := formatListRate(goal.Rate, goal.Runits)
@@ -562,16 +571,18 @@ func handleListCommand() {
 	}
 
 	// Print header
-	fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+	fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
 		maxSlugWidth, "Slug",
 		maxTitleWidth, "Title",
+		maxUnitsWidth, "Units",
 		maxRateWidth, "Rate",
 		"Stakes")
 
 	// Print separator
-	fmt.Printf("%s  %s  %s  %s\n",
+	fmt.Printf("%s  %s  %s  %s  %s\n",
 		strings.Repeat("-", maxSlugWidth),
 		strings.Repeat("-", maxTitleWidth),
+		strings.Repeat("-", maxUnitsWidth),
 		strings.Repeat("-", maxRateWidth),
 		strings.Repeat("-", maxStakesWidth))
 
@@ -581,12 +592,17 @@ func handleListCommand() {
 		if title == "" {
 			title = "-"
 		}
+		units := goal.Gunits
+		if units == "" {
+			units = "-"
+		}
 		rateStr := formatListRate(goal.Rate, goal.Runits)
 		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
 
-		fmt.Printf("%-*s  %-*s  %-*s  %s\n",
+		fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
 			maxSlugWidth, goal.Slug,
 			maxTitleWidth, title,
+			maxUnitsWidth, units,
 			maxRateWidth, rateStr,
 			stakesStr)
 	}

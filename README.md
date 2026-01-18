@@ -130,16 +130,17 @@ buzz list
 # Example output:
 # Total goals: 3
 # 
-# Slug      Title           Rate     Stakes
-# --------  --------------  -------  ------
-# coding    Code Daily      5/d      $10.00
-# exercise  Daily Exercise  1/d      $5.00
-# reading   Read Books      -        $0.00
+# Slug      Title           Units     Rate     Stakes
+# --------  --------------  --------  -------  ------
+# coding    Code Daily      lines     5/d      $10.00
+# exercise  Daily Exercise  workouts  1/d      $5.00
+# reading   Read Books      pages     -        $0.00
 ```
 
 Displays a table with the following information for each goal:
 - **Slug** - The goal's unique identifier
 - **Title** - The goal's display name (or "-" if not set)
+- **Units** - The unit being measured (e.g., "hours", "pages", "workouts", or "-" if not set)
 - **Rate** - The commitment rate (e.g., "5/d" for 5 per day, "1/w" for 1 per week, or "-" if not set)
 - **Stakes** - The current pledge amount
 
