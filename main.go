@@ -537,9 +537,9 @@ func handleListCommand() {
 	fmt.Printf("Total goals: %d\n\n", len(goals))
 
 	// Calculate column widths
-	maxSlugWidth := 4 // minimum for "Slug" header
-	maxTitleWidth := 5 // minimum for "Title" header
-	maxRateWidth := 4 // minimum for "Rate" header
+	maxSlugWidth := 4   // minimum for "Slug" header
+	maxTitleWidth := 5  // minimum for "Title" header
+	maxRateWidth := 4   // minimum for "Rate" header
 	maxStakesWidth := 6 // minimum for "Stakes" header
 
 	for _, goal := range goals {
