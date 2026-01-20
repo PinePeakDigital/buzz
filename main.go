@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -254,6 +255,7 @@ func printHelp() {
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
+	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
@@ -334,6 +336,9 @@ func main() {
 		case "charge":
 			handleChargeCommand()
 			return
+		case "schedule":
+			handleScheduleCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -342,7 +347,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, schedule, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -1171,4 +1176,191 @@ func handleChargeCommand() {
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
+}
+
+// timeSlot represents a time of day with goals scheduled at that time
+type timeSlot struct {
+	hour   int      // 0-23
+	minute int      // 0-59
+	goals  []string // goal slugs at this time
+}
+
+// handleScheduleCommand displays a visual representation of goal deadline distribution throughout a 24-hour day
+func handleScheduleCommand() {
+	// Load config and goals
+	_, goals, err := loadConfigAndGoals()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	if len(goals) == 0 {
+		fmt.Println("No goals found.")
+		return
+	}
+
+	// Extract time-of-day from each goal's deadline
+	timeSlots := extractTimeSlots(goals)
+
+	// Generate hourly density data
+	hourCounts := make([]int, 24)
+	for _, slot := range timeSlots {
+		hourCounts[slot.hour] += len(slot.goals)
+	}
+
+	// Display hourly density overview
+	displayHourlyDensity(hourCounts)
+
+	// Display detailed timeline
+	displayTimeline(timeSlots)
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// extractTimeSlots extracts time-of-day from all goal deadlines and groups them
+func extractTimeSlots(goals []Goal) []timeSlot {
+	// Map to group goals by their time of day (hour:minute)
+	slotMap := make(map[string]*timeSlot)
+
+	for _, goal := range goals {
+		// Convert losedate to time and extract hour/minute
+		t := time.Unix(goal.Losedate, 0)
+		hour := t.Hour()
+		minute := t.Minute()
+
+		// Create key for this time slot
+		key := fmt.Sprintf("%02d:%02d", hour, minute)
+
+		// Add goal to this time slot
+		if slot, exists := slotMap[key]; exists {
+			slot.goals = append(slot.goals, goal.Slug)
+		} else {
+			slotMap[key] = &timeSlot{
+				hour:   hour,
+				minute: minute,
+				goals:  []string{goal.Slug},
+			}
+		}
+	}
+
+	// Convert map to sorted slice
+	var slots []timeSlot
+	for _, slot := range slotMap {
+		slots = append(slots, *slot)
+	}
+
+	// Sort by time (hour, then minute)
+	sort.Slice(slots, func(i, j int) bool {
+		if slots[i].hour != slots[j].hour {
+			return slots[i].hour < slots[j].hour
+		}
+		return slots[i].minute < slots[j].minute
+	})
+
+	return slots
+}
+
+// displayHourlyDensity displays a compact bar chart showing goals per hour
+func displayHourlyDensity(hourCounts []int) {
+	fmt.Println("HOURLY DENSITY")
+
+	// Find max count for scaling
+	maxCount := 0
+	for _, count := range hourCounts {
+		if count > maxCount {
+			maxCount = count
+		}
+	}
+
+	// If no goals, just display empty chart
+	if maxCount == 0 {
+		fmt.Println("No goals scheduled.")
+		return
+	}
+
+	// Define bar characters (from empty to full)
+	bars := []rune{' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+
+	// Build the bar chart line
+	var barLine strings.Builder
+	barLine.WriteString("    ")
+
+	for hour := 0; hour < 24; hour++ {
+		count := hourCounts[hour]
+		if count == 0 {
+			barLine.WriteRune(bars[0])
+		} else {
+			// Scale to bar height (1-8)
+			barIndex := (count * (len(bars) - 1)) / maxCount
+			if barIndex == 0 && count > 0 {
+				barIndex = 1 // Ensure at least one bar level for any count
+			}
+			barLine.WriteRune(bars[barIndex])
+		}
+	}
+
+	fmt.Println(barLine.String())
+
+	// Build hour labels (show labels at 0, 6, 10, 12, 15, 18, 22)
+	labelHours := []int{0, 6, 10, 12, 15, 18, 22}
+	labelLine := make([]rune, 28) // "    " + 24 positions
+	for i := range labelLine {
+		labelLine[i] = ' '
+	}
+
+	for _, hour := range labelHours {
+		label := fmt.Sprintf("%02d", hour)
+		pos := 4 + hour
+		if pos+1 < len(labelLine) {
+			labelLine[pos] = rune(label[0])
+			labelLine[pos+1] = rune(label[1])
+		}
+	}
+	fmt.Println(string(labelLine))
+
+	// Build axis line with markers
+	axisLine := "├───┼─────┼─────────┼─────┼───────┼───────┼────┤"
+	fmt.Println(axisLine)
+
+	// Build count labels (show counts at labeled hours)
+	countLine := make([]rune, 28)
+	for i := range countLine {
+		countLine[i] = ' '
+	}
+
+	for _, hour := range labelHours {
+		count := hourCounts[hour]
+		if count > 0 {
+			label := fmt.Sprintf("%d", count)
+			pos := 4 + hour
+			// Center single digit, or place double digit
+			if len(label) == 1 {
+				if pos < len(countLine) {
+					countLine[pos] = rune(label[0])
+				}
+			} else if len(label) == 2 {
+				if pos < len(countLine) {
+					countLine[pos] = rune(label[0])
+				}
+				if pos+1 < len(countLine) {
+					countLine[pos+1] = rune(label[1])
+				}
+			}
+		}
+	}
+	fmt.Println(string(countLine))
+	fmt.Println()
+}
+
+// displayTimeline displays a vertical timeline listing all goals grouped by deadline time
+func displayTimeline(slots []timeSlot) {
+	fmt.Println("TIMELINE")
+	fmt.Println("────────────────────────────────────────────────")
+
+	for _, slot := range slots {
+		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
+		goalsStr := strings.Join(slot.goals, ", ")
+		fmt.Printf("%s ├─ %s\n", timeStr, goalsStr)
+	}
 }
