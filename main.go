@@ -1332,7 +1332,11 @@ func displayHourlyDensity(hourCounts []int) {
 	for _, hour := range labelHours {
 		count := hourCounts[hour]
 		if count > 0 {
+			// Handle large counts (100+) by capping display at "99"
 			label := fmt.Sprintf("%d", count)
+			if count > 99 {
+				label = "99"
+			}
 			pos := 4 + hour
 			// Center single digit, or place double digit
 			if len(label) == 1 {

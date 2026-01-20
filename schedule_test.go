@@ -8,8 +8,6 @@ import (
 // TestExtractTimeSlots tests the extraction and grouping of time slots from goals
 func TestExtractTimeSlots(t *testing.T) {
 	// Create test goals with different deadline times
-	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-
 	goals := []Goal{
 		{
 			Slug:     "goal1",
@@ -76,8 +74,6 @@ func TestExtractTimeSlots(t *testing.T) {
 	if len(slots[2].goals) != 1 || slots[2].goals[0] != "goal3" {
 		t.Errorf("Expected third slot to have goal3, got %v", slots[2].goals)
 	}
-
-	_ = now // Silence unused variable warning
 }
 
 // TestExtractTimeSlotsEmpty tests extractTimeSlots with no goals
@@ -122,5 +118,147 @@ func TestExtractTimeSlotsAcrossDates(t *testing.T) {
 	// Verify the time
 	if slots[0].hour != 14 || slots[0].minute != 30 {
 		t.Errorf("Expected slot at 14:30, got %02d:%02d", slots[0].hour, slots[0].minute)
+	}
+}
+
+// TestDisplayHourlyDensity tests the hourly density visualization
+func TestDisplayHourlyDensity(t *testing.T) {
+	tests := []struct {
+		name       string
+		hourCounts []int
+		shouldPass bool
+	}{
+		{
+			name:       "empty counts",
+			hourCounts: make([]int, 24),
+			shouldPass: true,
+		},
+		{
+			name: "single goal at midnight",
+			hourCounts: func() []int {
+				counts := make([]int, 24)
+				counts[0] = 1
+				return counts
+			}(),
+			shouldPass: true,
+		},
+		{
+			name: "multiple goals at different hours",
+			hourCounts: func() []int {
+				counts := make([]int, 24)
+				counts[6] = 1
+				counts[10] = 5
+				counts[12] = 1
+				counts[15] = 2
+				counts[18] = 1
+				counts[22] = 3
+				return counts
+			}(),
+			shouldPass: true,
+		},
+		{
+			name: "100+ goals at single hour",
+			hourCounts: func() []int {
+				counts := make([]int, 24)
+				counts[10] = 150
+				return counts
+			}(),
+			shouldPass: true,
+		},
+		{
+			name: "max scaling test",
+			hourCounts: func() []int {
+				counts := make([]int, 24)
+				counts[0] = 1
+				counts[12] = 50
+				return counts
+			}(),
+			shouldPass: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test should not panic
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("displayHourlyDensity panicked: %v", r)
+				}
+			}()
+
+			// We can't easily test the output without capturing stdout,
+			// but we can ensure the function runs without error
+			displayHourlyDensity(tt.hourCounts)
+		})
+	}
+}
+
+// TestDisplayTimeline tests the timeline visualization
+func TestDisplayTimeline(t *testing.T) {
+	tests := []struct {
+		name   string
+		slots  []timeSlot
+		verify func(*testing.T)
+	}{
+		{
+			name:  "empty slots",
+			slots: []timeSlot{},
+			verify: func(t *testing.T) {
+				// Should not panic
+			},
+		},
+		{
+			name: "single slot with one goal",
+			slots: []timeSlot{
+				{hour: 10, minute: 30, goals: []string{"exercise"}},
+			},
+			verify: func(t *testing.T) {
+				// Should not panic
+			},
+		},
+		{
+			name: "single slot with multiple goals",
+			slots: []timeSlot{
+				{hour: 10, minute: 30, goals: []string{"exercise", "vitamins", "breakfast"}},
+			},
+			verify: func(t *testing.T) {
+				// Should not panic
+			},
+		},
+		{
+			name: "multiple slots",
+			slots: []timeSlot{
+				{hour: 6, minute: 0, goals: []string{"wake_up"}},
+				{hour: 10, minute: 30, goals: []string{"exercise", "vitamins"}},
+				{hour: 22, minute: 0, goals: []string{"sleep"}},
+			},
+			verify: func(t *testing.T) {
+				// Should not panic
+			},
+		},
+		{
+			name: "midnight and noon",
+			slots: []timeSlot{
+				{hour: 0, minute: 0, goals: []string{"midnight_task"}},
+				{hour: 12, minute: 0, goals: []string{"noon_task"}},
+			},
+			verify: func(t *testing.T) {
+				// Should not panic
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test should not panic
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("displayTimeline panicked: %v", r)
+				}
+			}()
+
+			displayTimeline(tt.slots)
+			tt.verify(t)
+		})
 	}
 }
