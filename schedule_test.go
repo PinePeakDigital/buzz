@@ -9,7 +9,7 @@ import (
 func TestExtractTimeSlots(t *testing.T) {
 	// Create test goals with different deadline times
 	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	
+
 	goals := []Goal{
 		{
 			Slug:     "goal1",
