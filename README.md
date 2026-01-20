@@ -300,6 +300,45 @@ Creates a charge on your Beeminder account. This is useful for self-imposed pena
 
 **Note:** This creates a real charge on your payment method unless you use the `--dryrun` flag.
 
+**buzz schedule** - Display goal deadline distribution throughout a 24-hour day:
+
+```bash
+buzz schedule
+```
+
+Shows a visual representation of how all goal deadlines are distributed throughout a 24-hour day, regardless of when they're actually due. This helps you identify scheduling patterns and bottlenecks in your goal deadlines.
+
+The output consists of two parts:
+
+1. **Hourly Density Overview** - A compact bar chart showing the number of goals per hour across the 24-hour day
+2. **Detailed Timeline** - A vertical timeline listing all goals grouped by their deadline time
+
+Example output:
+```
+HOURLY DENSITY
+    ▁     █         █     ▃       ▅
+00  06    10        12    15      18      22
+├───┼─────┼─────────┼─────┼───────┼───────┼────┤
+    1     5         1     2       1       3
+
+TIMELINE
+────────────────────────────────────────────────
+06:00 ├─ wake_up
+10:30 ├─ exercise, vitamins, breakfast, meditation, journal
+12:00 ├─ lunch
+15:00 ├─ afternoon_walk, water_check
+18:00 ├─ dinner_prep
+22:00 ├─ bedtime_routine, reading, evening_review
+```
+
+This command extracts the time-of-day from all goal deadlines (ignoring the date) and groups goals by their exact deadline time. This is useful for:
+- Identifying the busiest hours of your day
+- Spotting scheduling imbalances and bottlenecks
+- Understanding your goal distribution patterns
+- Planning better time allocation
+
+The visualization uses ASCII characters that work well even with colors disabled (`--no-color` flag).
+
 **buzz review** - Interactive review of all goals:
 
 ```bash
