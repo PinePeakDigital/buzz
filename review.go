@@ -224,7 +224,10 @@ func formatDueTime(deadlineOffset int) string {
 func formatGoalDetails(goal *Goal, config *Config) string {
 	var details string
 
-	details += fmt.Sprintf("Title:       %s\n", goal.Title)
+	// Display title only if not empty
+	if goal.Title != "" {
+		details += fmt.Sprintf("Title:       %s\n", goal.Title)
+	}
 	details += fmt.Sprintf("Limsum:      %s\n", goal.Limsum)
 
 	// Display deadline (formatted timestamp)
@@ -242,7 +245,10 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 		details += fmt.Sprintf("Rate:        %s\n", rateStr)
 	}
 
-	details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
+	// Display autodata only if not empty
+	if goal.Autodata != "" {
+		details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
+	}
 
 	// Display autoratchet only if set (not nil)
 	if goal.Autoratchet != nil {
