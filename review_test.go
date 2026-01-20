@@ -609,3 +609,119 @@ func TestFineprintOrderInOutput(t *testing.T) {
 		t.Errorf("Expected Fine print to come after URL, but Fine print is at position %d and URL is at position %d", fineprintIndex, urlIndex)
 	}
 }
+
+// TestReviewModelViewWithTitle verifies that title is shown when present
+func TestReviewModelViewWithTitle(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "My Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the title when it's not empty
+	expectedTitle := "Title:       My Test Goal"
+	if !strings.Contains(view, expectedTitle) {
+		t.Errorf("Expected view to contain '%s' when title is set, but got:\n%s", expectedTitle, view)
+	}
+}
+
+// TestReviewModelViewWithEmptyTitle verifies that empty title is not shown
+func TestReviewModelViewWithEmptyTitle(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "", // Empty title
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view doesn't contain "Title:" when title is empty
+	if strings.Contains(view, "Title:") {
+		t.Errorf("Expected view to not contain 'Title:' when title is empty, but got:\n%s", view)
+	}
+}
+
+// TestReviewModelViewWithEmptyAutodata verifies that empty autodata is not shown
+func TestReviewModelViewWithEmptyAutodata(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Autodata: "", // Empty autodata
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view doesn't contain "Autodata:" when autodata is empty
+	if strings.Contains(view, "Autodata:") {
+		t.Errorf("Expected view to not contain 'Autodata:' when autodata is empty, but got:\n%s", view)
+	}
+}
+
+// TestReviewModelViewWithAutodata verifies that autodata is shown when present
+func TestReviewModelViewWithAutodata(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Autodata: "manual",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the autodata when it's not empty
+	expectedAutodata := "Autodata:    manual"
+	if !strings.Contains(view, expectedAutodata) {
+		t.Errorf("Expected view to contain '%s' when autodata is set, but got:\n%s", expectedAutodata, view)
+	}
+}
