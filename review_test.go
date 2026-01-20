@@ -610,6 +610,35 @@ func TestFineprintOrderInOutput(t *testing.T) {
 	}
 }
 
+// TestReviewModelViewWithTitle verifies that title is shown when present
+func TestReviewModelViewWithTitle(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "My Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+		},
+	}
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+	}
+
+	m := initialReviewModel(goals, config)
+	view := m.View()
+
+	// Check that the view contains the title when it's not empty
+	expectedTitle := "Title:       My Test Goal"
+	if !strings.Contains(view, expectedTitle) {
+		t.Errorf("Expected view to contain '%s' when title is set, but got:\n%s", expectedTitle, view)
+	}
+}
+
 // TestReviewModelViewWithEmptyTitle verifies that empty title is not shown
 func TestReviewModelViewWithEmptyTitle(t *testing.T) {
 	goals := []Goal{
