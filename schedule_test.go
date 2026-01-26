@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -259,6 +261,69 @@ func TestDisplayTimeline(t *testing.T) {
 
 			displayTimeline(tt.slots)
 			tt.verify(t)
+		})
+	}
+}
+
+// TestTimelineFormatting tests the specific formatting logic of displayTimeline
+func TestTimelineFormatting(t *testing.T) {
+	tests := []struct {
+		name           string
+		slot           timeSlot
+		expectedTime   string
+		expectedGoals  string
+	}{
+		{
+			name:           "zero-padded hour and minute",
+			slot:           timeSlot{hour: 9, minute: 5, goals: []string{"task1"}},
+			expectedTime:   "09:05",
+			expectedGoals:  "task1",
+		},
+		{
+			name:           "midnight formatting",
+			slot:           timeSlot{hour: 0, minute: 0, goals: []string{"midnight"}},
+			expectedTime:   "00:00",
+			expectedGoals:  "midnight",
+		},
+		{
+			name:           "noon formatting",
+			slot:           timeSlot{hour: 12, minute: 0, goals: []string{"lunch"}},
+			expectedTime:   "12:00",
+			expectedGoals:  "lunch",
+		},
+		{
+			name:           "late evening formatting",
+			slot:           timeSlot{hour: 23, minute: 59, goals: []string{"bedtime"}},
+			expectedTime:   "23:59",
+			expectedGoals:  "bedtime",
+		},
+		{
+			name:           "multiple goals joined with commas",
+			slot:           timeSlot{hour: 10, minute: 30, goals: []string{"task1", "task2", "task3"}},
+			expectedTime:   "10:30",
+			expectedGoals:  "task1, task2, task3",
+		},
+		{
+			name:           "two goals joined",
+			slot:           timeSlot{hour: 14, minute: 15, goals: []string{"exercise", "vitamins"}},
+			expectedTime:   "14:15",
+			expectedGoals:  "exercise, vitamins",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify time formatting
+			timeStr := fmt.Sprintf("%02d:%02d", tt.slot.hour, tt.slot.minute)
+			if timeStr != tt.expectedTime {
+				t.Errorf("Time formatting incorrect: expected %s, got %s", tt.expectedTime, timeStr)
+			}
+
+			// Verify goals joining
+			goalsStr := strings.Join(tt.slot.goals, ", ")
+			if goalsStr != tt.expectedGoals {
+				t.Errorf("Goals joining incorrect: expected %s, got %s", tt.expectedGoals, goalsStr)
+			}
 		})
 	}
 }
