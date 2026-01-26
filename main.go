@@ -1308,13 +1308,14 @@ func displayHourlyDensity(hourCounts []int) {
 	fmt.Println(barLine.String())
 
 	// Build hour labels (show all 24 hours with spacing)
-	// Use color to de-emphasize hours with no counts
+	// Use color to de-emphasize hours with no counts (if colors enabled)
+	colorProfile := lipgloss.ColorProfile()
 	var labelLine strings.Builder
 	labelLine.WriteString("    ")
 
 	for hour := 0; hour < 24; hour++ {
 		label := fmt.Sprintf("%02d", hour)
-		if hourCounts[hour] == 0 {
+		if hourCounts[hour] == 0 && colorProfile != termenv.Ascii {
 			// Dim hours with no counts using gray color
 			labelLine.WriteString("\033[90m" + label + "\033[0m ")
 		} else {
@@ -1392,10 +1393,16 @@ func displayTimeline(slots []timeSlot) {
 	fmt.Println("TIMELINE")
 	fmt.Println("────────────────────────────────────────────────")
 
-	// Define colors for timeline elements
-	timeColor := "\033[36m"    // Cyan for time labels
-	treeColor := "\033[90m"    // Gray for tree structure (├─ and │)
-	resetColor := "\033[0m"    // Reset to default
+	// Define colors for timeline elements (disabled if --no-color)
+	colorProfile := lipgloss.ColorProfile()
+	timeColor := ""
+	treeColor := ""
+	resetColor := ""
+	if colorProfile != termenv.Ascii {
+		timeColor = "\033[36m"    // Cyan for time labels
+		treeColor = "\033[90m"    // Gray for tree structure (├─ and │)
+		resetColor = "\033[0m"    // Reset to default
+	}
 
 for _, slot := range slots {
 		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
