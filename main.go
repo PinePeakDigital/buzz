@@ -1224,8 +1224,8 @@ func extractTimeSlots(goals []Goal) []timeSlot {
 	slotMap := make(map[string]*timeSlot)
 
 	for _, goal := range goals {
-		// Convert losedate to time and extract hour/minute
-		t := time.Unix(goal.Losedate, 0)
+		// Convert losedate to local time and extract hour/minute
+		t := time.Unix(goal.Losedate, 0).In(time.Local)
 		hour := t.Hour()
 		minute := t.Minute()
 
