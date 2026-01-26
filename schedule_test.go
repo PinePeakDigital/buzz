@@ -128,12 +128,10 @@ func TestDisplayHourlyDensity(t *testing.T) {
 	tests := []struct {
 		name       string
 		hourCounts []int
-		shouldPass bool
 	}{
 		{
 			name:       "empty counts",
 			hourCounts: make([]int, 24),
-			shouldPass: true,
 		},
 		{
 			name: "single goal at midnight",
@@ -142,7 +140,6 @@ func TestDisplayHourlyDensity(t *testing.T) {
 				counts[0] = 1
 				return counts
 			}(),
-			shouldPass: true,
 		},
 		{
 			name: "multiple goals at different hours",
@@ -156,7 +153,6 @@ func TestDisplayHourlyDensity(t *testing.T) {
 				counts[22] = 3
 				return counts
 			}(),
-			shouldPass: true,
 		},
 		{
 			name: "100+ goals at single hour",
@@ -165,7 +161,6 @@ func TestDisplayHourlyDensity(t *testing.T) {
 				counts[10] = 150
 				return counts
 			}(),
-			shouldPass: true,
 		},
 		{
 			name: "max scaling test",
@@ -175,7 +170,6 @@ func TestDisplayHourlyDensity(t *testing.T) {
 				counts[12] = 50
 				return counts
 			}(),
-			shouldPass: true,
 		},
 	}
 
