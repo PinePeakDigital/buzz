@@ -1282,36 +1282,40 @@ func displayHourlyDensity(hourCounts []int) {
 	// Define bar characters (from empty to full)
 	bars := []rune{' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
-	// Build the bar chart line
+	// Build the bar chart line (3 chars per hour: 2 for bar + 1 space = 72 positions + 4 prefix)
 	var barLine strings.Builder
 	barLine.WriteString("    ")
 
 	for hour := 0; hour < 24; hour++ {
 		count := hourCounts[hour]
+		var bar rune
 		if count == 0 {
-			barLine.WriteRune(bars[0])
+			bar = bars[0]
 		} else {
 			// Scale to bar height (1-8)
 			barIndex := (count * (len(bars) - 1)) / maxCount
 			if barIndex == 0 && count > 0 {
 				barIndex = 1 // Ensure at least one bar level for any count
 			}
-			barLine.WriteRune(bars[barIndex])
+			bar = bars[barIndex]
 		}
+		// Write the bar twice for 2-char width per hour, plus a space
+		barLine.WriteRune(bar)
+		barLine.WriteRune(bar)
+		barLine.WriteRune(' ')
 	}
 
 	fmt.Println(barLine.String())
 
-	// Build hour labels (show labels at 0, 6, 10, 12, 15, 18, 22)
-	labelHours := []int{0, 6, 10, 12, 15, 18, 22}
-	labelLine := make([]rune, 28) // "    " + 24 positions
+	// Build hour labels (show all 24 hours with spacing)
+	labelLine := make([]rune, 76) // "    " + 72 positions (3 per hour)
 	for i := range labelLine {
 		labelLine[i] = ' '
 	}
 
-	for _, hour := range labelHours {
+	for hour := 0; hour < 24; hour++ {
 		label := fmt.Sprintf("%02d", hour)
-		pos := 4 + hour
+		pos := 4 + (hour * 3)
 		if pos+1 < len(labelLine) {
 			labelLine[pos] = rune(label[0])
 			labelLine[pos+1] = rune(label[1])
@@ -1319,29 +1323,27 @@ func displayHourlyDensity(hourCounts []int) {
 	}
 	fmt.Println(string(labelLine))
 
-	// Build axis line with markers aligned to label positions
-	axisRunes := make([]rune, 28) // "    " + 24 positions
+	// Build axis line with markers for each hour
+	axisRunes := make([]rune, 76) // "    " + 72 positions
 	for i := range axisRunes {
 		axisRunes[i] = ' '
 	}
 
-	firstPos, lastPos := len(axisRunes), 0
-	for _, hour := range labelHours {
-		pos := 4 + hour
+	firstPos, lastPos := -1, -1
+	for hour := 0; hour < 24; hour++ {
+		pos := 4 + (hour * 3)
 		if pos >= len(axisRunes) {
 			continue
 		}
 		axisRunes[pos] = '┼'
-		if pos < firstPos {
+		if firstPos == -1 {
 			firstPos = pos
 		}
-		if pos > lastPos {
-			lastPos = pos
-		}
+		lastPos = pos
 	}
 
 	// Draw horizontal line segments between first and last marker
-	if firstPos <= lastPos && firstPos < len(axisRunes) {
+	if firstPos != -1 && lastPos != -1 && firstPos <= lastPos {
 		for i := firstPos + 1; i < lastPos; i++ {
 			if axisRunes[i] == ' ' {
 				axisRunes[i] = '─'
@@ -1351,21 +1353,22 @@ func displayHourlyDensity(hourCounts []int) {
 
 	fmt.Println(string(axisRunes))
 
-	// Build count labels (show counts at labeled hours)
-	countLine := make([]rune, 28)
+	// Build count labels (show counts for all hours with goals)
+	countLine := make([]rune, 76)
 	for i := range countLine {
 		countLine[i] = ' '
 	}
 
-	for _, hour := range labelHours {
+	for hour := 0; hour < 24; hour++ {
 		count := hourCounts[hour]
 		if count > 0 {
-			// For large counts, cap the display to avoid truncation (e.g., "99+")
-			label := fmt.Sprintf("%d", count)
+			var label string
 			if count > 99 {
-				label = "99+"
+				label = " ∞" // Use infinity symbol for 99+, with leading space
+			} else {
+				label = fmt.Sprintf("%2d", count) // Right-align in 2-char space
 			}
-			pos := 4 + hour
+			pos := 4 + (hour * 3)
 			// Write the label runes into the count line, guarding against overflow
 			for i, r := range label {
 				if pos+i >= len(countLine) {
