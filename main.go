@@ -1399,12 +1399,12 @@ func displayTimeline(slots []timeSlot) {
 	treeColor := ""
 	resetColor := ""
 	if colorProfile != termenv.Ascii {
-		timeColor = "\033[36m"    // Cyan for time labels
-		treeColor = "\033[90m"    // Gray for tree structure (├─ and │)
-		resetColor = "\033[0m"    // Reset to default
+		timeColor = "\033[36m" // Cyan for time labels
+		treeColor = "\033[90m" // Gray for tree structure (├─ and │)
+		resetColor = "\033[0m" // Reset to default
 	}
 
-for _, slot := range slots {
+	for _, slot := range slots {
 		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
 		goalsStr := strings.Join(slot.goals, ", ")
 
@@ -1430,12 +1430,12 @@ for _, slot := range slots {
 			available = 10 // minimal safety width
 		}
 
-	// Split on commas to get individual goals
+		// Split on commas to get individual goals
 		goals := strings.Split(goalsStr, ", ")
-	var line strings.Builder
-	line.WriteString(prefix)
-	current := 0
-	for _, goal := range goals {
+		var line strings.Builder
+		line.WriteString(prefix)
+		current := 0
+		for _, goal := range goals {
 			// Determine separator
 			sep := ""
 			if current > 0 {
