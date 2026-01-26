@@ -1364,9 +1364,9 @@ func displayHourlyDensity(hourCounts []int) {
 		if count > 0 {
 			var label string
 			if count > 99 {
-				label = " ∞" // Use infinity symbol for 99+, with leading space
+				label = " \u221e" // Use infinity symbol for 99+, with leading space
 			} else {
-				label = fmt.Sprintf("%2d", count) // Right-align in 2-char space
+				label = fmt.Sprintf("%-2d", count) // Left-align in 2-char space
 			}
 			pos := 4 + (hour * 3)
 			// Write the label runes into the count line, guarding against overflow
