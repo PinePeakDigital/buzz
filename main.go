@@ -1417,25 +1417,29 @@ for _, slot := range slots {
 			available = 10 // minimal safety width
 		}
 
-		// Split on commas to get individual goals
+	// Split on commas to get individual goals
 		goals := strings.Split(goalsStr, ", ")
-		var line strings.Builder
-		line.WriteString(prefix)
-		current := 0
-		for i, goal := range goals {
+	var line strings.Builder
+	line.WriteString(prefix)
+	current := 0
+	for _, goal := range goals {
+			// Determine separator
 			sep := ""
-			if i > 0 {
+			if current > 0 {
+				// Add comma+space before this goal if there's already content on this line
 				sep = ", "
 			}
 			chunk := sep + goal
 			if current+len(chunk) > available && current > 0 {
+				// Always add trailing comma when wrapping (more content follows)
+				line.WriteString(",")
 				fmt.Println(line.String())
 				// start new wrapped line with indent matching prefix width
 				// Use vertical line to show continuation
 				line.Reset()
 				// Time column width (5 chars) + space + vertical continuation
 				line.WriteString("      │  ")
-				// Add remaining spaces to reach goal column
+				// Add the goal that didn't fit
 				line.WriteString(goal)
 				current = len(goal)
 				continue
