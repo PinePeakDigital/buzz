@@ -1399,8 +1399,8 @@ func displayTimeline(slots []timeSlot) {
 	timeStyle := lipgloss.NewStyle()
 	treeStyle := lipgloss.NewStyle()
 	if colorProfile != termenv.Ascii {
-		timeStyle = timeStyle.Foreground(lipgloss.Color("6"))  // Cyan for time labels
-		treeStyle = treeStyle.Foreground(lipgloss.Color("8"))  // Gray for tree structure (├─ and │)
+		timeStyle = timeStyle.Foreground(lipgloss.Color("6")) // Cyan for time labels
+		treeStyle = treeStyle.Foreground(lipgloss.Color("8")) // Gray for tree structure (├─ and │)
 	}
 
 	for _, slot := range slots {
