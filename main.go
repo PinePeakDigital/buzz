@@ -1392,12 +1392,18 @@ func displayTimeline(slots []timeSlot) {
 	fmt.Println("TIMELINE")
 	fmt.Println("────────────────────────────────────────────────")
 
+	// Define colors for timeline elements
+	timeColor := "\033[36m"    // Cyan for time labels
+	treeColor := "\033[90m"    // Gray for tree structure (├─ and │)
+	resetColor := "\033[0m"    // Reset to default
+
 for _, slot := range slots {
 		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
 		goalsStr := strings.Join(slot.goals, ", ")
 
 		// Build the full line and wrap it to terminal width, indenting wrapped lines
-		prefix := fmt.Sprintf("%s ├─ ", timeStr)
+		// Color the time and tree separately
+		prefix := fmt.Sprintf("%s%s%s %s├─%s ", timeColor, timeStr, resetColor, treeColor, resetColor)
 		// Calculate visual width of prefix (rune count, not byte count)
 		prefixWidth := len([]rune(prefix))
 
@@ -1437,8 +1443,8 @@ for _, slot := range slots {
 				// start new wrapped line with indent matching prefix width
 				// Use vertical line to show continuation
 				line.Reset()
-				// Time column width (5 chars) + space + vertical continuation
-				line.WriteString("      │  ")
+				// Time column width (5 chars) + space + vertical continuation (colored)
+				line.WriteString(fmt.Sprintf("      %s│%s  ", treeColor, resetColor))
 				// Add the goal that didn't fit
 				line.WriteString(goal)
 				current = len(goal)
