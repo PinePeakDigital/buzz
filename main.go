@@ -1335,7 +1335,12 @@ func displayHourlyDensity(hourCounts []int) {
 		if pos >= len(axisRunes) {
 			continue
 		}
-		axisRunes[pos] = '┼'
+		// Use ┼ if hour has counts (extends down), ┴ if no counts (only extends up)
+		if hourCounts[hour] > 0 {
+			axisRunes[pos] = '┼'
+		} else {
+			axisRunes[pos] = '┴'
+		}
 		if firstPos == -1 {
 			firstPos = pos
 		}
