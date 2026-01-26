@@ -1319,9 +1319,37 @@ func displayHourlyDensity(hourCounts []int) {
 	}
 	fmt.Println(string(labelLine))
 
-	// Build axis line with markers
-	axisLine := "├───┼─────┼─────────┼─────┼───────┼───────┼────┤"
-	fmt.Println(axisLine)
+	// Build axis line with markers aligned to label positions
+	axisRunes := make([]rune, 28) // "    " + 24 positions
+	for i := range axisRunes {
+		axisRunes[i] = ' '
+	}
+
+	firstPos, lastPos := len(axisRunes), 0
+	for _, hour := range labelHours {
+		pos := 4 + hour
+		if pos >= len(axisRunes) {
+			continue
+		}
+		axisRunes[pos] = '┼'
+		if pos < firstPos {
+			firstPos = pos
+		}
+		if pos > lastPos {
+			lastPos = pos
+		}
+	}
+
+	// Draw horizontal line segments between first and last marker
+	if firstPos <= lastPos && firstPos < len(axisRunes) {
+		for i := firstPos + 1; i < lastPos; i++ {
+			if axisRunes[i] == ' ' {
+				axisRunes[i] = '─'
+			}
+		}
+	}
+
+	fmt.Println(string(axisRunes))
 
 	// Build count labels (show counts at labeled hours)
 	countLine := make([]rune, 28)
