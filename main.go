@@ -1332,24 +1332,18 @@ func displayHourlyDensity(hourCounts []int) {
 	for _, hour := range labelHours {
 		count := hourCounts[hour]
 		if count > 0 {
-			// Handle large counts (100+) by capping display at "99"
+			// For large counts, cap the display to avoid truncation (e.g., "99+")
 			label := fmt.Sprintf("%d", count)
 			if count > 99 {
-				label = "99"
+				label = "99+"
 			}
 			pos := 4 + hour
-			// Center single digit, or place double digit
-			if len(label) == 1 {
-				if pos < len(countLine) {
-					countLine[pos] = rune(label[0])
+			// Write the label runes into the count line, guarding against overflow
+			for i, r := range label {
+				if pos+i >= len(countLine) {
+					break
 				}
-			} else if len(label) == 2 {
-				if pos < len(countLine) {
-					countLine[pos] = rune(label[0])
-				}
-				if pos+1 < len(countLine) {
-					countLine[pos+1] = rune(label[1])
-				}
+				countLine[pos+i] = r
 			}
 		}
 	}
