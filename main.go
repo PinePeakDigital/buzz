@@ -1308,20 +1308,20 @@ func displayHourlyDensity(hourCounts []int) {
 	fmt.Println(barLine.String())
 
 	// Build hour labels (show all 24 hours with spacing)
-	labelLine := make([]rune, 76) // "    " + 72 positions (3 per hour)
-	for i := range labelLine {
-		labelLine[i] = ' '
-	}
+	// Use color to de-emphasize hours with no counts
+	var labelLine strings.Builder
+	labelLine.WriteString("    ")
 
 	for hour := 0; hour < 24; hour++ {
 		label := fmt.Sprintf("%02d", hour)
-		pos := 4 + (hour * 3)
-		if pos+1 < len(labelLine) {
-			labelLine[pos] = rune(label[0])
-			labelLine[pos+1] = rune(label[1])
+		if hourCounts[hour] == 0 {
+			// Dim hours with no counts using gray color
+			labelLine.WriteString("\033[90m" + label + "\033[0m ")
+		} else {
+			labelLine.WriteString(label + " ")
 		}
 	}
-	fmt.Println(string(labelLine))
+	fmt.Println(labelLine.String())
 
 	// Build axis line with markers for each hour
 	axisRunes := make([]rune, 76) // "    " + 72 positions
