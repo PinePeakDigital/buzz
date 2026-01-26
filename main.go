@@ -1392,9 +1392,57 @@ func displayTimeline(slots []timeSlot) {
 	fmt.Println("TIMELINE")
 	fmt.Println("────────────────────────────────────────────────")
 
-	for _, slot := range slots {
+for _, slot := range slots {
 		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
 		goalsStr := strings.Join(slot.goals, ", ")
-		fmt.Printf("%s ├─ %s\n", timeStr, goalsStr)
+
+		// Build the full line and wrap it to terminal width, indenting wrapped lines
+		prefix := fmt.Sprintf("%s ├─ ", timeStr)
+		// Calculate visual width of prefix (rune count, not byte count)
+		prefixWidth := len([]rune(prefix))
+
+		// Determine terminal width; fallback to 80 if unavailable
+		width := 80
+		if w, ok := os.LookupEnv("COLUMNS"); ok {
+			if n, err := strconv.Atoi(w); err == nil && n > 0 {
+				width = n
+			}
+		}
+
+		// Simple wrapping: break on commas before exceeding width
+		available := width
+		if prefixWidth < available {
+			available -= prefixWidth
+		} else {
+			available = 10 // minimal safety width
+		}
+
+		// Split on commas to get individual goals
+		goals := strings.Split(goalsStr, ", ")
+		var line strings.Builder
+		line.WriteString(prefix)
+		current := 0
+		for i, goal := range goals {
+			sep := ""
+			if i > 0 {
+				sep = ", "
+			}
+			chunk := sep + goal
+			if current+len(chunk) > available && current > 0 {
+				fmt.Println(line.String())
+				// start new wrapped line with indent matching prefix width
+				// Use vertical line to show continuation
+				line.Reset()
+				// Time column width (5 chars) + space + vertical continuation
+				line.WriteString("      │  ")
+				// Add remaining spaces to reach goal column
+				line.WriteString(goal)
+				current = len(goal)
+				continue
+			}
+			line.WriteString(chunk)
+			current += len(chunk)
+		}
+		fmt.Println(line.String())
 	}
 }
