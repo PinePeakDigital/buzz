@@ -1310,6 +1310,7 @@ func displayHourlyDensity(hourCounts []int) {
 	// Build hour labels (show all 24 hours with spacing)
 	// Use color to de-emphasize hours with no counts (if colors enabled)
 	colorProfile := lipgloss.ColorProfile()
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	var labelLine strings.Builder
 	labelLine.WriteString("    ")
 
@@ -1317,7 +1318,7 @@ func displayHourlyDensity(hourCounts []int) {
 		label := fmt.Sprintf("%02d", hour)
 		if hourCounts[hour] == 0 && colorProfile != termenv.Ascii {
 			// Dim hours with no counts using gray color
-			labelLine.WriteString("\033[90m" + label + "\033[0m ")
+			labelLine.WriteString(dimStyle.Render(label) + " ")
 		} else {
 			labelLine.WriteString(label + " ")
 		}
@@ -1411,8 +1412,8 @@ func displayTimeline(slots []timeSlot) {
 		// Build the full line and wrap it to terminal width, indenting wrapped lines
 		// Color the time and tree separately
 		prefix := fmt.Sprintf("%s%s%s %s├─%s ", timeColor, timeStr, resetColor, treeColor, resetColor)
-		// Calculate visual width of prefix (rune count, not byte count)
-		prefixWidth := len([]rune(prefix))
+		// Visual width of prefix: "HH:MM ├─ " = 9 characters (ANSI codes have zero width)
+		const prefixVisualWidth = 9
 
 		// Determine terminal width; fallback to 80 if unavailable
 		width := 80
@@ -1424,8 +1425,8 @@ func displayTimeline(slots []timeSlot) {
 
 		// Simple wrapping: break on commas before exceeding width
 		available := width
-		if prefixWidth < available {
-			available -= prefixWidth
+		if prefixVisualWidth < available {
+			available -= prefixVisualWidth
 		} else {
 			available = 10 // minimal safety width
 		}
