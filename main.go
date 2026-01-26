@@ -1394,15 +1394,13 @@ func displayTimeline(slots []timeSlot) {
 	fmt.Println("TIMELINE")
 	fmt.Println("────────────────────────────────────────────────")
 
-	// Define colors for timeline elements (disabled if --no-color)
+	// Define styles for timeline elements (disabled if --no-color)
 	colorProfile := lipgloss.ColorProfile()
-	timeColor := ""
-	treeColor := ""
-	resetColor := ""
+	timeStyle := lipgloss.NewStyle()
+	treeStyle := lipgloss.NewStyle()
 	if colorProfile != termenv.Ascii {
-		timeColor = "\033[36m" // Cyan for time labels
-		treeColor = "\033[90m" // Gray for tree structure (├─ and │)
-		resetColor = "\033[0m" // Reset to default
+		timeStyle = timeStyle.Foreground(lipgloss.Color("6"))  // Cyan for time labels
+		treeStyle = treeStyle.Foreground(lipgloss.Color("8"))  // Gray for tree structure (├─ and │)
 	}
 
 	for _, slot := range slots {
@@ -1410,8 +1408,8 @@ func displayTimeline(slots []timeSlot) {
 		goalsStr := strings.Join(slot.goals, ", ")
 
 		// Build the full line and wrap it to terminal width, indenting wrapped lines
-		// Color the time and tree separately
-		prefix := fmt.Sprintf("%s%s%s %s├─%s ", timeColor, timeStr, resetColor, treeColor, resetColor)
+		// Color the time and tree separately using lipgloss
+		prefix := timeStyle.Render(timeStr) + " " + treeStyle.Render("├─") + " "
 		// Visual width of prefix: "HH:MM ├─ " = 9 characters (ANSI codes have zero width)
 		const prefixVisualWidth = 9
 
@@ -1451,8 +1449,8 @@ func displayTimeline(slots []timeSlot) {
 				// start new wrapped line with indent matching prefix width
 				// Use vertical line to show continuation
 				line.Reset()
-				// Time column width (5 chars) + space + vertical continuation (colored)
-				line.WriteString(fmt.Sprintf("      %s│%s  ", treeColor, resetColor))
+				// Time column width (5 chars) + space + vertical continuation (styled)
+				line.WriteString("      " + treeStyle.Render("│") + "  ")
 				// Add the goal that didn't fit
 				line.WriteString(goal)
 				current = len(goal)
