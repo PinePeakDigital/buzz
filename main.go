@@ -16,6 +16,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 	"github.com/muesli/termenv"
 )
 
@@ -1438,10 +1439,8 @@ func displayTimeline(slots []timeSlot) {
 
 		// Determine terminal width; fallback to 80 if unavailable
 		width := 80
-		if w, ok := os.LookupEnv("COLUMNS"); ok {
-			if n, err := strconv.Atoi(w); err == nil && n > 0 {
-				width = n
-			}
+		if w, _, err := term.GetSize(uintptr(os.Stdout.Fd())); err == nil && w > 0 {
+			width = w
 		}
 
 		// Simple wrapping: break on commas before exceeding width
