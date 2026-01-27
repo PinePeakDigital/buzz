@@ -16,6 +16,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 	"github.com/muesli/termenv"
 )
 
@@ -1438,9 +1439,10 @@ func displayTimeline(slots []timeSlot) {
 
 		// Determine terminal width; fallback to 80 if unavailable
 		width := 80
-		if w, ok := os.LookupEnv("COLUMNS"); ok {
-			if n, err := strconv.Atoi(w); err == nil && n > 0 {
-				width = n
+		fd := uintptr(os.Stdout.Fd())
+		if term.IsTerminal(fd) {
+			if w, _, err := term.GetSize(fd); err == nil && w > 0 {
+				width = w
 			}
 		}
 
