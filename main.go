@@ -1263,6 +1263,12 @@ func extractTimeSlots(goals []Goal) []timeSlot {
 
 // displayHourlyDensity displays a compact bar chart showing goals per hour
 func displayHourlyDensity(hourCounts []int) {
+	const (
+		hoursPerDay    = 24
+		charsPerHour   = 3  // 2 for bar/label + 1 for space
+		densityLineLen = hoursPerDay * charsPerHour
+	)
+
 	fmt.Println("HOURLY DENSITY")
 
 	// Find max count for scaling
@@ -1282,10 +1288,10 @@ func displayHourlyDensity(hourCounts []int) {
 	// Define bar characters (from empty to full)
 	bars := []rune{' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
-	// Build the bar chart line (3 chars per hour: 2 for bar + 1 space = 72 positions)
+	// Build the bar chart line
 	var barLine strings.Builder
 
-	for hour := 0; hour < 24; hour++ {
+	for hour := 0; hour < hoursPerDay; hour++ {
 		count := hourCounts[hour]
 		var bar rune
 		if count == 0 {
@@ -1312,7 +1318,7 @@ func displayHourlyDensity(hourCounts []int) {
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	var labelLine strings.Builder
 
-	for hour := 0; hour < 24; hour++ {
+	for hour := 0; hour < hoursPerDay; hour++ {
 		label := fmt.Sprintf("%02d", hour)
 		if hourCounts[hour] == 0 && colorProfile != termenv.Ascii {
 			// Dim hours with no counts using gray color
@@ -1324,14 +1330,14 @@ func displayHourlyDensity(hourCounts []int) {
 	fmt.Println(labelLine.String())
 
 	// Build axis line with markers for each hour
-	axisRunes := make([]rune, 72) // 72 positions (3 chars per hour)
+	axisRunes := make([]rune, densityLineLen)
 	for i := range axisRunes {
 		axisRunes[i] = ' '
 	}
 
 	firstPos, lastPos := -1, -1
-	for hour := 0; hour < 24; hour++ {
-		pos := hour * 3
+	for hour := 0; hour < hoursPerDay; hour++ {
+		pos := hour * charsPerHour
 		if pos >= len(axisRunes) {
 			continue
 		}
@@ -1359,12 +1365,12 @@ func displayHourlyDensity(hourCounts []int) {
 	fmt.Println(string(axisRunes))
 
 	// Build count labels (show counts for all hours with goals)
-	countLine := make([]rune, 72)
+	countLine := make([]rune, densityLineLen)
 	for i := range countLine {
 		countLine[i] = ' '
 	}
 
-	for hour := 0; hour < 24; hour++ {
+	for hour := 0; hour < hoursPerDay; hour++ {
 		count := hourCounts[hour]
 		if count > 0 {
 			var label string
@@ -1373,7 +1379,7 @@ func displayHourlyDensity(hourCounts []int) {
 			} else {
 				label = fmt.Sprintf("%-2d", count) // Left-align in 2-char space
 			}
-			pos := hour * 3
+			pos := hour * charsPerHour
 			// Write the label runes into the count line, guarding against overflow
 			for i, r := range label {
 				if pos+i >= len(countLine) {
