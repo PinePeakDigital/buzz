@@ -1265,7 +1265,7 @@ func extractTimeSlots(goals []Goal) []timeSlot {
 func displayHourlyDensity(hourCounts []int) {
 	const (
 		hoursPerDay    = 24
-		charsPerHour   = 3  // Each hour uses 3 chars: 2 for display (bar/label) + 1 space
+		charsPerHour   = 3 // Each hour uses 3 chars: 2 for display (bar/label) + 1 space
 		densityLineLen = hoursPerDay * charsPerHour
 	)
 
