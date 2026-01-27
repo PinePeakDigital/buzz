@@ -365,13 +365,16 @@ func readValueFromStdin() (string, error) {
 	return "", fmt.Errorf("no input from stdin")
 }
 
-// detectMisplacedFlag checks if the --requestid flag appears in the args list
+// detectMisplacedFlag checks if known flags appear in the args list
 // This is used to detect when users place flags after positional arguments
-// Returns the first detected --requestid flag string, or empty string if none found
+// Returns the first detected flag string, or empty string if none found
 func detectMisplacedFlag(args []string) string {
+	knownFlags := []string{"--requestid", "--daystamp"}
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "--requestid") {
-			return arg
+		for _, flag := range knownFlags {
+			if strings.HasPrefix(arg, flag) {
+				return arg
+			}
 		}
 	}
 	return ""
