@@ -244,7 +244,7 @@ func printHelp() {
 	fmt.Println("  buzz less                         Output all do-less type goals")
 	fmt.Println("  buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
-	fmt.Println("                                    --daystamp: Date in YYYYMMDD format (default: today)")
+	fmt.Println("                                    --daystamp: Date in YYYYMMDD format (default: current time)")
 	fmt.Println("                                    Note: Flags must come BEFORE positional args")
 	fmt.Println("  echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
