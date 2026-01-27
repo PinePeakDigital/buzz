@@ -215,7 +215,7 @@ Lists all goals where you're trying to do less of something (weight loss, habit 
 **buzz add** - Add a datapoint to a goal without opening the TUI:
 
 ```bash
-buzz add <goalslug> <value> [comment] [--requestid=<id>]
+buzz add [--daystamp=<date>] [--requestid=<id>] <goalslug> <value> [comment]
 
 # Examples:
 buzz add opsec 1                    # Adds value 1 with default comment "Added via buzz"
@@ -223,6 +223,7 @@ buzz add workout 2.5 'morning run'  # Adds value 2.5 with custom comment
 buzz add study 00:05 'quick review' # Adds 5 minutes (converted to 0.083333 hours)
 buzz add focus 1:30                 # Adds 1.5 hours (1 hour 30 minutes)
 buzz add reading 3 'finished chapter 5' --requestid=abc123  # Adds with a request ID for idempotency
+buzz add exercise 1 --daystamp=20240115  # Adds datapoint for a specific date
 ```
 
 The `<value>` parameter supports both decimal numbers and time formats:
@@ -233,6 +234,11 @@ The `<value>` parameter supports both decimal numbers and time formats:
 Time formats are automatically converted to decimal hours before submitting to Beeminder.
 
 The comment parameter is optional and defaults to "Added via buzz" if not provided.
+
+The `--daystamp` flag is optional and specifies the date for the datapoint:
+- **Format**: YYYYMMDD (e.g., `20240115` for January 15, 2024)
+- **Default**: If not provided, uses the current timestamp
+- **Use case**: Backfill data for past dates or pre-enter data for today
 
 The `--requestid` flag is optional and provides idempotency:
 - **Prevents duplicates**: Safely retry submissions without creating duplicate datapoints
