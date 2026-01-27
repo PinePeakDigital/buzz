@@ -444,6 +444,30 @@ func TestDetectMisplacedFlag(t *testing.T) {
 			expectedFlag: "--requestid=123",
 			description:  "Should return the first detected flag",
 		},
+		{
+			name:         "flag --daystamp after args",
+			args:         []string{"goalslug", "1", "comment", "--daystamp"},
+			expectedFlag: "--daystamp",
+			description:  "Should detect --daystamp flag after positional arguments",
+		},
+		{
+			name:         "flag --daystamp= after args",
+			args:         []string{"goalslug", "1", "comment", "--daystamp=20240115"},
+			expectedFlag: "--daystamp=20240115",
+			description:  "Should detect --daystamp=value flag after positional arguments",
+		},
+		{
+			name:         "daystamp before requestid returns daystamp",
+			args:         []string{"goalslug", "1", "--daystamp=20240115", "--requestid=123"},
+			expectedFlag: "--daystamp=20240115",
+			description:  "Should return the first detected flag when multiple are present",
+		},
+		{
+			name:         "requestid before daystamp returns requestid",
+			args:         []string{"goalslug", "1", "--requestid=123", "--daystamp=20240115"},
+			expectedFlag: "--requestid=123",
+			description:  "Should return the first detected flag when multiple are present",
+		},
 	}
 
 	for _, tt := range tests {

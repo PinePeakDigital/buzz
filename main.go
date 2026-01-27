@@ -242,10 +242,11 @@ func printHelp() {
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
 	fmt.Println("  buzz due <duration>               Output all goals due within duration (e.g., 10m, 1h, 5d, 1w)")
 	fmt.Println("  buzz less                         Output all do-less type goals")
-	fmt.Println("  buzz add [--requestid=<id>] <goalslug> <value> [comment]")
+	fmt.Println("  buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]")
 	fmt.Println("                                    Add a datapoint to a goal")
+	fmt.Println("                                    --daystamp: Date in YYYYMMDD format (default: current time)")
 	fmt.Println("                                    Note: Flags must come BEFORE positional args")
-	fmt.Println("  echo \"<value>\" | buzz add [--requestid=<id>] <goalslug> [comment]")
+	fmt.Println("  echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
@@ -791,11 +792,12 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 // printAddUsageAndExit prints the usage for buzz add command and exits with code 1
 func printAddUsageAndExit(errorMsg string) {
 	fmt.Println("Error: " + errorMsg)
-	fmt.Println("Usage: buzz add [--requestid=<id>] <goalslug> <value> [comment]")
-	fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] <goalslug> [comment]")
+	fmt.Println("Usage: buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]")
+	fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
 	fmt.Println("")
-	fmt.Println("Note: Flags (--requestid) must come BEFORE positional arguments.")
-	fmt.Println("      Example: buzz add --requestid=ID goalslug value comment")
+	fmt.Println("Note: Flags must come BEFORE positional arguments.")
+	fmt.Println("      Example: buzz add --daystamp=20240115 goalslug value comment")
+	fmt.Println("      The --daystamp flag accepts dates in YYYYMMDD format.")
 	os.Exit(1)
 }
 
@@ -804,12 +806,14 @@ func handleAddCommand() {
 	// Parse flags for the add command
 	addFlags := flag.NewFlagSet("add", flag.ContinueOnError)
 	requestid := addFlags.String("requestid", "", "Request ID for idempotency")
+	daystamp := addFlags.String("daystamp", "", "Date for the datapoint in YYYYMMDD format")
 	if err := addFlags.Parse(os.Args[2:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Println("Usage: buzz add [--requestid=<id>] <goalslug> <value> [comment]")
-			fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] <goalslug> [comment]")
+			fmt.Println("Usage: buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]")
+			fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
 			fmt.Println("")
 			fmt.Println("Note: Flags must come BEFORE positional arguments.")
+			fmt.Println("      The --daystamp flag accepts dates in YYYYMMDD format.")
 			return
 		}
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
@@ -823,7 +827,7 @@ func handleAddCommand() {
 	if misplacedFlag := detectMisplacedFlag(args); misplacedFlag != "" {
 		fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", misplacedFlag)
 		fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
-		fmt.Fprintf(os.Stderr, "Correct usage: buzz add --requestid=ID goalslug value comment\n")
+		fmt.Fprintf(os.Stderr, "Correct usage: buzz add [--requestid=ID] [--daystamp=DATE] goalslug value comment\n")
 		fmt.Fprintln(os.Stderr, "")
 	}
 
@@ -869,7 +873,19 @@ func handleAddCommand() {
 		os.Exit(1)
 	}
 
-	// Use current time as timestamp
+	// Parse and validate daystamp if provided
+	var daystampForAPI string
+	if *daystamp != "" {
+		// Validate date format (YYYYMMDD)
+		_, err := time.Parse("20060102", *daystamp)
+		if err != nil {
+			fmt.Printf("Error: Invalid date format for --daystamp: %s (expected YYYYMMDD)\n", *daystamp)
+			os.Exit(1)
+		}
+		daystampForAPI = *daystamp
+	}
+
+	// Use current time as timestamp (only used if daystamp is not provided)
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 
 	// Convert time format to decimal hours if needed
@@ -889,7 +905,7 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = CreateDatapoint(config, goalSlug, timestamp, value, comment, *requestid)
+	err = CreateDatapointWithDaystamp(config, goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
 		os.Exit(1)
@@ -902,6 +918,9 @@ func handleAddCommand() {
 	}
 
 	successMsg := fmt.Sprintf("Successfully added datapoint to %s: value=%s, comment=\"%s\"", goalSlug, value, comment)
+	if *daystamp != "" {
+		successMsg += fmt.Sprintf(", daystamp=%s", *daystamp)
+	}
 	if *requestid != "" {
 		successMsg += fmt.Sprintf(", requestid=\"%s\"", *requestid)
 	}

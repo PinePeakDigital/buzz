@@ -432,15 +432,27 @@ func GetLastDatapointValue(config *Config, goalSlug string) (float64, error) {
 
 // CreateDatapoint submits a new datapoint to a Beeminder goal
 func CreateDatapoint(config *Config, goalSlug, timestamp, value, comment, requestid string) error {
+	return CreateDatapointWithDaystamp(config, goalSlug, timestamp, "", value, comment, requestid)
+}
+
+// CreateDatapointWithDaystamp submits a new datapoint to a Beeminder goal with optional daystamp
+// If daystamp is provided (format YYYYMMDD), it will be used instead of timestamp
+func CreateDatapointWithDaystamp(config *Config, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
 	baseURL := getBaseURL(config)
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		baseURL, config.Username, goalSlug)
 
 	data := url.Values{}
 	data.Set("auth_token", config.AuthToken)
-	data.Set("timestamp", timestamp)
 	data.Set("value", value)
 	data.Set("comment", comment)
+
+	// Use daystamp if provided, otherwise use timestamp
+	if daystamp != "" {
+		data.Set("daystamp", daystamp)
+	} else {
+		data.Set("timestamp", timestamp)
+	}
 
 	// Add requestid if provided
 	if requestid != "" {

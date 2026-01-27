@@ -1586,6 +1586,91 @@ func TestCreateDatapointWithRequestID(t *testing.T) {
 	}
 }
 
+// TestCreateDatapointWithDaystamp tests CreateDatapointWithDaystamp function
+func TestCreateDatapointWithDaystamp(t *testing.T) {
+	tests := []struct {
+		name           string
+		daystamp       string
+		timestamp      string
+		expectDaystamp bool // true if daystamp should be used, false if timestamp
+	}{
+		{
+			name:           "with daystamp",
+			daystamp:       "20240115",
+			timestamp:      "1234567890",
+			expectDaystamp: true,
+		},
+		{
+			name:           "without daystamp (empty string)",
+			daystamp:       "",
+			timestamp:      "1234567890",
+			expectDaystamp: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock server that captures the request
+			var capturedBody string
+			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify it's a POST request
+				if r.Method != http.MethodPost {
+					t.Errorf("Expected POST request, got %s", r.Method)
+				}
+
+				// Parse the request body
+				if err := r.ParseForm(); err != nil {
+					t.Errorf("Failed to parse form: %v", err)
+				}
+				capturedBody = r.PostForm.Encode()
+
+				// Return success
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"id":"123"}`))
+			}))
+			defer mockServer.Close()
+
+			// Create a config with mock server URL
+			config := &Config{
+				Username:  "testuser",
+				AuthToken: "testtoken",
+				BaseURL:   mockServer.URL,
+			}
+
+			// Call CreateDatapointWithDaystamp
+			err := CreateDatapointWithDaystamp(config, "testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
+			if err != nil {
+				t.Fatalf("CreateDatapointWithDaystamp failed: %v", err)
+			}
+
+			// Verify daystamp vs timestamp presence in request body
+			if tt.expectDaystamp {
+				if !strings.Contains(capturedBody, "daystamp="+tt.daystamp) {
+					t.Errorf("Expected daystamp in body, got: %s", capturedBody)
+				}
+				if strings.Contains(capturedBody, "timestamp=") {
+					t.Errorf("Did not expect timestamp in body when daystamp is set, got: %s", capturedBody)
+				}
+			} else {
+				if strings.Contains(capturedBody, "daystamp=") {
+					t.Errorf("Did not expect daystamp in body, got: %s", capturedBody)
+				}
+				if !strings.Contains(capturedBody, "timestamp="+tt.timestamp) {
+					t.Errorf("Expected timestamp in body, got: %s", capturedBody)
+				}
+			}
+
+			// Verify other required fields are present
+			if !strings.Contains(capturedBody, "auth_token=testtoken") {
+				t.Errorf("Expected auth_token in body, got: %s", capturedBody)
+			}
+			if !strings.Contains(capturedBody, "value=5.0") {
+				t.Errorf("Expected value in body, got: %s", capturedBody)
+			}
+		})
+	}
+}
+
 // TestParseDuration tests the ParseDuration function
 func TestParseDuration(t *testing.T) {
 	tests := []struct {
