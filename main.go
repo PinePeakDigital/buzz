@@ -827,7 +827,7 @@ func handleAddCommand() {
 	if misplacedFlag := detectMisplacedFlag(args); misplacedFlag != "" {
 		fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", misplacedFlag)
 		fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
-		fmt.Fprintf(os.Stderr, "Correct usage: buzz add [--daystamp=DATE] [--requestid=ID] goalslug value comment\n")
+		fmt.Fprintf(os.Stderr, "Correct usage: buzz add [--requestid=ID] [--daystamp=DATE] goalslug value comment\n")
 		fmt.Fprintln(os.Stderr, "")
 	}
 
