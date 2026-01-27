@@ -316,7 +316,7 @@ The output consists of two parts:
 Example output:
 ```
 HOURLY DENSITY
-    ▁     █         █     ▃       ▅
+▁     █         █     ▃       ▅
 00  06    10        12    15      18      22
 ├───┼─────┼─────────┼─────┼───────┼───────┼────┤
     1     5         1     2       1       3
