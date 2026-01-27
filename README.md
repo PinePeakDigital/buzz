@@ -222,8 +222,8 @@ buzz add opsec 1                    # Adds value 1 with default comment "Added v
 buzz add workout 2.5 'morning run'  # Adds value 2.5 with custom comment
 buzz add study 00:05 'quick review' # Adds 5 minutes (converted to 0.083333 hours)
 buzz add focus 1:30                 # Adds 1.5 hours (1 hour 30 minutes)
-buzz add reading 3 'finished chapter 5' --requestid=abc123  # Adds with a request ID for idempotency
-buzz add exercise 1 --daystamp=20240115  # Adds datapoint for a specific date
+buzz add --requestid=abc123 reading 3 'finished chapter 5'  # Adds with a request ID for idempotency
+buzz add --daystamp=20240115 exercise 1  # Adds datapoint for a specific date
 ```
 
 The `<value>` parameter supports both decimal numbers and time formats:
