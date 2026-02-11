@@ -642,6 +642,43 @@ func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval
 	return &goal, nil
 }
 
+// UpdateGoalDeadline updates the deadline (seconds from midnight) for a goal
+func UpdateGoalDeadline(config *Config, goalSlug string, deadline int) (*Goal, error) {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json",
+		baseURL, config.Username, goalSlug)
+
+	data := url.Values{}
+	data.Set("auth_token", config.AuthToken)
+	data.Set("deadline", fmt.Sprintf("%d", deadline))
+
+	req, err := http.NewRequest(http.MethodPut, apiURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	LogRequest(config, "PUT", apiURL)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update goal deadline: %w", err)
+	}
+	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, apiURL)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var goal Goal
+	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
+		return nil, fmt.Errorf("failed to decode updated goal: %w", err)
+	}
+
+	return &goal, nil
+}
+
 // RefreshGoal forces a fetch of autodata and graph refresh for a goal
 // Returns true if the goal was queued for refresh, false if not
 func RefreshGoal(config *Config, goalSlug string) (bool, error) {

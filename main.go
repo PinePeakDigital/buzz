@@ -257,6 +257,7 @@ func printHelp() {
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
+	fmt.Println("  buzz deadline <goalslug> <time>    Change a goal's deadline (e.g., \"3:00 PM\" or \"15:00\")")
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
@@ -338,6 +339,9 @@ func main() {
 		case "charge":
 			handleChargeCommand()
 			return
+		case "deadline":
+			handleDeadlineCommand()
+			return
 		case "schedule":
 			handleScheduleCommand()
 			return
@@ -349,7 +353,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, schedule, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -1195,6 +1199,80 @@ func handleChargeCommand() {
 	}
 
 	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// parseTimeToDeadlineOffset parses a time string (e.g., "3:00 PM", "15:00") into
+// a deadline offset in seconds from midnight, as used by the Beeminder API.
+func parseTimeToDeadlineOffset(timeStr string) (int, error) {
+	// Try 12-hour format first (e.g., "3:00 PM", "11:30 AM")
+	t, err := time.Parse("3:04 PM", strings.ToUpper(strings.TrimSpace(timeStr)))
+	if err != nil {
+		// Try alternate casing
+		t, err = time.Parse("3:04 pm", strings.ToLower(strings.TrimSpace(timeStr)))
+	}
+	if err != nil {
+		// Try 24-hour format (e.g., "15:00", "23:30")
+		t, err = time.Parse("15:04", strings.TrimSpace(timeStr))
+	}
+	if err != nil {
+		return 0, fmt.Errorf("invalid time format %q (expected e.g. \"3:00 PM\" or \"15:00\")", timeStr)
+	}
+
+	hour := t.Hour()
+	minute := t.Minute()
+	offset := hour*3600 + minute*60
+
+	// Beeminder deadline offsets: 6am (21600) wraps to negative for times after 6am
+	// Range: -61200 (7:00 AM) to 21600 (6:00 AM)
+	// Times from 7:00-23:59 are negative offsets (before midnight)
+	// Times from 0:00-6:00 are positive offsets (after midnight)
+	if hour > 6 {
+		offset = offset - 24*3600
+	}
+
+	return offset, nil
+}
+
+func handleDeadlineCommand() {
+	// Usage: buzz deadline <goalslug> <time>
+	if len(os.Args) < 4 {
+		fmt.Fprintln(os.Stderr, "Error: Missing required arguments")
+		fmt.Fprintln(os.Stderr, "Usage: buzz deadline <goalslug> <time>")
+		fmt.Fprintln(os.Stderr, "  <time> can be:")
+		fmt.Fprintln(os.Stderr, "    - 12-hour format: \"3:00 PM\", \"11:30 AM\"")
+		fmt.Fprintln(os.Stderr, "    - 24-hour format: \"15:00\", \"23:30\"")
+		os.Exit(1)
+	}
+
+	goalSlug := os.Args[2]
+	timeStr := strings.Join(os.Args[3:], " ")
+
+	offset, err := parseTimeToDeadlineOffset(timeStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		os.Exit(1)
+	}
+
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	goal, err := UpdateGoalDeadline(config, goalSlug, offset)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to update deadline: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	fmt.Printf("Updated deadline for %s to %s\n", goal.Slug, formatDueTime(goal.Deadline))
+
 	fmt.Print(getUpdateMessage())
 }
 

@@ -1945,3 +1945,66 @@ func TestIsDueWithin(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateGoalDeadline(t *testing.T) {
+	t.Run("successful update", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPut {
+				t.Errorf("Expected PUT request, got %s", r.Method)
+			}
+
+			if !strings.Contains(r.URL.Path, "/users/testuser/goals/testgoal.json") {
+				t.Errorf("Unexpected URL path: %s", r.URL.Path)
+			}
+
+			r.ParseForm()
+			if r.FormValue("deadline") != "-32400" {
+				t.Errorf("Expected deadline -32400, got %s", r.FormValue("deadline"))
+			}
+
+			goal := Goal{
+				Slug:     "testgoal",
+				Deadline: -32400,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := UpdateGoalDeadline(config, "testgoal", -32400)
+		if err != nil {
+			t.Fatalf("UpdateGoalDeadline failed: %v", err)
+		}
+		if goal.Slug != "testgoal" {
+			t.Errorf("Expected slug 'testgoal', got %s", goal.Slug)
+		}
+		if goal.Deadline != -32400 {
+			t.Errorf("Expected deadline -32400, got %d", goal.Deadline)
+		}
+	})
+
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal error"))
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		_, err := UpdateGoalDeadline(config, "testgoal", 0)
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+	})
+}
