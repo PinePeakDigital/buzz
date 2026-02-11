@@ -36,9 +36,9 @@ func TestParseTimeToDeadlineOffset(t *testing.T) {
 			expected: 21600, // 6*3600
 		},
 		{
-			name:     "6:30 AM wraps negative",
-			input:    "6:30 AM",
-			expected: -63000, // (6*3600 + 30*60) - 24*3600
+			name:    "6:30 AM rejected",
+			input:   "6:30 AM",
+			wantErr: true,
 		},
 		{
 			name:     "7:00 AM wraps negative",

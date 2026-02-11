@@ -1220,13 +1220,22 @@ func parseTimeToDeadlineOffset(timeStr string) (int, error) {
 
 	hour := t.Hour()
 	minute := t.Minute()
+
+	// Beeminder does not allow deadlines between 6:01 AM and 6:59 AM.
+	// Allowed ranges: 12:00 AM–6:00 AM (nightowl) and 7:00 AM–11:59 PM (earlybird).
+	// https://help.beeminder.com/article/14-deadline#allowed
+	if hour == 6 && minute > 0 {
+		return 0, fmt.Errorf("deadlines between 6:01 AM and 6:59 AM are not allowed by Beeminder")
+	}
+
 	offset := hour*3600 + minute*60
 
-	// Beeminder deadline offsets: 6:00 AM (21600) wraps to negative for times after 6:00 AM
+	// Beeminder deadline offsets use seconds from midnight.
 	// Range: -61200 (7:00 AM) to 21600 (6:00 AM)
-	// Times from 6:01-23:59 are negative offsets (before midnight)
+	// Times from 7:00-23:59 are negative offsets (before midnight)
 	// Times from 0:00-6:00 are positive offsets (after midnight)
-	if hour > 6 || (hour == 6 && minute > 0) {
+	// https://forum.beeminder.com/t/api-deadline/10666
+	if hour > 6 {
 		offset = offset - 24*3600
 	}
 
