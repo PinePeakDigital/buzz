@@ -670,8 +670,11 @@ func UpdateGoalDeadline(config *Config, goalSlug string, deadline int) (*Goal, e
 	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var goal Goal
