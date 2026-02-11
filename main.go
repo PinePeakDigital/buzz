@@ -1206,15 +1206,13 @@ func handleChargeCommand() {
 // parseTimeToDeadlineOffset parses a time string (e.g., "3:00 PM", "15:00") into
 // a deadline offset in seconds from midnight, as used by the Beeminder API.
 func parseTimeToDeadlineOffset(timeStr string) (int, error) {
+	trimmed := strings.TrimSpace(timeStr)
+
 	// Try 12-hour format first (e.g., "3:00 PM", "11:30 AM")
-	t, err := time.Parse("3:04 PM", strings.ToUpper(strings.TrimSpace(timeStr)))
-	if err != nil {
-		// Try alternate casing
-		t, err = time.Parse("3:04 pm", strings.ToLower(strings.TrimSpace(timeStr)))
-	}
+	t, err := time.Parse("3:04 PM", strings.ToUpper(trimmed))
 	if err != nil {
 		// Try 24-hour format (e.g., "15:00", "23:30")
-		t, err = time.Parse("15:04", strings.TrimSpace(timeStr))
+		t, err = time.Parse("15:04", trimmed)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("invalid time format %q (expected e.g. \"3:00 PM\" or \"15:00\")", timeStr)
