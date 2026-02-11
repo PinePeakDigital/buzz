@@ -1248,7 +1248,16 @@ func handleDeadlineCommand() {
 	yes := deadlineFlags.Bool("yes", false, "Skip confirmation prompt")
 	yesShort := deadlineFlags.Bool("y", false, "Skip confirmation prompt (shorthand)")
 	if err := deadlineFlags.Parse(os.Args[2:]); err != nil {
-		os.Exit(1)
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes|-y] <goalslug> <time>")
+			fmt.Fprintln(os.Stderr, "  <time> can be:")
+			fmt.Fprintln(os.Stderr, "    - 12-hour format: \"3:00 PM\", \"11:30 AM\"")
+			fmt.Fprintln(os.Stderr, "    - 24-hour format: \"15:00\", \"23:30\"")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes|-y] <goalslug> <time>")
+		os.Exit(2)
 	}
 
 	args := deadlineFlags.Args()
