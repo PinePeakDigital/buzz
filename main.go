@@ -1222,11 +1222,11 @@ func parseTimeToDeadlineOffset(timeStr string) (int, error) {
 	minute := t.Minute()
 	offset := hour*3600 + minute*60
 
-	// Beeminder deadline offsets: 6am (21600) wraps to negative for times after 6am
+	// Beeminder deadline offsets: 6:00 AM (21600) wraps to negative for times after 6:00 AM
 	// Range: -61200 (7:00 AM) to 21600 (6:00 AM)
-	// Times from 7:00-23:59 are negative offsets (before midnight)
+	// Times from 6:01-23:59 are negative offsets (before midnight)
 	// Times from 0:00-6:00 are positive offsets (after midnight)
-	if hour > 6 {
+	if hour > 6 || (hour == 6 && minute > 0) {
 		offset = offset - 24*3600
 	}
 

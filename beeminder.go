@@ -642,7 +642,9 @@ func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval
 	return &goal, nil
 }
 
-// UpdateGoalDeadline updates the deadline (seconds from midnight) for a goal
+// UpdateGoalDeadline updates the deadline (seconds from midnight) for a goal.
+// The deadline parameter is undocumented in the official API but is supported:
+// https://forum.beeminder.com/t/api-deadline/10666
 func UpdateGoalDeadline(config *Config, goalSlug string, deadline int) (*Goal, error) {
 	baseURL := getBaseURL(config)
 	escapedSlug := url.PathEscape(goalSlug)
