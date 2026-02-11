@@ -645,8 +645,9 @@ func CreateGoal(config *Config, slug, title, goalType, gunits, goaldate, goalval
 // UpdateGoalDeadline updates the deadline (seconds from midnight) for a goal
 func UpdateGoalDeadline(config *Config, goalSlug string, deadline int) (*Goal, error) {
 	baseURL := getBaseURL(config)
+	escapedSlug := url.PathEscape(goalSlug)
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json",
-		baseURL, config.Username, goalSlug)
+		baseURL, config.Username, escapedSlug)
 
 	data := url.Values{}
 	data.Set("auth_token", config.AuthToken)
