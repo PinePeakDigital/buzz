@@ -306,6 +306,23 @@ Creates a charge on your Beeminder account. This is useful for self-imposed pena
 
 **Note:** This creates a real charge on your payment method unless you use the `--dryrun` flag.
 
+**buzz deadline** - Change a goal's deadline:
+
+```bash
+buzz deadline [--yes] <goalslug> <time>
+
+# Examples:
+buzz deadline mygoal 3:00 PM
+buzz deadline mygoal 15:00
+buzz deadline --yes mygoal 11:30 AM  # Skip confirmation prompt
+```
+
+Changes the daily deadline for a Beeminder goal. The command shows the current and new deadline and asks for confirmation before making the change.
+
+- `<goalslug>`: The slug of the goal to update
+- `<time>`: The new deadline time in 12-hour (`3:00 PM`) or 24-hour (`15:00`) format
+- `--yes`, `-y`: Skip the confirmation prompt (useful for scripting)
+
 **buzz schedule** - Display goal deadline distribution throughout a 24-hour day:
 
 ```bash
