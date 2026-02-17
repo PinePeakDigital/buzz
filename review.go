@@ -233,12 +233,17 @@ func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipglo
 	color := GetBufferColor(goal.Safebuf)
 	style, exists := colorStyles[color]
 	if !exists {
-		style = colorStyles["gray"]
+		// Fallback to gray if color not found
+		style, exists = colorStyles["gray"]
+		if !exists {
+			// Ultimate fallback: unstyled (if gray is also missing)
+			style = lipgloss.NewStyle()
+		}
 	}
 	coloredLimsum := style.Render(goal.Limsum)
 	details += fmt.Sprintf("Limsum:      %s\n", coloredLimsum)
 
-	// Display deadline (formatted timestamp) with color coding
+	// Display deadline (formatted timestamp) with same color coding
 	deadlineTime := time.Unix(goal.Losedate, 0)
 	deadlineStr := deadlineTime.Format("Mon Jan 2, 2006 at 3:04 PM MST")
 	coloredDeadline := style.Render(deadlineStr)
