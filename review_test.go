@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func TestSortGoalsBySlug(t *testing.T) {
@@ -591,16 +590,7 @@ func TestFineprintOrderInOutput(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
-	// Create color styles for the test
-	colorStyles := map[string]lipgloss.Style{
-		"red":    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		"orange": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
-		"blue":   lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
-		"green":  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		"gray":   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-	}
-
-	output := formatGoalDetails(&goal, config, colorStyles)
+	output := formatGoalDetails(&goal, config, CreateColorStyles())
 
 	// Find positions of URL and Fine print in the output
 	urlIndex := strings.Index(output, "URL:")

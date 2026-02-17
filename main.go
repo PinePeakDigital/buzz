@@ -1088,18 +1088,9 @@ func handleViewCommand() {
 		os.Exit(1)
 	}
 
-	// Create color styles for formatting goal details
-	colorStyles := map[string]lipgloss.Style{
-		"red":    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		"orange": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
-		"blue":   lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
-		"green":  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		"gray":   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-	}
-
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
-	fmt.Print(formatGoalDetails(goal, config, colorStyles))
+	fmt.Print(formatGoalDetails(goal, config, CreateColorStyles()))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
