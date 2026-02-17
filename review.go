@@ -231,7 +231,10 @@ func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipglo
 
 	// Display limsum with color coding based on urgency
 	color := GetBufferColor(goal.Safebuf)
-	style := colorStyles[color]
+	style, exists := colorStyles[color]
+	if !exists {
+		style = colorStyles["gray"]
+	}
 	coloredLimsum := style.Render(goal.Limsum)
 	details += fmt.Sprintf("Limsum:      %s\n", coloredLimsum)
 
