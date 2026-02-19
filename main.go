@@ -1090,7 +1090,7 @@ func handleViewCommand() {
 
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
-	fmt.Print(formatGoalDetails(goal, config))
+	fmt.Print(formatGoalDetails(goal, config, CreateColorStyles()))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())

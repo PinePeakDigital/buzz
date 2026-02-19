@@ -118,3 +118,14 @@ func CreateOverlayStyle() lipgloss.Style {
 		Background(lipgloss.Color("8")).
 		Foreground(lipgloss.Color("0"))
 }
+
+// CreateColorStyles returns the color styles for text formatting based on buffer urgency
+func CreateColorStyles() map[string]lipgloss.Style {
+	return map[string]lipgloss.Style{
+		"red":    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+		"orange": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
+		"blue":   lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
+		"green":  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		"gray":   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+	}
+}
