@@ -6,6 +6,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sort"
@@ -260,6 +263,11 @@ func printHelp() {
 	fmt.Println("  buzz deadline [--yes] <goalslug> <time>")
 	fmt.Println("                                    Change a goal's deadline (e.g., \"3:00 PM\" or \"15:00\")")
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
+	fmt.Println("  buzz api <method> <path> [key=value ...]")
+	fmt.Println("                                    Make an authenticated request to the Beeminder API")
+	fmt.Println("                                    Methods: GET, POST, PUT, DELETE, PATCH")
+	fmt.Println("                                    Use {user} in path to substitute your username")
+	fmt.Println("                                    Example: buzz api GET /api/v1/users/{user}/goals.json")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
@@ -346,6 +354,9 @@ func main() {
 		case "schedule":
 			handleScheduleCommand()
 			return
+		case "api":
+			handleApiCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -354,7 +365,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, api, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -1610,5 +1621,124 @@ func displayTimeline(slots []timeSlot) {
 			current += len(chunk)
 		}
 		fmt.Println(line.String())
+	}
+}
+
+// makeAPIRequest performs an authenticated Beeminder API request.
+// For GET and DELETE, params are added to the query string.
+// For POST, PUT, and PATCH, params are sent as a form-encoded body.
+// Returns the response body bytes and HTTP status code.
+func makeAPIRequest(config *Config, method, path string, params []string) ([]byte, int, error) {
+	// Replace {user} placeholder with the configured username
+	path = strings.ReplaceAll(path, "{user}", config.Username)
+
+	// Build the full URL
+	fullURL := getBaseURL(config) + path
+
+	// Assemble form data: always include auth_token
+	formData := url.Values{}
+	formData.Set("auth_token", config.AuthToken)
+	for _, param := range params {
+		parts := strings.SplitN(param, "=", 2)
+		if len(parts) != 2 {
+			return nil, 0, fmt.Errorf("invalid parameter format: %q (expected key=value)", param)
+		}
+		formData.Set(parts[0], parts[1])
+	}
+
+	var req *http.Request
+	var err error
+	if method == "GET" || method == "DELETE" {
+		// Merge params into the query string
+		parsedURL, parseErr := url.Parse(fullURL)
+		if parseErr != nil {
+			return nil, 0, fmt.Errorf("invalid URL %q: %w", fullURL, parseErr)
+		}
+		q := parsedURL.Query()
+		for key, values := range formData {
+			for _, value := range values {
+				q.Add(key, value)
+			}
+		}
+		parsedURL.RawQuery = q.Encode()
+		fullURL = parsedURL.String()
+		req, err = http.NewRequest(method, fullURL, nil)
+	} else {
+		// Send params in the request body
+		req, err = http.NewRequest(method, fullURL, strings.NewReader(formData.Encode()))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	LogRequest(config, method, fullURL)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, fullURL)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %w", err)
+	}
+	return body, resp.StatusCode, nil
+}
+
+// handleApiCommand makes an authenticated request to the Beeminder API using stored credentials.
+func handleApiCommand() {
+	if len(os.Args) < 4 {
+		fmt.Fprintln(os.Stderr, "Error: Missing required arguments")
+		fmt.Fprintln(os.Stderr, "Usage: buzz api <method> <path> [key=value ...]")
+		fmt.Fprintln(os.Stderr, "  Methods: GET, POST, PUT, DELETE, PATCH")
+		fmt.Fprintln(os.Stderr, "  Use {user} in path to substitute your Beeminder username")
+		fmt.Fprintln(os.Stderr, "  Example: buzz api GET /api/v1/users/{user}/goals.json")
+		os.Exit(1)
+	}
+
+	method := strings.ToUpper(os.Args[2])
+	path := os.Args[3]
+	params := os.Args[4:]
+
+	validMethods := map[string]bool{
+		"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true,
+	}
+	if !validMethods[method] {
+		fmt.Fprintf(os.Stderr, "Error: Invalid HTTP method: %s\n", method)
+		fmt.Fprintln(os.Stderr, "Valid methods: GET, POST, PUT, DELETE, PATCH")
+		os.Exit(1)
+	}
+
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	body, statusCode, err := makeAPIRequest(config, method, path, params)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	// Pretty-print JSON when possible; fall back to raw output
+	var prettyJSON bytes.Buffer
+	if jsonErr := json.Indent(&prettyJSON, body, "", "  "); jsonErr == nil {
+		fmt.Println(prettyJSON.String())
+	} else {
+		fmt.Println(string(body))
+	}
+
+	if statusCode < 200 || statusCode >= 300 {
+		os.Exit(1)
 	}
 }
