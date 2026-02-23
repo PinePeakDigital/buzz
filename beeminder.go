@@ -84,6 +84,32 @@ func FetchGoals(config *Config) ([]Goal, error) {
 	return goals, nil
 }
 
+// FetchArchivedGoals fetches the user's archived goals from Beeminder API
+func FetchArchivedGoals(config *Config) ([]Goal, error) {
+	baseURL := getBaseURL(config)
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/archived.json?auth_token=%s",
+		baseURL, config.Username, config.AuthToken)
+
+	LogRequest(config, "GET", url)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch archived goals: %w", err)
+	}
+	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, url)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var goals []Goal
+	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
+		return nil, fmt.Errorf("failed to decode archived goals: %w", err)
+	}
+
+	return goals, nil
+}
+
 // SortGoals sorts goals by: 1. Due ascending, 2. Stakes descending, 3. Name ascending
 func SortGoals(goals []Goal) {
 	sort.Slice(goals, func(i, j int) bool {

@@ -2008,3 +2008,99 @@ func TestUpdateGoalDeadline(t *testing.T) {
 		}
 	})
 }
+
+// TestFetchArchivedGoalsWithMockServer tests FetchArchivedGoals function with a mock HTTP server
+func TestFetchArchivedGoalsWithMockServer(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify it's a GET request
+		if r.Method != http.MethodGet {
+			t.Errorf("Expected GET request, got %s", r.Method)
+		}
+
+		// Verify the URL path
+		expectedPath := "/api/v1/users/testuser/goals/archived.json"
+		if r.URL.Path != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+
+		// Verify auth token is present
+		if r.URL.Query().Get("auth_token") != "testtoken" {
+			t.Errorf("Expected auth_token=testtoken, got %s", r.URL.Query().Get("auth_token"))
+		}
+
+		// Return a list of archived goals
+		goals := []Goal{
+			{Slug: "old-goal", Title: "Old Goal", GoalType: "hustler"},
+			{Slug: "retired", Title: "Retired Goal", GoalType: "drinker"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(goals)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+		BaseURL:   mockServer.URL,
+	}
+
+	goals, err := FetchArchivedGoals(config)
+	if err != nil {
+		t.Fatalf("FetchArchivedGoals failed: %v", err)
+	}
+
+	if len(goals) != 2 {
+		t.Errorf("Expected 2 archived goals, got %d", len(goals))
+	}
+
+	if goals[0].Slug != "old-goal" {
+		t.Errorf("Expected first goal slug 'old-goal', got %q", goals[0].Slug)
+	}
+	if goals[1].Slug != "retired" {
+		t.Errorf("Expected second goal slug 'retired', got %q", goals[1].Slug)
+	}
+}
+
+// TestFetchArchivedGoalsEmptyList tests FetchArchivedGoals when no archived goals exist
+func TestFetchArchivedGoalsEmptyList(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+		BaseURL:   mockServer.URL,
+	}
+
+	goals, err := FetchArchivedGoals(config)
+	if err != nil {
+		t.Fatalf("FetchArchivedGoals failed: %v", err)
+	}
+
+	if len(goals) != 0 {
+		t.Errorf("Expected 0 archived goals, got %d", len(goals))
+	}
+}
+
+// TestFetchArchivedGoalsAPIError tests FetchArchivedGoals when the API returns an error
+func TestFetchArchivedGoalsAPIError(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+		BaseURL:   mockServer.URL,
+	}
+
+	_, err := FetchArchivedGoals(config)
+	if err == nil {
+		t.Error("Expected error for non-200 status, got nil")
+	}
+}
+
