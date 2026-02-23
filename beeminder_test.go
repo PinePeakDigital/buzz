@@ -2103,4 +2103,3 @@ func TestFetchArchivedGoalsAPIError(t *testing.T) {
 		t.Error("Expected error for non-200 status, got nil")
 	}
 }
-
