@@ -199,3 +199,149 @@ func TestMakeAPIRequestJSONPrettyPrint(t *testing.T) {
 		t.Errorf("slug = %v, want pushups", parsed["slug"])
 	}
 }
+
+// TestMakeAPIRequestPUT tests that PUT params are sent in the request body and not in the query string
+func TestMakeAPIRequestPUT(t *testing.T) {
+	var capturedBody string
+	var capturedQuery string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		capturedQuery = r.URL.RawQuery
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+		capturedBody = r.PostForm.Encode()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"dp1"}`)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "alice",
+		AuthToken: "tok123",
+		BaseURL:   mockServer.URL,
+	}
+
+	_, status, err := makeAPIRequest(config, "PUT",
+		"/api/v1/users/alice/goals/pushups/datapoints.json",
+		[]string{"value=5", "comment=test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != http.StatusOK {
+		t.Errorf("status = %d, want 200", status)
+	}
+	if !strings.Contains(capturedBody, "auth_token=tok123") {
+		t.Errorf("auth_token missing from body; body = %q", capturedBody)
+	}
+	if !strings.Contains(capturedBody, "value=5") {
+		t.Errorf("value missing from body; body = %q", capturedBody)
+	}
+	if strings.Contains(capturedQuery, "value=5") {
+		t.Errorf("value should not be in query string; query = %q", capturedQuery)
+	}
+}
+
+// TestMakeAPIRequestDELETE tests that DELETE params are added to the query string
+func TestMakeAPIRequestDELETE(t *testing.T) {
+	var capturedQuery string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		capturedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"dp1"}`)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "alice",
+		AuthToken: "tok123",
+		BaseURL:   mockServer.URL,
+	}
+
+	_, status, err := makeAPIRequest(config, "DELETE",
+		"/api/v1/users/alice/goals/pushups/datapoints/dp1.json",
+		nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != http.StatusOK {
+		t.Errorf("status = %d, want 200", status)
+	}
+	if !strings.Contains(capturedQuery, "auth_token=tok123") {
+		t.Errorf("auth_token missing from query string; query = %q", capturedQuery)
+	}
+}
+
+// TestMakeAPIRequestPATCH tests that PATCH params are sent in the request body and not in the query string
+func TestMakeAPIRequestPATCH(t *testing.T) {
+	var capturedBody string
+	var capturedQuery string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Errorf("expected PATCH, got %s", r.Method)
+		}
+		capturedQuery = r.URL.RawQuery
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+		capturedBody = r.PostForm.Encode()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"dp1"}`)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "alice",
+		AuthToken: "tok123",
+		BaseURL:   mockServer.URL,
+	}
+
+	_, status, err := makeAPIRequest(config, "PATCH",
+		"/api/v1/users/alice/goals/pushups/datapoints.json",
+		[]string{"value=5", "comment=test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != http.StatusOK {
+		t.Errorf("status = %d, want 200", status)
+	}
+	if !strings.Contains(capturedBody, "auth_token=tok123") {
+		t.Errorf("auth_token missing from body; body = %q", capturedBody)
+	}
+	if !strings.Contains(capturedBody, "value=5") {
+		t.Errorf("value missing from body; body = %q", capturedBody)
+	}
+	if strings.Contains(capturedQuery, "value=5") {
+		t.Errorf("value should not be in query string; query = %q", capturedQuery)
+	}
+}
+
+// TestMakeAPIRequestUserPlaceholderSpecialChars tests {user} replacement with URL-unsafe characters
+func TestMakeAPIRequestUserPlaceholderSpecialChars(t *testing.T) {
+	var capturedRequestURI string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// RequestURI contains the raw, unmodified request-target (path + query)
+		capturedRequestURI = r.RequestURI
+		fmt.Fprintln(w, `{}`)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "bob smith",
+		AuthToken: "tok",
+		BaseURL:   mockServer.URL,
+	}
+
+	if _, _, err := makeAPIRequest(config, "GET", "/api/v1/users/{user}/goals.json", nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// url.PathEscape encodes spaces as %20; verify the path segment was encoded
+	if !strings.Contains(capturedRequestURI, "/api/v1/users/bob%20smith/goals.json") {
+		t.Errorf("request URI = %q, expected to contain /api/v1/users/bob%%20smith/goals.json", capturedRequestURI)
+	}
+}

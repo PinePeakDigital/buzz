@@ -1629,8 +1629,8 @@ func displayTimeline(slots []timeSlot) {
 // For POST, PUT, and PATCH, params are sent as a form-encoded body.
 // Returns the response body bytes and HTTP status code.
 func makeAPIRequest(config *Config, method, path string, params []string) ([]byte, int, error) {
-	// Replace {user} placeholder with the configured username
-	path = strings.ReplaceAll(path, "{user}", config.Username)
+	// Replace {user} placeholder with the configured username, escaping it for use in the URL path
+	path = strings.ReplaceAll(path, "{user}", url.PathEscape(config.Username))
 
 	// Build the full URL
 	fullURL := getBaseURL(config) + path
