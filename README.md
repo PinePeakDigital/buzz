@@ -146,6 +146,21 @@ Displays a table with the following information for each goal:
 
 Goals are sorted alphabetically by slug. The command also shows the total number of goals at the top. This command is useful for getting a quick overview of all your goals without focusing on deadlines.
 
+**buzz archived** - List all archived goals:
+
+```bash
+buzz archived
+# Example output:
+# Total archived goals: 2
+#
+# Slug      Title           Units  Rate  Stakes
+# --------  --------------  -----  ----  ------
+# old-goal  Old Goal        -      -     $0.00
+# retired   Retired Goal    -      -     $0.00
+```
+
+Displays a table with the same columns as `buzz list` (Slug, Title, Units, Rate, Stakes). Goals are sorted alphabetically by slug.
+
 **buzz today** - Output all goals due today:
 
 ```bash

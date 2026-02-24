@@ -58,19 +58,22 @@ func getBaseURL(config *Config) string {
 	return config.BaseURL
 }
 
-// FetchGoals fetches the user's goals from Beeminder API
-func FetchGoals(config *Config) ([]Goal, error) {
+// fetchGoalsList fetches a list of goals from the given API path segment.
+// path should be the endpoint path after /api/v1/users/{username}/, e.g. "goals.json" or "goals/archived.json".
+func fetchGoalsList(config *Config, path string) ([]Goal, error) {
 	baseURL := getBaseURL(config)
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals.json?auth_token=%s",
-		baseURL, config.Username, config.AuthToken)
+	q := url.Values{}
+	q.Set("auth_token", config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/%s?%s",
+		baseURL, url.PathEscape(config.Username), path, q.Encode())
 
-	LogRequest(config, "GET", url)
-	resp, err := http.Get(url)
+	LogRequest(config, "GET", apiURL)
+	resp, err := http.Get(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goals: %w", err)
+		return nil, fmt.Errorf("failed to fetch goals from %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	LogResponse(config, resp.StatusCode, url)
+	LogResponse(config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -78,10 +81,20 @@ func FetchGoals(config *Config) ([]Goal, error) {
 
 	var goals []Goal
 	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
-		return nil, fmt.Errorf("failed to decode goals: %w", err)
+		return nil, fmt.Errorf("failed to decode goals from %s: %w", path, err)
 	}
 
 	return goals, nil
+}
+
+// FetchGoals fetches the user's goals from Beeminder API
+func FetchGoals(config *Config) ([]Goal, error) {
+	return fetchGoalsList(config, "goals.json")
+}
+
+// FetchArchivedGoals fetches the user's archived goals from Beeminder API
+func FetchArchivedGoals(config *Config) ([]Goal, error) {
+	return fetchGoalsList(config, "goals/archived.json")
 }
 
 // SortGoals sorts goals by: 1. Due ascending, 2. Stakes descending, 3. Name ascending

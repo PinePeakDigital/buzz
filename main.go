@@ -238,6 +238,7 @@ func printHelp() {
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz list                         List all goals with slug, title, units, rate, and stakes")
+	fmt.Println("  buzz archived                     List all archived goals")
 	fmt.Println("  buzz all                          Output all goals")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")
@@ -310,6 +311,9 @@ func main() {
 		case "list":
 			handleListCommand()
 			return
+		case "archived":
+			handleArchivedCommand()
+			return
 		case "all":
 			handleAllCommand()
 			return
@@ -354,7 +358,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, help, version")
+			fmt.Println("Available commands: next, list, archived, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -548,6 +552,53 @@ func handleListCommand() {
 	// Print summary header
 	fmt.Printf("Total goals: %d\n\n", len(goals))
 
+	printGoalsTable(goals)
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// handleArchivedCommand outputs a summary list of all archived goals with slug, title, units, rate, and stakes
+func handleArchivedCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	// Fetch archived goals
+	goals, err := FetchArchivedGoals(config)
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch archived goals: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	// Sort goals alphabetically by slug for easy scanning
+	SortGoalsBySlug(goals)
+
+	// If no goals, exit
+	if len(goals) == 0 {
+		fmt.Println("No archived goals found.")
+		return
+	}
+
+	// Print summary header
+	fmt.Printf("Total archived goals: %d\n\n", len(goals))
+
+	printGoalsTable(goals)
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// printGoalsTable prints a formatted table of goals with slug, title, units, rate, and stakes columns
+func printGoalsTable(goals []Goal) {
 	// Calculate column widths
 	maxSlugWidth := 4   // minimum for "Slug" header
 	maxTitleWidth := 5  // minimum for "Title" header
@@ -612,9 +663,6 @@ func handleListCommand() {
 			maxRateWidth, rateStr,
 			stakesStr)
 	}
-
-	// Check for updates and display message if available
-	fmt.Print(getUpdateMessage())
 }
 
 // getDisplayUnits returns the display value for goal units, using "-" if empty
