@@ -2064,6 +2064,22 @@ func TestFetchArchivedGoalsWithMockServer(t *testing.T) {
 // TestFetchArchivedGoalsEmptyList tests FetchArchivedGoals when no archived goals exist
 func TestFetchArchivedGoalsEmptyList(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify it's a GET request
+		if r.Method != http.MethodGet {
+			t.Errorf("Expected GET request, got %s", r.Method)
+		}
+
+		// Verify the URL path
+		expectedPath := "/api/v1/users/testuser/goals/archived.json"
+		if r.URL.Path != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+
+		// Verify auth token is present
+		if r.URL.Query().Get("auth_token") != "testtoken" {
+			t.Errorf("Expected auth_token=testtoken, got %s", r.URL.Query().Get("auth_token"))
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("[]"))
 	}))
@@ -2088,6 +2104,22 @@ func TestFetchArchivedGoalsEmptyList(t *testing.T) {
 // TestFetchArchivedGoalsAPIError tests FetchArchivedGoals when the API returns an error
 func TestFetchArchivedGoalsAPIError(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify it's a GET request
+		if r.Method != http.MethodGet {
+			t.Errorf("Expected GET request, got %s", r.Method)
+		}
+
+		// Verify the URL path
+		expectedPath := "/api/v1/users/testuser/goals/archived.json"
+		if r.URL.Path != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+
+		// Verify auth token is present
+		if r.URL.Query().Get("auth_token") != "testtoken" {
+			t.Errorf("Expected auth_token=testtoken, got %s", r.URL.Query().Get("auth_token"))
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer mockServer.Close()

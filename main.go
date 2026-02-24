@@ -558,7 +558,7 @@ func handleListCommand() {
 	fmt.Print(getUpdateMessage())
 }
 
-// handleArchivedCommand outputs a summary list of all archived goals with slug, title, rate, and stakes
+// handleArchivedCommand outputs a summary list of all archived goals with slug, title, units, rate, and stakes
 func handleArchivedCommand() {
 	// Load config
 	if !ConfigExists() {
