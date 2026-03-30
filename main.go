@@ -260,8 +260,8 @@ func printHelp() {
 	fmt.Println("  buzz deadline [--yes] <goalslug> <time>")
 	fmt.Println("                                    Change a goal's deadline (e.g., \"3:00 PM\" or \"15:00\")")
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
-	fmt.Println("  buzz uncle [--yes] <goalslug>     Instantly derail a goal that is in the red, paying the pledge")
-	fmt.Println("                                    --yes: Skip the confirmation prompt")
+	fmt.Println("  buzz uncle [-y|--yes] <goalslug>  Instantly derail a goal that is in the red, paying the pledge")
+	fmt.Println("                                    -y, --yes: Skip the confirmation prompt")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
@@ -1621,17 +1621,29 @@ func displayTimeline(slots []timeSlot) {
 // handleUncleCommand instantly derails a goal that is in the red.
 func handleUncleCommand() {
 	uncleFlags := flag.NewFlagSet("uncle", flag.ContinueOnError)
+	uncleFlags.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: buzz uncle [-y|--yes] <goalslug>")
+	}
 	yes := uncleFlags.Bool("yes", false, "Skip the confirmation prompt")
 	yesShort := uncleFlags.Bool("y", false, "Skip the confirmation prompt (shorthand)")
 	if err := uncleFlags.Parse(os.Args[2:]); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		if errors.Is(err, flag.ErrHelp) {
+			uncleFlags.Usage()
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", err)
+		fmt.Fprintln(os.Stderr, "Usage: buzz uncle [-y|--yes] <goalslug>")
 		os.Exit(2)
 	}
 
 	args := uncleFlags.Args()
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
-		fmt.Fprintln(os.Stderr, "Usage: buzz uncle [--yes] <goalslug>")
+	if len(args) != 1 {
+		if len(args) == 0 {
+			fmt.Fprintln(os.Stderr, "Error: Missing required argument")
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: Too many arguments: %v\n", args[1:])
+		}
+		fmt.Fprintln(os.Stderr, "Usage: buzz uncle [-y|--yes] <goalslug>")
 		os.Exit(1)
 	}
 

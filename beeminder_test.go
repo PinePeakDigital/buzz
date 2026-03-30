@@ -2081,14 +2081,17 @@ func TestCallUncleWithMockServer(t *testing.T) {
 	})
 
 	t.Run("goal slug URL encoding", func(t *testing.T) {
+		// Use a slug containing a character that requires percent-encoding (space → %20)
+		rawSlug := "my goal"
+		escapedSlug := "my%20goal"
 		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			expectedPath := "/api/v1/users/testuser/goals/my-goal/uncleme.json"
-			if r.URL.Path != expectedPath {
-				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			expectedPath := "/api/v1/users/testuser/goals/" + escapedSlug + "/uncleme.json"
+			if r.URL.EscapedPath() != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.EscapedPath())
 			}
 
 			goal := map[string]interface{}{
-				"slug": "my-goal",
+				"slug": rawSlug,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(goal)
@@ -2101,11 +2104,11 @@ func TestCallUncleWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := CallUncle(config, "my-goal")
+		goal, err := CallUncle(config, rawSlug)
 		if err != nil {
 			t.Fatalf("CallUncle failed: %v", err)
 		}
-		if goal == nil || goal.Slug != "my-goal" {
+		if goal == nil || goal.Slug != rawSlug {
 			t.Fatalf("Unexpected goal: %+v", goal)
 		}
 	})
