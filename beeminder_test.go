@@ -2008,3 +2008,130 @@ func TestUpdateGoalDeadline(t *testing.T) {
 		}
 	})
 }
+
+// TestCallUncleWithMockServer tests CallUncle function with a mock HTTP server
+func TestCallUncleWithMockServer(t *testing.T) {
+	t.Run("successful uncle call", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Verify it's a POST request
+			if r.Method != http.MethodPost {
+				t.Errorf("Expected POST request, got %s", r.Method)
+			}
+
+			// Verify the URL path
+			expectedPath := "/api/v1/users/testuser/goals/testgoal/uncleme.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+
+			// Verify auth_token is in the query string
+			if r.URL.Query().Get("auth_token") != "testtoken" {
+				t.Errorf("Expected auth_token 'testtoken', got %s", r.URL.Query().Get("auth_token"))
+			}
+
+			// Return a mock goal response
+			goal := map[string]interface{}{
+				"slug":      "testgoal",
+				"goal_type": "hustler",
+				"losedate":  1358524800,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := CallUncle(config, "testgoal")
+		if err != nil {
+			t.Fatalf("CallUncle failed: %v", err)
+		}
+		if goal == nil || goal.Slug != "testgoal" {
+			t.Fatalf("Unexpected goal: %+v", goal)
+		}
+	})
+
+	t.Run("goal not in red", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"errors": "Can't uncle a goal that's not in the red."}`))
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := CallUncle(config, "testgoal")
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if goal != nil {
+			t.Errorf("Expected nil goal on error, got: %+v", goal)
+		}
+		if !strings.Contains(err.Error(), "API returned status 400") {
+			t.Errorf("Expected error message about status 400, got: %v", err)
+		}
+	})
+
+	t.Run("goal slug URL encoding", func(t *testing.T) {
+		// Use a slug containing a character that requires percent-encoding (space → %20)
+		rawSlug := "my goal"
+		escapedSlug := "my%20goal"
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			expectedPath := "/api/v1/users/testuser/goals/" + escapedSlug + "/uncleme.json"
+			if r.URL.EscapedPath() != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.EscapedPath())
+			}
+
+			goal := map[string]interface{}{
+				"slug": rawSlug,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := CallUncle(config, rawSlug)
+		if err != nil {
+			t.Fatalf("CallUncle failed: %v", err)
+		}
+		if goal == nil || goal.Slug != rawSlug {
+			t.Fatalf("Unexpected goal: %+v", goal)
+		}
+	})
+
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal error"))
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := CallUncle(config, "testgoal")
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if goal != nil {
+			t.Errorf("Expected nil goal on error, got: %+v", goal)
+		}
+	})
+}
