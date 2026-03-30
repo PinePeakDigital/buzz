@@ -513,6 +513,37 @@ func CreateCharge(config *Config, amount float64, note string, dryrun bool) (*Ch
 	return &ch, nil
 }
 
+// CallUncle instantly derails a goal that is in the red (safebuf <= 0).
+// It charges the pledge amount and inserts the post-derail respite into the graph.
+func CallUncle(config *Config, goalSlug string) (*Goal, error) {
+	baseURL := getBaseURL(config)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/uncleme.json?auth_token=%s",
+		baseURL, config.Username, url.PathEscape(goalSlug), config.AuthToken)
+
+	LogRequest(config, "POST", apiURL)
+	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded", strings.NewReader(""))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call uncle: %w", err)
+	}
+	defer resp.Body.Close()
+	LogResponse(config, resp.StatusCode, apiURL)
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var goal Goal
+	if err := json.Unmarshal(body, &goal); err != nil {
+		return nil, fmt.Errorf("failed to decode goal: %w", err)
+	}
+	return &goal, nil
+}
+
 // FetchGoal fetches a single goal by slug
 func FetchGoal(config *Config, goalSlug string) (*Goal, error) {
 	baseURL := getBaseURL(config)

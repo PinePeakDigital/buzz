@@ -260,6 +260,8 @@ func printHelp() {
 	fmt.Println("  buzz deadline [--yes] <goalslug> <time>")
 	fmt.Println("                                    Change a goal's deadline (e.g., \"3:00 PM\" or \"15:00\")")
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
+	fmt.Println("  buzz uncle [--yes] <goalslug>     Instantly derail a goal that is in the red, paying the pledge")
+	fmt.Println("                                    --yes: Skip the confirmation prompt")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
@@ -346,6 +348,9 @@ func main() {
 		case "schedule":
 			handleScheduleCommand()
 			return
+		case "uncle":
+			handleUncleCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -354,7 +359,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, uncle, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -1611,4 +1616,57 @@ func displayTimeline(slots []timeSlot) {
 		}
 		fmt.Println(line.String())
 	}
+}
+
+// handleUncleCommand instantly derails a goal that is in the red.
+func handleUncleCommand() {
+	uncleFlags := flag.NewFlagSet("uncle", flag.ContinueOnError)
+	yes := uncleFlags.Bool("yes", false, "Skip the confirmation prompt")
+	yesShort := uncleFlags.Bool("y", false, "Skip the confirmation prompt (shorthand)")
+	if err := uncleFlags.Parse(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		os.Exit(2)
+	}
+
+	args := uncleFlags.Args()
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
+		fmt.Fprintln(os.Stderr, "Usage: buzz uncle [--yes] <goalslug>")
+		os.Exit(1)
+	}
+
+	goalSlug := args[0]
+	skipConfirm := *yes || *yesShort
+
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	if !skipConfirm {
+		fmt.Printf("Call uncle on %s? This will instantly derail the goal and charge the pledge. [y/N] ", goalSlug)
+		var response string
+		fmt.Scanln(&response)
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.")
+			return
+		}
+	}
+
+	goal, err := CallUncle(config, goalSlug)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to call uncle: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	fmt.Printf("Called uncle on %s. The goal has been derailed.\n", goal.Slug)
+
+	fmt.Print(getUpdateMessage())
 }
