@@ -760,7 +760,7 @@ func TestFormatGoalDetailsWithDatapoints(t *testing.T) {
 		Username: "testuser",
 	}
 
-	result := formatGoalDetails(goal, config)
+	result := formatGoalDetails(goal, config, CreateColorStyles())
 
 	// Check that the result contains datapoint information
 	if !strings.Contains(result, "Recent datapoints:") {
@@ -809,7 +809,7 @@ func TestFormatGoalDetailsWithoutDatapoints(t *testing.T) {
 		Username: "testuser",
 	}
 
-	result := formatGoalDetails(goal, config)
+	result := formatGoalDetails(goal, config, CreateColorStyles())
 
 	// Check that the result does NOT contain datapoint information
 	if strings.Contains(result, "Recent datapoints:") {

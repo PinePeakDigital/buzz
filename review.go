@@ -237,8 +237,12 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 
 	for i := 0; i < count; i++ {
 		dp := datapoints[i]
-		timestamp := time.Unix(dp.Timestamp, 0)
-		dateStr := timestamp.Format("2006-01-02")
+		var dateStr string
+		if dp.Daystamp != "" && len(dp.Daystamp) == 8 {
+			dateStr = dp.Daystamp[:4] + "-" + dp.Daystamp[4:6] + "-" + dp.Daystamp[6:8]
+		} else {
+			dateStr = time.Unix(dp.Timestamp, 0).UTC().Format("2006-01-02")
+		}
 		
 		// Format value with appropriate precision
 		valueStr := fmt.Sprintf("%.6g", dp.Value)
