@@ -226,15 +226,19 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 		return ""
 	}
 
-	var output string
-	output += "\nRecent datapoints:\n"
-
-	// Show up to 5 most recent datapoints
 	count := len(datapoints)
 	if count > 5 {
 		count = 5
 	}
 
+	type row struct {
+		date    string
+		value   string
+		comment string
+	}
+
+	rows := make([]row, count)
+	maxValueLen := 0
 	for i := 0; i < count; i++ {
 		dp := datapoints[i]
 		var dateStr string
@@ -243,15 +247,20 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 		} else {
 			dateStr = time.Unix(dp.Timestamp, 0).UTC().Format("2006-01-02")
 		}
-		
-		// Format value with appropriate precision
 		valueStr := fmt.Sprintf("%.6g", dp.Value)
-		
-		// Format the line with daystamp, value, and comment
-		if dp.Comment != "" {
-			output += fmt.Sprintf("  %s: %s (%s)\n", dateStr, valueStr, dp.Comment)
+		if len(valueStr) > maxValueLen {
+			maxValueLen = len(valueStr)
+		}
+		rows[i] = row{date: dateStr, value: valueStr, comment: dp.Comment}
+	}
+
+	var output string
+	output += "\nRecent datapoints:\n"
+	for _, r := range rows {
+		if r.comment != "" {
+			output += fmt.Sprintf("  %s   %-*s   %s\n", r.date, maxValueLen, r.value, r.comment)
 		} else {
-			output += fmt.Sprintf("  %s: %s\n", dateStr, valueStr)
+			output += fmt.Sprintf("  %s   %s\n", r.date, r.value)
 		}
 	}
 
