@@ -19,6 +19,7 @@ type Goal struct {
 	GoalType    string      `json:"goal_type"` // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
 	Losedate    int64       `json:"losedate"`
 	Pledge      float64     `json:"pledge"`
+	PledgeCap   *float64    `json:"pledge_cap"` // Pointer to handle null values from API
 	Safebuf     int         `json:"safebuf"`
 	Limsum      string      `json:"limsum"`
 	Baremin     string      `json:"baremin"`

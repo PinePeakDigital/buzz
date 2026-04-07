@@ -83,12 +83,15 @@ func truncateString(s string, maxLen int) string {
 }
 
 // formatGoalFirstLine formats the first line of a goal cell with slug and stakes
-// Format: "slug         $5" (exactly 16 characters)
-func formatGoalFirstLine(slug string, pledge float64) string {
+// Format: "slug         $5" or "slug      $5/$10" (exactly 16 characters)
+func formatGoalFirstLine(slug string, pledge float64, pledgeCap *float64) string {
 	const width = 16
 
-	// Format the pledge part (e.g., "$5" or "$10")
+	// Format the pledge part (e.g., "$5", "$5/$10")
 	pledgeStr := fmt.Sprintf("$%.0f", pledge)
+	if pledgeCap != nil && *pledgeCap > 0 && *pledgeCap != pledge {
+		pledgeStr = fmt.Sprintf("$%.0f/$%.0f", pledge, *pledgeCap)
+	}
 
 	// Calculate space available for slug (need at least 1 space between slug and pledge)
 	availableForSlug := width - len(pledgeStr) - 1
