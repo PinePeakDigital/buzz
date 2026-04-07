@@ -614,7 +614,7 @@ func FetchGoalsWithDatapoints(config *Config) ([]Goal, error) {
 	const maxWorkers = 5
 	var wg sync.WaitGroup
 	goalsChan := make(chan int, len(goals))
-	
+
 	// Start worker goroutines
 	for w := 0; w < maxWorkers && w < len(goals); w++ {
 		wg.Add(1)
