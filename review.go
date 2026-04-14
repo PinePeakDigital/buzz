@@ -252,7 +252,11 @@ func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipglo
 	// Display due time (time of day)
 	details += fmt.Sprintf("Due time:    %s\n", formatDueTime(goal.Deadline))
 
-	details += fmt.Sprintf("Pledge:      $%.2f\n", goal.Pledge)
+	pledgeDisplay := fmt.Sprintf("$%.2f", goal.Pledge)
+	if goal.PledgeCap != nil && *goal.PledgeCap > 0 && *goal.PledgeCap != goal.Pledge {
+		pledgeDisplay = fmt.Sprintf("$%.2f / $%.2f", goal.Pledge, *goal.PledgeCap)
+	}
+	details += fmt.Sprintf("Pledge:      %s\n", pledgeDisplay)
 
 	// Display current rate (n / unit)
 	if goal.Rate != nil && goal.Runits != "" {

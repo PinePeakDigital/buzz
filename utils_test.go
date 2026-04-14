@@ -219,31 +219,36 @@ func TestFuzzyMatch(t *testing.T) {
 // TestFormatGoalFirstLine tests the formatGoalFirstLine function
 func TestFormatGoalFirstLine(t *testing.T) {
 	tests := []struct {
-		name     string
-		slug     string
-		pledge   float64
-		expected string
+		name      string
+		slug      string
+		pledge    float64
+		pledgeCap *float64
+		expected  string
 	}{
-		{"short slug with small pledge", "test", 5.0, "test          $5"},
-		{"short slug with large pledge", "test", 270.0, "test        $270"},
-		{"exact length slug", "the_slug", 5.0, "the_slug      $5"},
-		{"long slug needs truncation", "a_very_long_slug", 5.0, "a_very_lon... $5"},
-		{"very long slug", "this_is_an_extremely_long_slug_name", 10.0, "this_is_a... $10"},
-		{"empty slug", "", 5.0, "              $5"},
-		{"slug with spaces", "my goal", 15.0, "my goal      $15"},
-		{"zero pledge", "test", 0.0, "test          $0"},
-		{"large pledge value", "x", 10000.0, "x         $10000"},
-		{"extremely large pledge that exceeds width", "", 999999999999999.0, "$999999999999999"},
+		{"short slug with small pledge", "test", 5.0, nil, "test          $5"},
+		{"short slug with large pledge", "test", 270.0, nil, "test        $270"},
+		{"exact length slug", "the_slug", 5.0, nil, "the_slug      $5"},
+		{"long slug needs truncation", "a_very_long_slug", 5.0, nil, "a_very_lon... $5"},
+		{"very long slug", "this_is_an_extremely_long_slug_name", 10.0, nil, "this_is_a... $10"},
+		{"empty slug", "", 5.0, nil, "              $5"},
+		{"slug with spaces", "my goal", 15.0, nil, "my goal      $15"},
+		{"zero pledge", "test", 0.0, nil, "test          $0"},
+		{"large pledge value", "x", 10000.0, nil, "x         $10000"},
+		{"extremely large pledge that exceeds width", "", 999999999999999.0, nil, "$999999999999999"},
+		{"pledge with cap", "test", 5.0, float64Ptr(10.0), "test      $5/$10"},
+		{"pledge with cap same as pledge", "test", 10.0, float64Ptr(10.0), "test         $10"},
+		{"pledge with zero cap", "test", 5.0, float64Ptr(0.0), "test          $5"},
+		{"zero pledge and zero cap", "test", 0.0, float64Ptr(0.0), "test          $0"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatGoalFirstLine(tt.slug, tt.pledge)
+			result := formatGoalFirstLine(tt.slug, tt.pledge, tt.pledgeCap)
 			if result != tt.expected {
-				t.Errorf("formatGoalFirstLine(%q, %.0f) = %q, want %q", tt.slug, tt.pledge, result, tt.expected)
+				t.Errorf("formatGoalFirstLine(%q, %.0f, cap) = %q, want %q", tt.slug, tt.pledge, result, tt.expected)
 			}
 			if len(result) != 16 {
-				t.Errorf("formatGoalFirstLine(%q, %.0f) length = %d, want 16", tt.slug, tt.pledge, len(result))
+				t.Errorf("formatGoalFirstLine(%q, %.0f, cap) length = %d, want 16", tt.slug, tt.pledge, len(result))
 			}
 		})
 	}
