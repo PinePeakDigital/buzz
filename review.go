@@ -220,6 +220,53 @@ func formatDueTime(deadlineOffset int) string {
 	return t.Format("3:04 PM")
 }
 
+// formatRecentDatapoints formats up to 5 most recent datapoints for display
+func formatRecentDatapoints(datapoints []Datapoint) string {
+	if len(datapoints) == 0 {
+		return ""
+	}
+
+	count := len(datapoints)
+	if count > 5 {
+		count = 5
+	}
+
+	type row struct {
+		date    string
+		value   string
+		comment string
+	}
+
+	rows := make([]row, count)
+	maxValueLen := 0
+	for i := 0; i < count; i++ {
+		dp := datapoints[i]
+		var dateStr string
+		if dp.Daystamp != "" && len(dp.Daystamp) == 8 {
+			dateStr = dp.Daystamp[:4] + "-" + dp.Daystamp[4:6] + "-" + dp.Daystamp[6:8]
+		} else {
+			dateStr = time.Unix(dp.Timestamp, 0).UTC().Format("2006-01-02")
+		}
+		valueStr := fmt.Sprintf("%.6g", dp.Value)
+		if len(valueStr) > maxValueLen {
+			maxValueLen = len(valueStr)
+		}
+		rows[i] = row{date: dateStr, value: valueStr, comment: dp.Comment}
+	}
+
+	var output string
+	output += "\nRecent datapoints:\n"
+	for _, r := range rows {
+		if r.comment != "" {
+			output += fmt.Sprintf("  %s   %-*s   %s\n", r.date, maxValueLen, r.value, r.comment)
+		} else {
+			output += fmt.Sprintf("  %s   %s\n", r.date, r.value)
+		}
+	}
+
+	return output
+}
+
 // formatGoalDetails formats the goal details in a consistent way for both view and review commands
 func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipgloss.Style) string {
 	var details string
@@ -282,6 +329,11 @@ func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipglo
 	// Display fine print if it exists (at the end)
 	if goal.Fineprint != "" {
 		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
+	}
+
+	// Display recent datapoints if available
+	if len(goal.Datapoints) > 0 {
+		details += formatRecentDatapoints(goal.Datapoints)
 	}
 
 	return details
