@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1556,7 +1557,7 @@ func TestCreateDatapointWithRequestID(t *testing.T) {
 			}
 
 			// Call CreateDatapoint
-			err := CreateDatapoint(config, "testgoal", "1234567890", "5.0", "test comment", tt.requestid)
+			_, err := CreateDatapoint(config, "testgoal", "1234567890", "5.0", "test comment", tt.requestid)
 			if err != nil {
 				t.Fatalf("CreateDatapoint failed: %v", err)
 			}
@@ -1638,7 +1639,7 @@ func TestCreateDatapointWithDaystamp(t *testing.T) {
 			}
 
 			// Call CreateDatapointWithDaystamp
-			err := CreateDatapointWithDaystamp(config, "testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
+			_, err := CreateDatapointWithDaystamp(config, "testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
 			if err != nil {
 				t.Fatalf("CreateDatapointWithDaystamp failed: %v", err)
 			}
@@ -2134,4 +2135,236 @@ func TestCallUncleWithMockServer(t *testing.T) {
 			t.Errorf("Expected nil goal on error, got: %+v", goal)
 		}
 	})
+}
+
+func TestWaitForDatapoint(t *testing.T) {
+	t.Run("finds datapoint immediately", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.URL.RawQuery, "datapoints=true") {
+				t.Error("Expected datapoints=true query parameter")
+			}
+
+			goal := Goal{
+				Slug: "testgoal",
+				Datapoints: []Datapoint{
+					{ID: "target-id", Value: 1.0, Comment: "test"},
+					{ID: "other-id", Value: 2.0, Comment: "other"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		found, err := WaitForDatapoint(config, "testgoal", "target-id", 1*time.Second, 100*time.Millisecond)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if !found {
+			t.Error("Expected to find datapoint immediately")
+		}
+	})
+
+	t.Run("times out when datapoint not found", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			goal := Goal{
+				Slug: "testgoal",
+				Datapoints: []Datapoint{
+					{ID: "other-id", Value: 2.0, Comment: "other"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		start := time.Now()
+		found, err := WaitForDatapoint(config, "testgoal", "missing-id", 300*time.Millisecond, 100*time.Millisecond)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if found {
+			t.Error("Expected not to find datapoint (timeout)")
+		}
+		if elapsed < 250*time.Millisecond {
+			t.Errorf("Expected to wait at least 250ms, but only waited %v", elapsed)
+		}
+	})
+
+	t.Run("continues polling on fetch errors", func(t *testing.T) {
+		callCount := 0
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			if callCount == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			goal := Goal{
+				Slug: "testgoal",
+				Datapoints: []Datapoint{
+					{ID: "target-id", Value: 1.0, Comment: "test"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		found, err := WaitForDatapoint(config, "testgoal", "target-id", 1*time.Second, 100*time.Millisecond)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if !found {
+			t.Error("Expected to find datapoint after retrying")
+		}
+		if callCount < 2 {
+			t.Errorf("Expected at least 2 API calls, got %d", callCount)
+		}
+	})
+
+	t.Run("returns error on permanent failure", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		start := time.Now()
+		found, err := WaitForDatapoint(config, "testgoal", "target-id", 5*time.Second, 100*time.Millisecond)
+		elapsed := time.Since(start)
+
+		if err == nil {
+			t.Error("Expected error on permanent failure, got nil")
+		}
+		if found {
+			t.Error("Expected not to find datapoint on error")
+		}
+		if elapsed > 1*time.Second {
+			t.Errorf("Expected to fail fast (< 1s), but took %v", elapsed)
+		}
+	})
+
+	t.Run("handles zero timeout with at least one attempt", func(t *testing.T) {
+		callCount := 0
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			goal := Goal{
+				Slug: "testgoal",
+				Datapoints: []Datapoint{
+					{ID: "target-id", Value: 1.0, Comment: "test"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		found, err := WaitForDatapoint(config, "testgoal", "target-id", 0, 100*time.Millisecond)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if !found {
+			t.Error("Expected to find datapoint on first attempt")
+		}
+		if callCount < 1 {
+			t.Errorf("Expected at least 1 API call with zero timeout, got %d", callCount)
+		}
+	})
+}
+
+func TestIsPermanentError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"401 unauthorized", fmt.Errorf("API returned status 401"), true},
+		{"403 forbidden", fmt.Errorf("API returned status 403"), true},
+		{"404 not found", fmt.Errorf("API returned status 404"), true},
+		{"500 server error", fmt.Errorf("API returned status 500"), false},
+		{"network error", fmt.Errorf("connection refused"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isPermanentError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isPermanentError(%v) = %v, want %v", tt.err, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCreateDatapointReturnsDatapoint(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+
+		datapoint := Datapoint{
+			ID:        "12345",
+			Timestamp: 1234567890,
+			Value:     42.0,
+			Comment:   "test datapoint",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(datapoint)
+	}))
+	defer mockServer.Close()
+
+	config := &Config{
+		Username:  "testuser",
+		AuthToken: "testtoken",
+		BaseURL:   mockServer.URL,
+	}
+
+	datapoint, err := CreateDatapoint(config, "testgoal", "1234567890", "42", "test datapoint", "")
+	if err != nil {
+		t.Fatalf("CreateDatapoint failed: %v", err)
+	}
+
+	if datapoint == nil {
+		t.Fatal("Expected datapoint to be returned, got nil")
+	}
+	if datapoint.ID != "12345" {
+		t.Errorf("Expected ID '12345', got '%s'", datapoint.ID)
+	}
+	if datapoint.Value != 42.0 {
+		t.Errorf("Expected Value 42.0, got %v", datapoint.Value)
+	}
+	if datapoint.Comment != "test datapoint" {
+		t.Errorf("Expected Comment 'test datapoint', got '%s'", datapoint.Comment)
+	}
 }
