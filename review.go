@@ -224,9 +224,15 @@ func formatDueTime(deadlineOffset int) string {
 func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipgloss.Style) string {
 	var details string
 
-	// Display title only if not empty
-	if goal.Title != "" {
-		details += fmt.Sprintf("Title:       %s\n", goal.Title)
+	// Display current rate (n / unit)
+	if goal.Rate != nil && goal.Runits != "" {
+		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
+		details += fmt.Sprintf("Rate:        %s\n", rateStr)
+	}
+
+	// Display autoratchet only if set (not nil)
+	if goal.Autoratchet != nil {
+		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
 	}
 
 	// Display limsum with color coding based on urgency
@@ -258,20 +264,14 @@ func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipglo
 	}
 	details += fmt.Sprintf("Pledge:      %s\n", pledgeDisplay)
 
-	// Display current rate (n / unit)
-	if goal.Rate != nil && goal.Runits != "" {
-		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
-		details += fmt.Sprintf("Rate:        %s\n", rateStr)
+	// Display title only if not empty
+	if goal.Title != "" {
+		details += fmt.Sprintf("Title:       %s\n", goal.Title)
 	}
 
 	// Display autodata only if not empty
 	if goal.Autodata != "" {
 		details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
-	}
-
-	// Display autoratchet only if set (not nil)
-	if goal.Autoratchet != nil {
-		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
 	}
 
 	// Generate and display goal URL
