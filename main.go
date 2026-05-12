@@ -531,11 +531,12 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 // displayed amount reflects what's required to avoid a beemergency tomorrow.
 //
 // Two baremin value shapes are recognised: plain numeric (e.g. "+2") and the
-// HH:MM time format used by hour-valued goals (e.g. "+00:25"). For both, the
-// goal's rate is interpreted as units-of-baremin per runits and converted to a
-// per-day amount before being added. If rate information is missing, runits
-// isn't one Beeminder uses, or the value can't be parsed, the original Baremin
-// string is returned unchanged.
+// colon-separated time format used by hour-valued goals — both "HH:MM" (e.g.
+// "+00:25") and "HH:MM:SS" (e.g. "+00:25:00"). For both, the goal's rate is
+// interpreted as units-of-baremin per runits and converted to a per-day amount
+// before being added. The output preserves whichever colon format the input
+// used. If rate information is missing, runits isn't one Beeminder uses, or
+// the value can't be parsed, the original Baremin string is returned unchanged.
 func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !IsDueTodayAt(g.Losedate, now) {
 		return g.Baremin
@@ -552,15 +553,16 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	value := ParseBareminValue(g.Baremin)
 	perDay := ratePerDay(*g.Rate, g.Runits)
 
-	// HH:MM time format — e.g. "+00:25 in 8 hours". The base value and the rate
-	// share the same unit (hours), so add in hours and reformat as HH:MM.
+	// Colon-separated time formats — HH:MM or HH:MM:SS. The base value and
+	// the rate share the same hour unit, so add in seconds and reformat in
+	// whichever colon format the input used.
 	if strings.Contains(value, ":") {
-		baseHours, ok := parseHoursMinutes(value)
+		baseSeconds, includeSeconds, ok := parseTimeValue(value)
 		if !ok {
 			return g.Baremin
 		}
-		totalMinutes := int(math.Round((baseHours + perDay) * 60))
-		return formatMinutesAsHHMM(totalMinutes) + " in 1 day"
+		totalSeconds := baseSeconds + int(math.Round(perDay*3600))
+		return formatTimeValue(totalSeconds, includeSeconds) + " in 1 day"
 	}
 
 	// Plain numeric.
@@ -576,45 +578,66 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	return fmt.Sprintf("%s%g in 1 day", sign, total)
 }
 
-// parseHoursMinutes parses a "[-]HH:MM" string and returns the value as a
-// fractional hours float. Returns ok=false for anything that isn't exactly two
-// colon-separated integer fields.
-func parseHoursMinutes(s string) (float64, bool) {
-	sign := 1.0
+// parseTimeValue parses a "[-]HH:MM" or "[-]HH:MM:SS" string into total
+// seconds. The second return value reports whether the input included a
+// seconds component, so callers can preserve the original format on output.
+// Returns ok=false for anything that isn't exactly two or three colon-separated
+// non-negative integer fields with minutes and seconds < 60.
+func parseTimeValue(s string) (totalSeconds int, includeSeconds bool, ok bool) {
+	sign := 1
 	if strings.HasPrefix(s, "-") {
-		sign = -1.0
+		sign = -1
 		s = strings.TrimPrefix(s, "-")
 	}
 	parts := strings.Split(s, ":")
-	if len(parts) != 2 {
-		return 0, false
+	if len(parts) != 2 && len(parts) != 3 {
+		return 0, false, false
 	}
 	hh, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return 0, false
+		return 0, false, false
 	}
 	mm, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return 0, false
+		return 0, false, false
 	}
-	// Reject malformed inputs (e.g. "1:75", "1:-05", "--1:30"). The leading
-	// sign has already been stripped into `sign`, so either field being
-	// negative — or minutes outside [0, 60) — means the string was malformed.
-	if hh < 0 || mm < 0 || mm >= 60 {
-		return 0, false
+	ss := 0
+	if len(parts) == 3 {
+		ss, err = strconv.Atoi(parts[2])
+		if err != nil {
+			return 0, false, false
+		}
 	}
-	return sign * (float64(hh) + float64(mm)/60.0), true
+	// Reject malformed inputs (e.g. "1:75", "1:-05:00", "--1:30"). The leading
+	// sign has already been stripped, so any negative field — or minutes/
+	// seconds outside [0, 60) — means the string was malformed.
+	if hh < 0 || mm < 0 || mm >= 60 || ss < 0 || ss >= 60 {
+		return 0, false, false
+	}
+	return sign * (hh*3600 + mm*60 + ss), len(parts) == 3, true
 }
 
-// formatMinutesAsHHMM formats a signed minute count as Beeminder's HH:MM
-// baremin style (zero-padded hours and minutes, leading "+" for non-negative).
-func formatMinutesAsHHMM(totalMinutes int) string {
-	sign := "+"
-	if totalMinutes < 0 {
-		sign = "-"
-		totalMinutes = -totalMinutes
+// formatTimeValue formats a signed second count back into Beeminder's
+// colon-separated baremin style. When includeSeconds is true the output is
+// HH:MM:SS, otherwise HH:MM. Hours, minutes, and seconds are zero-padded and a
+// leading "+" is included for non-negative values. When dropping seconds, the
+// value is rounded to the nearest minute first so a fractional-minute bump
+// from the rate conversion doesn't silently undercount by up to 59 seconds.
+func formatTimeValue(totalSeconds int, includeSeconds bool) string {
+	if !includeSeconds {
+		totalSeconds = int(math.Round(float64(totalSeconds)/60.0)) * 60
 	}
-	return fmt.Sprintf("%s%02d:%02d", sign, totalMinutes/60, totalMinutes%60)
+	sign := "+"
+	if totalSeconds < 0 {
+		sign = "-"
+		totalSeconds = -totalSeconds
+	}
+	h := totalSeconds / 3600
+	m := (totalSeconds % 3600) / 60
+	if includeSeconds {
+		return fmt.Sprintf("%s%02d:%02d:%02d", sign, h, m, totalSeconds%60)
+	}
+	return fmt.Sprintf("%s%02d:%02d", sign, h, m)
 }
 
 // isKnownRunits reports whether the given runits string is one of the values
