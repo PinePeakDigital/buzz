@@ -479,6 +479,25 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			},
 			expected: "+2 in 1 day",
 		},
+		{
+			// Dueby includes a past daystamp alongside today and tomorrow.
+			// We must still pick tomorrow's entry (20250116 = "+5"), not the
+			// earlier ones — i.e. don't index by sort order.
+			name: "due today with past+today+tomorrow dueby still picks tomorrow",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250114": {FormattedDelta: "+99"},
+					"20250115": {FormattedDelta: "+1"},
+					"20250116": {FormattedDelta: "+5"},
+					"20250117": {FormattedDelta: "+9"},
+				},
+			},
+			expected: "+5 in 1 day",
+		},
 	}
 
 	for _, tt := range tests {
