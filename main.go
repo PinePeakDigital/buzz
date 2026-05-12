@@ -543,7 +543,7 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 // determined or the value can't be parsed, the original Baremin string is
 // returned unchanged.
 func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
-	if !IsDueTodayAt(g.Losedate, now) {
+	if !dueLaterTodayAt(g, now) {
 		return g.Baremin
 	}
 	perDay, ok := slopePerDayAt(g, now)
@@ -920,15 +920,25 @@ func handleTomorrowCommand() {
 }
 
 // losedateByEndOfTomorrowAt returns the deadline timestamp to display for a
-// goal in the tomorrow view. For goals due today (whose baremin we're bumping
-// by one day's rate), advance the deadline by one calendar day in the
-// caller's local zone so the displayed wall-clock deadline stays correct
-// across DST transitions; otherwise return the goal's own losedate unchanged.
+// goal in the tomorrow view. For goals due later today (whose baremin we're
+// bumping by one day's rate), advance the deadline by one calendar day in
+// the caller's local zone so the displayed wall-clock deadline stays correct
+// across DST transitions. Overdue goals (losedate already in the past) keep
+// their own losedate so the OVERDUE indicator remains visible — bumping them
+// would silently hide the fact that they've already derailed.
 func losedateByEndOfTomorrowAt(g Goal, now time.Time) int64 {
-	if !IsDueTodayAt(g.Losedate, now) {
+	if !dueLaterTodayAt(g, now) {
 		return g.Losedate
 	}
 	return time.Unix(g.Losedate, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
+}
+
+// dueLaterTodayAt reports whether a goal's losedate falls between now and the
+// start of tomorrow. Used as the gating predicate for the tomorrow-view
+// bumping helpers: overdue goals (losedate < now) and goals due tomorrow or
+// later are left untouched so their actual deadline keeps showing.
+func dueLaterTodayAt(g Goal, now time.Time) bool {
+	return g.Losedate >= now.Unix() && IsDueTodayAt(g.Losedate, now)
 }
 
 // handleLessCommand outputs all do-less type goals

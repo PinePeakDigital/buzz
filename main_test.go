@@ -290,6 +290,14 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			expected: "+1 today",
 		},
 		{
+			// Overdue goals keep their original baremin paired with the
+			// original (overdue) losedate — bumping either would hide the
+			// fact that the goal has already derailed.
+			name:     "overdue is unchanged",
+			goal:     Goal{Losedate: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix(), Baremin: "+1 today", Rate: f(1), Runits: "d"},
+			expected: "+1 today",
+		},
+		{
 			// Real-world scenario from a "clean" hours-valued goal: 25 minutes
 			// due today, rate 1 hour/day. Tomorrow needs today's 25 minutes
 			// plus another hour = 1:25.
@@ -450,6 +458,22 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 			name:     "due later keeps own losedate",
 			goal:     Goal{Losedate: dayAfterTomorrowDeadline},
 			expected: dayAfterTomorrowDeadline,
+		},
+		{
+			// Overdue goals keep their losedate so the OVERDUE indicator
+			// remains visible — bumping it would silently move the deadline
+			// into the future and hide the fact that the goal has derailed.
+			name:     "overdue keeps own losedate",
+			goal:     Goal{Losedate: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix()},
+			expected: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix(),
+		},
+		{
+			// Edge case: losedate exactly equals now — treat as still
+			// "due later today" so bumping happens. Anything strictly less
+			// than now is overdue.
+			name:     "losedate at exactly now still bumps",
+			goal:     Goal{Losedate: now.Unix()},
+			expected: time.Unix(now.Unix(), 0).In(now.Location()).AddDate(0, 0, 1).Unix(),
 		},
 	}
 
