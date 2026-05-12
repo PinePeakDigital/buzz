@@ -714,6 +714,15 @@ func roadallSlopePerDayAt(g Goal, t time.Time) (float64, bool) {
 		if len(cur) < 3 || cur[0] == nil {
 			return 0, false
 		}
+		prev := g.Roadall[i-1]
+		if len(prev) < 3 || prev[0] == nil {
+			return 0, false
+		}
+		// `target` is before the road even starts — don't fall through to
+		// segment 1 just because target <= cur[0].
+		if target < *prev[0] {
+			return 0, false
+		}
 		if target > *cur[0] {
 			continue
 		}
@@ -725,8 +734,7 @@ func roadallSlopePerDayAt(g Goal, t time.Time) (float64, bool) {
 			return ratePerDay(*cur[2], g.Runits), true
 		}
 		// Rate not specified — derive from (Δvalue / Δtime).
-		prev := g.Roadall[i-1]
-		if len(prev) < 3 || prev[0] == nil || prev[1] == nil || cur[1] == nil {
+		if prev[1] == nil || cur[1] == nil {
 			return 0, false
 		}
 		seconds := *cur[0] - *prev[0]

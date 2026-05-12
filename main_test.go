@@ -473,6 +473,17 @@ func TestRoadallSlopePerDayAt(t *testing.T) {
 			ok:       true,
 		},
 		{
+			// Target is before the road's start anchor — shouldn't match
+			// segment 1 just because target <= segEnd1.
+			name: "target before road start returns false",
+			goal: Goal{
+				Runits: "d",
+				// Road starts in the future, well after `target`.
+				Roadall: piecewiseRoadall(target.Unix()+86400, 0, float64(target.Unix()+10*86400), 1.0),
+			},
+			ok: false,
+		},
+		{
 			name: "target past last segment returns false",
 			goal: Goal{
 				Runits: "d",
