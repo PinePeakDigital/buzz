@@ -173,11 +173,10 @@ func TestNoColorFlag(t *testing.T) {
 func TestDueFiltersSkipEndValueReached(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 
-	// Pick a losedate squarely inside "today" and one inside "tomorrow"
-	// (filters use time.Now() internally, so we anchor relative to that).
-	now := time.Now()
-	todayDeadline := time.Date(now.Year(), now.Month(), now.Day(), 23, 0, 0, 0, now.Location()).Unix()
-	tomorrowDeadline := time.Date(now.Year(), now.Month(), now.Day()+1, 12, 0, 0, 0, now.Location()).Unix()
+	// Fixed reference time so the test is deterministic across midnight boundaries.
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
+	tomorrowDeadline := time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC).Unix()
 
 	tests := []struct {
 		name           string
@@ -213,11 +212,11 @@ func TestDueFiltersSkipEndValueReached(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isDueTodayFilter(tt.goal); got != tt.todayExpect {
-				t.Errorf("isDueTodayFilter = %v, want %v", got, tt.todayExpect)
+			if got := isDueTodayFilterAt(tt.goal, now); got != tt.todayExpect {
+				t.Errorf("isDueTodayFilterAt = %v, want %v", got, tt.todayExpect)
 			}
-			if got := isDueTomorrowFilter(tt.goal); got != tt.tomorrowExpect {
-				t.Errorf("isDueTomorrowFilter = %v, want %v", got, tt.tomorrowExpect)
+			if got := isDueTomorrowFilterAt(tt.goal, now); got != tt.tomorrowExpect {
+				t.Errorf("isDueTomorrowFilterAt = %v, want %v", got, tt.tomorrowExpect)
 			}
 		})
 	}
