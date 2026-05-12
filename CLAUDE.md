@@ -12,4 +12,4 @@ Canonical triage labels — `needs-triage`, `needs-info`, `ready-for-agent`, `re
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context layout. `CONTEXT.md` and `docs/adr/` live at the repo root if/when they exist (created lazily by `/grill-with-docs`). See `docs/agents/domain.md`.
