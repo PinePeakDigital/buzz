@@ -541,9 +541,10 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 // interpreted as units-of-baremin per day before being added. The output
 // preserves whichever colon format the input used. If the slope can't be
 // determined or the value can't be parsed, the original Baremin string is
-// returned unchanged. The returned string never carries a trailing time-window
-// qualifier (e.g. " in 1 day", " within 1 day", " today") — every row in the
-// tomorrow view shares the same horizon, so the suffix is just noise.
+// returned with any trailing time-window qualifier removed. The returned
+// string never carries that qualifier (e.g. " in 1 day", " within 1 day",
+// " today") — every row in the tomorrow view shares the same horizon, so
+// the suffix is just noise.
 func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !dueLaterTodayAt(g, now) {
 		return stripTimeWindowSuffix(g.Baremin)
