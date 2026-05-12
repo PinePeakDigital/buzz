@@ -6,7 +6,8 @@ import "time"
 type appModel struct {
 	goals              []Goal    // Beeminder goals
 	cursor             int       // which goal our cursor is pointing at
-	config             *Config   // Beeminder credentials
+	config             *Config   // Beeminder credentials (kept for openBrowser URL building)
+	client             Client    // Beeminder API client
 	loading            bool      // whether we're loading goals
 	err                error     // error from loading goals
 	width              int       // terminal width
@@ -59,6 +60,7 @@ func initialAppModel(config *Config) appModel {
 	return appModel{
 		goals:         []Goal{},
 		config:        config,
+		client:        NewHTTPClient(config),
 		loading:       true,
 		refreshActive: true,
 		searchMode:    false,
