@@ -7,7 +7,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
+
+// httpClientTimeout caps every Beeminder request so a stalled connection can't
+// freeze the CLI or block a Bubble Tea Cmd indefinitely. A real cancellation
+// story (per-request context, user-quit propagation) is tracked in issue #253;
+// this timeout is the cheap stopgap until then.
+const httpClientTimeout = 30 * time.Second
 
 // Client is the Beeminder API seam. Production code depends on this interface;
 // HTTPClient is the only adapter today, and tests use it via NewHTTPClient
@@ -38,7 +45,10 @@ type HTTPClient struct {
 // The returned value can be assigned to a Client interface variable; downstream
 // code should depend on Client, not *HTTPClient.
 func NewHTTPClient(config *Config) *HTTPClient {
-	return &HTTPClient{config: config, http: http.DefaultClient}
+	return &HTTPClient{
+		config: config,
+		http:   &http.Client{Timeout: httpClientTimeout},
+	}
 }
 
 // getBaseURL returns the configured base URL or the default Beeminder URL.
