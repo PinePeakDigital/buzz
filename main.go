@@ -979,16 +979,6 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	)
 }
 
-// handleFilteredCommandWithBaremin is like handleFilteredCommand but lets the
-// caller customise the baremin string displayed for each goal. The deadline
-// shown for each goal still comes from the goal's own losedate. Kept for
-// backwards compatibility with callers that only need to override baremin.
-func handleFilteredCommandWithBaremin(filterName string, filter func(Goal) bool, bareminFor func(Goal) string) {
-	handleFilteredCommandWithDisplay(filterName, filter, bareminFor,
-		func(g Goal) int64 { return g.Losedate },
-	)
-}
-
 // handleFilteredCommandWithDisplay is the most general filtered-output helper:
 // the caller can override both the displayed baremin string and the deadline
 // timestamp used for the timeframe/absolute-deadline columns. The tomorrow
