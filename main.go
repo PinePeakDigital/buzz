@@ -729,9 +729,9 @@ func handleTodayCommand() {
 // to not be due tomorrow.
 func handleTomorrowCommand() {
 	now := time.Now()
-	handleFilteredCommandWithBaremin("tomorrow", isDueTomorrowFilter, func(g Goal) string {
-		return bareminByEndOfTomorrowAt(g, now)
-	})
+	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
+	bareminFor := func(g Goal) string { return bareminByEndOfTomorrowAt(g, now) }
+	handleFilteredCommandWithBaremin("tomorrow", filter, bareminFor)
 }
 
 // handleLessCommand outputs all do-less type goals
