@@ -620,8 +620,13 @@ func parseTimeValue(s string) (totalSeconds int, includeSeconds bool, ok bool) {
 // formatTimeValue formats a signed second count back into Beeminder's
 // colon-separated baremin style. When includeSeconds is true the output is
 // HH:MM:SS, otherwise HH:MM. Hours, minutes, and seconds are zero-padded and a
-// leading "+" is included for non-negative values.
+// leading "+" is included for non-negative values. When dropping seconds, the
+// value is rounded to the nearest minute first so a fractional-minute bump
+// from the rate conversion doesn't silently undercount by up to 59 seconds.
 func formatTimeValue(totalSeconds int, includeSeconds bool) string {
+	if !includeSeconds {
+		totalSeconds = int(math.Round(float64(totalSeconds)/60.0)) * 60
+	}
 	sign := "+"
 	if totalSeconds < 0 {
 		sign = "-"

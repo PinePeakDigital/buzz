@@ -410,6 +410,11 @@ func TestFormatTimeValue(t *testing.T) {
 		{85 * 60, false, "+01:25"},
 		{605 * 60, false, "+10:05"},
 		{-15 * 60, false, "-00:15"},
+		// When dropping seconds, round to the nearest minute rather than
+		// truncating — 30 seconds past the minute rounds up to the next.
+		{25*60 + 30, false, "+00:26"},
+		{25*60 + 29, false, "+00:25"},
+		{-15*60 - 30, false, "-00:16"},
 		{0, true, "+00:00:00"},
 		{25 * 60, true, "+00:25:00"},
 		{85 * 60, true, "+01:25:00"},
