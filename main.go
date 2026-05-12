@@ -909,12 +909,26 @@ func handleTodayCommand() {
 // handleTomorrowCommand outputs all goals that are due tomorrow. Goals that
 // are already due today are included with their baremin bumped by one day's
 // rate, so the user sees the total amount they would need to do for the goal
-// to not be due tomorrow.
+// to not be due tomorrow. The displayed deadline is bumped to match — the
+// bumped baremin is what's needed by *tomorrow's* deadline, not today's.
 func handleTomorrowCommand() {
 	now := time.Now()
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
 	bareminFor := func(g Goal) string { return bareminByEndOfTomorrowAt(g, now) }
-	handleFilteredCommandWithBaremin("tomorrow", filter, bareminFor)
+	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor)
+}
+
+// losedateByEndOfTomorrowAt returns the deadline timestamp to display for a
+// goal in the tomorrow view. For goals due today (whose baremin we're bumping
+// by one day's rate), advance the deadline by 24 hours so the displayed
+// deadline matches the bumped baremin's coverage; otherwise return the goal's
+// own losedate unchanged.
+func losedateByEndOfTomorrowAt(g Goal, now time.Time) int64 {
+	if !IsDueTodayAt(g.Losedate, now) {
+		return g.Losedate
+	}
+	return g.Losedate + 86400
 }
 
 // handleLessCommand outputs all do-less type goals
@@ -959,13 +973,28 @@ func handleDueCommand() {
 // filterName is used in messages (e.g., "today", "tomorrow", or "do-less")
 // filter is a function that takes a Goal and returns true if the goal matches
 func handleFilteredCommand(filterName string, filter func(Goal) bool) {
-	handleFilteredCommandWithBaremin(filterName, filter, func(g Goal) string { return g.Baremin })
+	handleFilteredCommandWithDisplay(filterName, filter,
+		func(g Goal) string { return g.Baremin },
+		func(g Goal) int64 { return g.Losedate },
+	)
 }
 
 // handleFilteredCommandWithBaremin is like handleFilteredCommand but lets the
-// caller customise the baremin string displayed for each goal. This is used by
-// the tomorrow view to bump due-today goals by one day's rate.
+// caller customise the baremin string displayed for each goal. The deadline
+// shown for each goal still comes from the goal's own losedate. Kept for
+// backwards compatibility with callers that only need to override baremin.
 func handleFilteredCommandWithBaremin(filterName string, filter func(Goal) bool, bareminFor func(Goal) string) {
+	handleFilteredCommandWithDisplay(filterName, filter, bareminFor,
+		func(g Goal) int64 { return g.Losedate },
+	)
+}
+
+// handleFilteredCommandWithDisplay is the most general filtered-output helper:
+// the caller can override both the displayed baremin string and the deadline
+// timestamp used for the timeframe/absolute-deadline columns. The tomorrow
+// view uses this to bump both for due-today goals so the bumped baremin and
+// the displayed deadline are aligned to the same target moment.
+func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool, bareminFor func(Goal) string, losedateFor func(Goal) int64) {
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
@@ -1016,8 +1045,9 @@ func handleFilteredCommandWithBaremin(filterName string, filter func(Goal) bool,
 	maxRelativeWidth := 0
 
 	for i, goal := range filteredGoals {
-		timeframe := FormatDueDate(goal.Losedate)
-		absoluteDeadline := FormatAbsoluteDeadline(goal.Losedate)
+		losedate := losedateFor(goal)
+		timeframe := FormatDueDate(losedate)
+		absoluteDeadline := FormatAbsoluteDeadline(losedate)
 		baremin := bareminFor(goal)
 		displays[i] = goalDisplay{
 			goal:             goal,

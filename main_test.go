@@ -417,6 +417,52 @@ func piecewiseRoadall(startT int64, startV float64, segments ...float64) [][]*fl
 	return rows
 }
 
+// TestLosedateByEndOfTomorrowAt verifies that due-today goals get their
+// displayed deadline advanced by 24 hours in the tomorrow view, so it lines
+// up with the bumped baremin's coverage. Goals already due tomorrow keep
+// their own losedate.
+func TestLosedateByEndOfTomorrowAt(t *testing.T) {
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	todayDeadline := time.Date(2025, 1, 15, 17, 59, 0, 0, time.UTC).Unix()
+	tomorrowDeadline := time.Date(2025, 1, 16, 17, 59, 0, 0, time.UTC).Unix()
+	dayAfterTomorrowDeadline := time.Date(2025, 1, 17, 17, 59, 0, 0, time.UTC).Unix()
+
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected int64
+	}{
+		{
+			// User-reported real-world case: a clean goal due today at 5:59 PM
+			// should show tomorrow's 5:59 PM as the deadline in `buzz tomorrow`
+			// since the displayed baremin covers tomorrow.
+			name:     "due today bumps deadline by 24 hours",
+			goal:     Goal{Losedate: todayDeadline},
+			expected: todayDeadline + 86400,
+		},
+		{
+			name:     "due tomorrow keeps own losedate",
+			goal:     Goal{Losedate: tomorrowDeadline},
+			expected: tomorrowDeadline,
+		},
+		{
+			name:     "due later keeps own losedate",
+			goal:     Goal{Losedate: dayAfterTomorrowDeadline},
+			expected: dayAfterTomorrowDeadline,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := losedateByEndOfTomorrowAt(tt.goal, now)
+			if got != tt.expected {
+				t.Errorf("losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+					got, tt.expected, got-tt.expected)
+			}
+		})
+	}
+}
+
 // TestRoadallSlopePerDayAt verifies the segment-resolving helper that powers
 // piecewise-aware baremin bumping.
 func TestRoadallSlopePerDayAt(t *testing.T) {
