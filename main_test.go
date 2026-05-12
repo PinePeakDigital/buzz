@@ -462,6 +462,23 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			},
 			expected: "+2 in 1 day",
 		},
+		{
+			// Dueby keyed only by past daystamps (defensive — Beeminder
+			// normally starts at today). The deadline-aware lookup misses,
+			// so we fall back instead of mistakenly using a stale entry.
+			name: "due today with only-past dueby keys falls back",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250113": {FormattedDelta: "+99"},
+					"20250114": {FormattedDelta: "+99"},
+				},
+			},
+			expected: "+2 in 1 day",
+		},
 	}
 
 	for _, tt := range tests {
@@ -469,6 +486,48 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			got := bareminByEndOfTomorrowAt(tt.goal, now)
 			if got != tt.expected {
 				t.Errorf("bareminByEndOfTomorrowAt = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestTomorrowDaystampFor verifies that the daystamp lookup honours each
+// goal's `deadline` shift. A positive deadline (e.g. +3h cutoff) keeps
+// early-morning runs on yesterday's daystamp; a negative deadline (e.g.
+// -3h, 9pm cutoff) pushes late-evening runs onto tomorrow's daystamp.
+func TestTomorrowDaystampFor(t *testing.T) {
+	tests := []struct {
+		name     string
+		deadline int
+		now      time.Time
+		expected string
+	}{
+		{
+			name:     "midnight cutoff, mid-afternoon",
+			deadline: 0,
+			now:      time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC),
+			expected: "20250116",
+		},
+		{
+			name:     "3am cutoff, 1am run is still 'yesterday' so tomorrow is the calendar day",
+			deadline: 3 * 3600,
+			now:      time.Date(2025, 1, 15, 1, 0, 0, 0, time.UTC),
+			expected: "20250115",
+		},
+		{
+			name:     "9pm cutoff, 10pm run already on next Beeminder day",
+			deadline: -3 * 3600,
+			now:      time.Date(2025, 1, 15, 22, 0, 0, 0, time.UTC),
+			expected: "20250117",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := Goal{Deadline: tt.deadline}
+			got := tomorrowDaystampFor(g, tt.now)
+			if got != tt.expected {
+				t.Errorf("tomorrowDaystampFor(deadline=%d, now=%v) = %q, want %q", tt.deadline, tt.now, got, tt.expected)
 			}
 		})
 	}

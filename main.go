@@ -546,7 +546,7 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !dueLaterTodayAt(g, now) {
 		return g.Baremin
 	}
-	if bumped, ok := bareminFromDueby(g); ok {
+	if bumped, ok := bareminFromDueby(g, now); ok {
 		return bumped + " in 1 day"
 	}
 	perDay, ok := slopePerDayAt(g, now)
@@ -580,29 +580,35 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	return fmt.Sprintf("%s%g in 1 day", sign, total)
 }
 
-// bareminFromDueby returns the formatted delta for the day after the goal's
-// current "today" daystamp, taken from Beeminder's pre-rounded `dueby` map.
-// Beeminder rounds those strings to the goal's Display Precision, so honouring
-// them sidesteps float-formatting noise (e.g. "+10788.140000000001") that
-// arises when we add today's baremin to a per-day rate ourselves. Returns
-// ok=false when dueby is absent, has fewer than two entries, or the
-// tomorrow entry has no formatted delta — callers fall back to local
-// arithmetic in those cases. Daystamps are YYYYMMDD strings, so
-// lexicographic and chronological order coincide.
-func bareminFromDueby(g Goal) (string, bool) {
-	if len(g.Dueby) < 2 {
+// bareminFromDueby returns the formatted delta for tomorrow's daystamp,
+// taken from Beeminder's pre-rounded `dueby` map. Beeminder rounds those
+// strings to the goal's Display Precision, so honouring them sidesteps
+// float-formatting noise (e.g. "+10788.140000000001") that arises when we
+// add today's baremin to a per-day rate ourselves. Returns ok=false when
+// dueby is absent or the tomorrow entry is missing/empty — callers fall
+// back to local arithmetic in those cases.
+func bareminFromDueby(g Goal, now time.Time) (string, bool) {
+	if len(g.Dueby) == 0 {
 		return "", false
 	}
-	keys := make([]string, 0, len(g.Dueby))
-	for k := range g.Dueby {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	tomorrow := g.Dueby[keys[1]].FormattedDelta
-	if tomorrow == "" {
+	entry, ok := g.Dueby[tomorrowDaystampFor(g, now)]
+	if !ok || entry.FormattedDelta == "" {
 		return "", false
 	}
-	return tomorrow, true
+	return entry.FormattedDelta, true
+}
+
+// tomorrowDaystampFor returns the YYYYMMDD daystamp representing the day
+// after the goal's current Beeminder day. Beeminder shifts day boundaries
+// by the goal's `deadline` seconds — positive deadlines push the boundary
+// past midnight (e.g. +10800 = 3am cutoff), negative deadlines pull it
+// before (e.g. -10800 = 9pm cutoff). Subtracting the deadline from `now`
+// produces a wall-clock time inside the user's calendar date that matches
+// the goal's current daystamp; the next calendar day is tomorrow's.
+func tomorrowDaystampFor(g Goal, now time.Time) string {
+	shifted := now.Add(-time.Duration(g.Deadline) * time.Second).In(now.Location())
+	tomorrow := time.Date(shifted.Year(), shifted.Month(), shifted.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
+	return tomorrow.Format("20060102")
 }
 
 // parseTimeValue parses a "[-]HH:MM" or "[-]HH:MM:SS" string into total
