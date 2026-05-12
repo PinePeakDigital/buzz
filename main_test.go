@@ -395,6 +395,109 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			},
 			expected: "+01:25:00 in 1 day",
 		},
+		{
+			// Real-world steps-goal scenario: API returns dueby pre-rounded
+			// to the goal's Display Precision, so we should honour the
+			// formatted tomorrow delta instead of doing our own float math
+			// (which would print "+10788.140000000001").
+			name: "due today with dueby uses Beeminder's formatted tomorrow delta",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+2283",
+				Rate:     f(8505.140000000001),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+2283"},
+					"20250116": {FormattedDelta: "+10789"},
+					"20250117": {FormattedDelta: "+10789"},
+				},
+			},
+			expected: "+10789 in 1 day",
+		},
+		{
+			// Timey goals also get pre-formatted dueby entries; honour them
+			// over our own colon-format reconstruction.
+			name: "due today with timey dueby honours Beeminder's tomorrow formatting",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+00:25 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+00:25"},
+					"20250116": {FormattedDelta: "+01:25"},
+				},
+			},
+			expected: "+01:25 in 1 day",
+		},
+		{
+			// Dueby with only today's entry can't tell us tomorrow's value —
+			// fall back to the existing slope-based bump.
+			name: "due today with single-entry dueby falls back to slope bump",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+1"},
+				},
+			},
+			expected: "+2 in 1 day",
+		},
+		{
+			// Dueby present but tomorrow's entry has an empty FormattedDelta
+			// (defensive — shouldn't happen in practice). Fall back so we
+			// still produce a useful display string.
+			name: "due today with empty tomorrow FormattedDelta falls back",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+1"},
+					"20250116": {FormattedDelta: ""},
+				},
+			},
+			expected: "+2 in 1 day",
+		},
+		{
+			// Dueby keyed only by past daystamps (defensive — Beeminder
+			// normally starts at today). The deadline-aware lookup misses,
+			// so we fall back instead of mistakenly using a stale entry.
+			name: "due today with only-past dueby keys falls back",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250113": {FormattedDelta: "+99"},
+					"20250114": {FormattedDelta: "+99"},
+				},
+			},
+			expected: "+2 in 1 day",
+		},
+		{
+			// Dueby includes a past daystamp alongside today and tomorrow.
+			// We must still pick tomorrow's entry (20250116 = "+5"), not the
+			// earlier ones — i.e. don't index by sort order.
+			name: "due today with past+today+tomorrow dueby still picks tomorrow",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250114": {FormattedDelta: "+99"},
+					"20250115": {FormattedDelta: "+1"},
+					"20250116": {FormattedDelta: "+5"},
+					"20250117": {FormattedDelta: "+9"},
+				},
+			},
+			expected: "+5 in 1 day",
+		},
 	}
 
 	for _, tt := range tests {
@@ -402,6 +505,48 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			got := bareminByEndOfTomorrowAt(tt.goal, now)
 			if got != tt.expected {
 				t.Errorf("bareminByEndOfTomorrowAt = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestTomorrowDaystampFor verifies that the daystamp lookup honours each
+// goal's `deadline` shift. A positive deadline (e.g. +3h cutoff) keeps
+// early-morning runs on yesterday's daystamp; a negative deadline (e.g.
+// -3h, 9pm cutoff) pushes late-evening runs onto tomorrow's daystamp.
+func TestTomorrowDaystampFor(t *testing.T) {
+	tests := []struct {
+		name     string
+		deadline int
+		now      time.Time
+		expected string
+	}{
+		{
+			name:     "midnight cutoff, mid-afternoon",
+			deadline: 0,
+			now:      time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC),
+			expected: "20250116",
+		},
+		{
+			name:     "3am cutoff, 1am run is still 'yesterday' so tomorrow is the calendar day",
+			deadline: 3 * 3600,
+			now:      time.Date(2025, 1, 15, 1, 0, 0, 0, time.UTC),
+			expected: "20250115",
+		},
+		{
+			name:     "9pm cutoff, 10pm run already on next Beeminder day",
+			deadline: -3 * 3600,
+			now:      time.Date(2025, 1, 15, 22, 0, 0, 0, time.UTC),
+			expected: "20250117",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := Goal{Deadline: tt.deadline}
+			got := tomorrowDaystampFor(g, tt.now)
+			if got != tt.expected {
+				t.Errorf("tomorrowDaystampFor(deadline=%d, now=%v) = %q, want %q", tt.deadline, tt.now, got, tt.expected)
 			}
 		})
 	}
