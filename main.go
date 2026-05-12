@@ -511,15 +511,83 @@ func isDueTodayFilter(g Goal) bool {
 	return isDueTodayFilterAt(g, time.Now())
 }
 
-// isDueTomorrowFilterAt returns true if the goal is due tomorrow (relative to now) and
-// hasn't already reached its end value. Exposed for deterministic time-based tests.
+// isDueTomorrowFilterAt returns true if the goal is due by the end of tomorrow
+// (i.e. due today or tomorrow) and hasn't already reached its end value. Goals
+// due today are included so the tomorrow view shows the full set of goals the
+// user must address to avoid a beemergency tomorrow. Exposed for deterministic
+// time-based tests.
 func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
-	return IsDueTomorrowAt(g.Losedate, now) && !IsEndValueReached(g)
+	if IsEndValueReached(g) {
+		return false
+	}
+	return IsDueTodayAt(g.Losedate, now) || IsDueTomorrowAt(g.Losedate, now)
 }
 
-// isDueTomorrowFilter returns true if the goal is due tomorrow and hasn't already reached its end value
-func isDueTomorrowFilter(g Goal) bool {
-	return isDueTomorrowFilterAt(g, time.Now())
+// bareminByEndOfTomorrowAt returns the baremin string to display for a goal in
+// the "due tomorrow" view. For goals already due tomorrow, the goal's existing
+// Baremin string is returned (it already reflects what's needed by tomorrow's
+// deadline). For goals due today, one day's worth of rate is added so the
+// displayed amount reflects what's required to avoid a beemergency tomorrow.
+//
+// If the baremin can't be parsed as a plain number (e.g. it's an HH:MM time
+// value) or rate information is missing, the original Baremin string is
+// returned unchanged.
+func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
+	if !IsDueTodayAt(g.Losedate, now) {
+		return g.Baremin
+	}
+	if g.Rate == nil {
+		return g.Baremin
+	}
+	// Without recognised runits we can't safely convert the rate to a per-day
+	// amount, so fall back to the original baremin rather than producing a
+	// dimensionally-wrong bump.
+	if !isKnownRunits(g.Runits) {
+		return g.Baremin
+	}
+	value := ParseBareminValue(g.Baremin)
+	base, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return g.Baremin
+	}
+	perDay := ratePerDay(*g.Rate, g.Runits)
+	total := base + perDay
+	sign := "+"
+	if total < 0 {
+		sign = ""
+	}
+	return fmt.Sprintf("%s%g in 1 day", sign, total)
+}
+
+// isKnownRunits reports whether the given runits string is one of the values
+// Beeminder uses (y/m/w/d/h). Callers that need a dimensionally-correct
+// per-day conversion should bail out for anything else.
+func isKnownRunits(runits string) bool {
+	switch runits {
+	case "y", "m", "w", "d", "h":
+		return true
+	}
+	return false
+}
+
+// ratePerDay converts a rate expressed in the given runits into an equivalent
+// amount per day. Supports the runits Beeminder reports: y, m, w, d, h. For
+// unrecognised units the rate is returned unchanged.
+func ratePerDay(rate float64, runits string) float64 {
+	switch runits {
+	case "y":
+		return rate / 365.0
+	case "m":
+		return rate / 30.0
+	case "w":
+		return rate / 7.0
+	case "d":
+		return rate
+	case "h":
+		return rate * 24.0
+	default:
+		return rate
+	}
 }
 
 // isDoLessFilter returns true if the goal is a do-less type goal
@@ -667,9 +735,15 @@ func handleTodayCommand() {
 	handleFilteredCommand("today", isDueTodayFilter)
 }
 
-// handleTomorrowCommand outputs all goals that are due tomorrow
+// handleTomorrowCommand outputs all goals that are due tomorrow. Goals that
+// are already due today are included with their baremin bumped by one day's
+// rate, so the user sees the total amount they would need to do for the goal
+// to not be due tomorrow.
 func handleTomorrowCommand() {
-	handleFilteredCommand("tomorrow", isDueTomorrowFilter)
+	now := time.Now()
+	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
+	bareminFor := func(g Goal) string { return bareminByEndOfTomorrowAt(g, now) }
+	handleFilteredCommandWithBaremin("tomorrow", filter, bareminFor)
 }
 
 // handleLessCommand outputs all do-less type goals
@@ -714,6 +788,13 @@ func handleDueCommand() {
 // filterName is used in messages (e.g., "today", "tomorrow", or "do-less")
 // filter is a function that takes a Goal and returns true if the goal matches
 func handleFilteredCommand(filterName string, filter func(Goal) bool) {
+	handleFilteredCommandWithBaremin(filterName, filter, func(g Goal) string { return g.Baremin })
+}
+
+// handleFilteredCommandWithBaremin is like handleFilteredCommand but lets the
+// caller customise the baremin string displayed for each goal. This is used by
+// the tomorrow view to bump due-today goals by one day's rate.
+func handleFilteredCommandWithBaremin(filterName string, filter func(Goal) bool, bareminFor func(Goal) string) {
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
@@ -753,6 +834,7 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	// Pre-calculate formatted values to avoid redundant formatting calls
 	type goalDisplay struct {
 		goal             Goal
+		baremin          string
 		timeframe        string
 		absoluteDeadline string
 	}
@@ -765,8 +847,10 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	for i, goal := range filteredGoals {
 		timeframe := FormatDueDate(goal.Losedate)
 		absoluteDeadline := FormatAbsoluteDeadline(goal.Losedate)
+		baremin := bareminFor(goal)
 		displays[i] = goalDisplay{
 			goal:             goal,
+			baremin:          baremin,
 			timeframe:        timeframe,
 			absoluteDeadline: absoluteDeadline,
 		}
@@ -774,8 +858,8 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 		if len(goal.Slug) > maxSlugWidth {
 			maxSlugWidth = len(goal.Slug)
 		}
-		if len(goal.Baremin) > maxBareminWidth {
-			maxBareminWidth = len(goal.Baremin)
+		if len(baremin) > maxBareminWidth {
+			maxBareminWidth = len(baremin)
 		}
 		if len(timeframe) > maxRelativeWidth {
 			maxRelativeWidth = len(timeframe)
@@ -800,7 +884,7 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 		// Format the line with proper spacing
 		line := fmt.Sprintf("%-*s  %-*s  %-*s  %s",
 			maxSlugWidth, display.goal.Slug,
-			maxBareminWidth, display.goal.Baremin,
+			maxBareminWidth, display.baremin,
 			maxRelativeWidth, display.timeframe,
 			display.absoluteDeadline)
 

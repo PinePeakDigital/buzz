@@ -185,10 +185,12 @@ func TestDueFiltersSkipEndValueReached(t *testing.T) {
 		tomorrowExpect bool
 	}{
 		{
+			// Due-today goals are also surfaced in the tomorrow view: if the
+			// user does nothing today the goal carries into tomorrow.
 			name:           "do-more goal due today, not yet reached",
 			goal:           Goal{Losedate: todayDeadline, Dir: 1, Curval: f(50), Goalval: f(100)},
 			todayExpect:    true,
-			tomorrowExpect: false,
+			tomorrowExpect: true,
 		},
 		{
 			name:           "do-more goal due today, end value reached",
@@ -217,6 +219,97 @@ func TestDueFiltersSkipEndValueReached(t *testing.T) {
 			}
 			if got := isDueTomorrowFilterAt(tt.goal, now); got != tt.tomorrowExpect {
 				t.Errorf("isDueTomorrowFilterAt = %v, want %v", got, tt.tomorrowExpect)
+			}
+		})
+	}
+}
+
+// TestRatePerDay verifies rate conversion across the runits Beeminder reports.
+func TestRatePerDay(t *testing.T) {
+	tests := []struct {
+		name     string
+		rate     float64
+		runits   string
+		expected float64
+	}{
+		{"per day stays the same", 2, "d", 2},
+		{"per week divides by 7", 7, "w", 1},
+		{"per month divides by 30", 30, "m", 1},
+		{"per year divides by 365", 365, "y", 1},
+		{"per hour multiplies by 24", 0.5, "h", 12},
+		{"unknown unit passes through", 3, "x", 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ratePerDay(tt.rate, tt.runits)
+			if got != tt.expected {
+				t.Errorf("ratePerDay(%v, %q) = %v, want %v", tt.rate, tt.runits, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestBareminByEndOfTomorrowAt verifies that due-today goals get their baremin
+// bumped by one day's worth of rate, while goals due tomorrow (or later) are
+// returned unchanged.
+func TestBareminByEndOfTomorrowAt(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
+	tomorrowDeadline := time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC).Unix()
+
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected string
+	}{
+		{
+			name:     "due today with rate 1/day bumps +1 to +2",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 in 0 days", Rate: f(1), Runits: "d"},
+			expected: "+2 in 1 day",
+		},
+		{
+			name:     "due today with rate 7/week bumps +0 to +1",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+0 today", Rate: f(7), Runits: "w"},
+			expected: "+1 in 1 day",
+		},
+		{
+			name:     "due today with negative baremin still adds rate",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "-2 today", Rate: f(1), Runits: "d"},
+			expected: "-1 in 1 day",
+		},
+		{
+			name:     "due tomorrow is unchanged",
+			goal:     Goal{Losedate: tomorrowDeadline, Baremin: "+3 in 1 day", Rate: f(1), Runits: "d"},
+			expected: "+3 in 1 day",
+		},
+		{
+			name:     "due today with nil rate is unchanged",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: nil, Runits: "d"},
+			expected: "+1 today",
+		},
+		{
+			name:     "due today with non-numeric baremin is unchanged",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "0:05 today", Rate: f(1), Runits: "d"},
+			expected: "0:05 today",
+		},
+		{
+			name:     "due today with empty runits falls back",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: ""},
+			expected: "+1 today",
+		},
+		{
+			name:     "due today with unknown runits falls back",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: "x"},
+			expected: "+1 today",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := bareminByEndOfTomorrowAt(tt.goal, now)
+			if got != tt.expected {
+				t.Errorf("bareminByEndOfTomorrowAt = %q, want %q", got, tt.expected)
 			}
 		})
 	}
