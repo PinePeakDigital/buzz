@@ -953,6 +953,16 @@ func TestIsEndValueReached(t *testing.T) {
 			goal:     Goal{Dir: 0, Curval: f(120), Goalval: f(100)},
 			expected: false,
 		},
+		{
+			name:     "drinker do-less goal at/over cap is not 'reached' (must stay visible)",
+			goal:     Goal{GoalType: "drinker", Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: false,
+		},
+		{
+			name:     "WEEN do-less goal (yaw=-1, dir=+1) at cap is not 'reached'",
+			goal:     Goal{Yaw: -1, Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

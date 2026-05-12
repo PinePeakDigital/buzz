@@ -308,7 +308,14 @@ func IsDueWithinAt(losedate int64, duration time.Duration, now time.Time) bool {
 //
 // Returns false when the end value can't be determined (e.g., goalval and mathishard
 // are both nil, or direction is unknown), so callers don't accidentally hide goals.
+//
+// Do-less goals are excluded: their goalval is an ongoing cap, not an endpoint to
+// reach, so curval crossing it indicates a problem state (at/over cap) rather than
+// completion. Hiding such goals would mask the very situations they're meant to flag.
 func IsEndValueReached(goal Goal) bool {
+	if IsDoLessGoal(goal) {
+		return false
+	}
 	if goal.Curval == nil {
 		return false
 	}
