@@ -356,6 +356,10 @@ func TestParseHoursMinutes(t *testing.T) {
 		{"three parts is rejected", "1:30:00", 0, false},
 		{"missing minutes is rejected", "1", 0, false},
 		{"non-numeric is rejected", "ab:cd", 0, false},
+		{"out-of-range minutes is rejected", "1:75", 0, false},
+		{"negative minutes field is rejected", "1:-05", 0, false},
+		{"double-negative is rejected", "--1:30", 0, false},
+		{"minutes at boundary (60) is rejected", "1:60", 0, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -597,6 +597,12 @@ func parseHoursMinutes(s string) (float64, bool) {
 	if err != nil {
 		return 0, false
 	}
+	// Reject malformed inputs (e.g. "1:75", "1:-05", "--1:30"). The leading
+	// sign has already been stripped into `sign`, so either field being
+	// negative — or minutes outside [0, 60) — means the string was malformed.
+	if hh < 0 || mm < 0 || mm >= 60 {
+		return 0, false
+	}
 	return sign * (float64(hh) + float64(mm)/60.0), true
 }
 
