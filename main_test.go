@@ -290,6 +290,14 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			expected: "+1 today",
 		},
 		{
+			// Overdue goals keep their original baremin paired with the
+			// original (overdue) losedate — bumping either would hide the
+			// fact that the goal has already derailed.
+			name:     "overdue is unchanged",
+			goal:     Goal{Losedate: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix(), Baremin: "+1 today", Rate: f(1), Runits: "d"},
+			expected: "+1 today",
+		},
+		{
 			// Real-world scenario from a "clean" hours-valued goal: 25 minutes
 			// due today, rate 1 hour/day. Tomorrow needs today's 25 minutes
 			// plus another hour = 1:25.
@@ -415,6 +423,123 @@ func piecewiseRoadall(startT int64, startV float64, segments ...float64) [][]*fl
 		rows = append(rows, []*float64{&segT, nil, &segR})
 	}
 	return rows
+}
+
+// TestLosedateByEndOfTomorrowAt verifies that due-today goals get their
+// displayed deadline advanced by one calendar day in the tomorrow view (in
+// the caller's local zone, so DST transitions stay aligned), while goals
+// already due tomorrow or later keep their own losedate.
+func TestLosedateByEndOfTomorrowAt(t *testing.T) {
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	todayDeadline := time.Date(2025, 1, 15, 17, 59, 0, 0, time.UTC).Unix()
+	tomorrowDeadline := time.Date(2025, 1, 16, 17, 59, 0, 0, time.UTC).Unix()
+	dayAfterTomorrowDeadline := time.Date(2025, 1, 17, 17, 59, 0, 0, time.UTC).Unix()
+
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected int64
+	}{
+		{
+			// User-reported real-world case: a clean goal due today at 5:59 PM
+			// should show tomorrow's 5:59 PM as the deadline in `buzz tomorrow`
+			// since the displayed baremin covers tomorrow. Outside DST
+			// transitions this is the same as +86400.
+			name:     "due today bumps deadline by one calendar day",
+			goal:     Goal{Losedate: todayDeadline},
+			expected: time.Date(2025, 1, 16, 17, 59, 0, 0, time.UTC).Unix(),
+		},
+		{
+			name:     "due tomorrow keeps own losedate",
+			goal:     Goal{Losedate: tomorrowDeadline},
+			expected: tomorrowDeadline,
+		},
+		{
+			name:     "due later keeps own losedate",
+			goal:     Goal{Losedate: dayAfterTomorrowDeadline},
+			expected: dayAfterTomorrowDeadline,
+		},
+		{
+			// Overdue goals keep their losedate so the OVERDUE indicator
+			// remains visible — bumping it would silently move the deadline
+			// into the future and hide the fact that the goal has derailed.
+			name:     "overdue keeps own losedate",
+			goal:     Goal{Losedate: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix()},
+			expected: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix(),
+		},
+		{
+			// Edge case: losedate exactly equals now — treat as still
+			// "due later today" so bumping happens. Anything strictly less
+			// than now is overdue.
+			name:     "losedate at exactly now still bumps",
+			goal:     Goal{Losedate: now.Unix()},
+			expected: time.Unix(now.Unix(), 0).In(now.Location()).AddDate(0, 0, 1).Unix(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := losedateByEndOfTomorrowAt(tt.goal, now)
+			if got != tt.expected {
+				t.Errorf("losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+					got, tt.expected, got-tt.expected)
+			}
+		})
+	}
+
+	// DST boundary: in America/New_York the spring-forward jump means
+	// 5:59 PM the next calendar day is only 23 hours away in absolute terms,
+	// not 24. Using AddDate(0,0,1) preserves the wall-clock time, so the
+	// returned losedate is +82800 seconds rather than +86400.
+	t.Run("DST spring-forward preserves wall-clock", func(t *testing.T) {
+		ny, err := time.LoadLocation("America/New_York")
+		if err != nil {
+			t.Skipf("America/New_York not available: %v", err)
+		}
+		// 5:59 PM the day before spring-forward (2025-03-09).
+		losedate := time.Date(2025, 3, 8, 17, 59, 0, 0, ny)
+		nowDST := time.Date(2025, 3, 8, 14, 0, 0, 0, ny)
+		got := losedateByEndOfTomorrowAt(Goal{Losedate: losedate.Unix()}, nowDST)
+		want := time.Date(2025, 3, 9, 17, 59, 0, 0, ny).Unix()
+		if got != want {
+			t.Errorf("DST losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+				got, want, got-want)
+		}
+		// Sanity: a naive +86400 would land at the wrong wall-clock hour
+		// (6:59 PM instead of 5:59 PM after the spring-forward).
+		if losedate.Unix()+86400 == want {
+			t.Errorf("DST test would also pass with naive +86400 — losedate fixture isn't actually crossing the DST boundary")
+		}
+	})
+}
+
+// TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
+// order the user actually sees in the deadline column. The tomorrow view
+// bumps due-today losedates by one calendar day, which can flip the relative
+// order of goals if we don't resort using the same losedateFor projection.
+func TestSortGoalsByDisplayedLosedate(t *testing.T) {
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+
+	// Goal A: due today at 11 PM → displays as tomorrow 11 PM
+	// Goal B: due tomorrow at 9 AM → displays as tomorrow 9 AM (earlier)
+	dueToday11PM := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
+	dueTomorrow9AM := time.Date(2025, 1, 16, 9, 0, 0, 0, time.UTC).Unix()
+
+	// Pre-sort by original losedate, like SortGoals would. A comes first
+	// because its original losedate is earlier — but A's *displayed* losedate
+	// is later, so the resort must flip them.
+	goals := []Goal{
+		{Slug: "a", Losedate: dueToday11PM},
+		{Slug: "b", Losedate: dueTomorrow9AM},
+	}
+
+	sortGoalsByDisplayedLosedate(goals, losedateFor)
+
+	if goals[0].Slug != "b" || goals[1].Slug != "a" {
+		t.Errorf("expected [b, a] after resorting by displayed losedate, got [%s, %s]",
+			goals[0].Slug, goals[1].Slug)
+	}
 }
 
 // TestRoadallSlopePerDayAt verifies the segment-resolving helper that powers
