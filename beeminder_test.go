@@ -939,6 +939,11 @@ func TestIsEndValueReached(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "goalval takes precedence over mathishard[1] when both present",
+			goal:     Goal{Dir: 1, Curval: f(110), Goalval: f(120), Mathishard: []*float64{f(1234567890), f(100), f(1)}},
+			expected: false, // 110 < 120 (goalval); would be true if mathishard[1]=100 were used
+		},
+		{
 			name:     "mathishard with nil goalval slot returns false",
 			goal:     Goal{Dir: 1, Curval: f(120), Mathishard: []*float64{f(1234567890), nil, f(1)}},
 			expected: false,
