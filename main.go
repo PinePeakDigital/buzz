@@ -549,7 +549,7 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 		return stripTimeWindowSuffix(g.Baremin)
 	}
 	if bumped, ok := bareminFromDueby(g, now); ok {
-		return bumped
+		return stripTimeWindowSuffix(bumped)
 	}
 	perDay, ok := slopePerDayAt(g, now)
 	if !ok {
