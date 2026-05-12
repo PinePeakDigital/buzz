@@ -541,17 +541,19 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 // interpreted as units-of-baremin per day before being added. The output
 // preserves whichever colon format the input used. If the slope can't be
 // determined or the value can't be parsed, the original Baremin string is
-// returned unchanged.
+// returned unchanged. The returned string never carries a trailing time-window
+// qualifier (e.g. " in 1 day", " within 1 day", " today") — every row in the
+// tomorrow view shares the same horizon, so the suffix is just noise.
 func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !dueLaterTodayAt(g, now) {
-		return g.Baremin
+		return stripTimeWindowSuffix(g.Baremin)
 	}
 	if bumped, ok := bareminFromDueby(g, now); ok {
-		return bumped + " in 1 day"
+		return bumped
 	}
 	perDay, ok := slopePerDayAt(g, now)
 	if !ok {
-		return g.Baremin
+		return stripTimeWindowSuffix(g.Baremin)
 	}
 	value := ParseBareminValue(g.Baremin)
 
@@ -561,23 +563,43 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if strings.Contains(value, ":") {
 		baseSeconds, includeSeconds, ok := parseTimeValue(value)
 		if !ok {
-			return g.Baremin
+			return stripTimeWindowSuffix(g.Baremin)
 		}
 		totalSeconds := baseSeconds + int(math.Round(perDay*3600))
-		return formatTimeValue(totalSeconds, includeSeconds) + " in 1 day"
+		return formatTimeValue(totalSeconds, includeSeconds)
 	}
 
 	// Plain numeric.
 	base, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		return g.Baremin
+		return stripTimeWindowSuffix(g.Baremin)
 	}
 	total := base + perDay
 	sign := "+"
 	if total < 0 {
 		sign = ""
 	}
-	return fmt.Sprintf("%s%g in 1 day", sign, total)
+	return fmt.Sprintf("%s%g", sign, total)
+}
+
+// stripTimeWindowSuffix removes Beeminder's trailing time-window phrase from a
+// baremin/limsum string (e.g. " in 1 day", " within 1 day", " in 3 hours",
+// " today"), leaving just the leading signed value. Used by the tomorrow view,
+// where every row shares the same horizon so the suffix only adds noise.
+func stripTimeWindowSuffix(s string) string {
+	if s == "" {
+		return s
+	}
+	for _, sep := range []string{" within ", " in "} {
+		if i := strings.Index(s, sep); i >= 0 {
+			return s[:i]
+		}
+	}
+	// Handle "+0 today" / "0 today" style: drop the trailing " today" word.
+	if strings.HasSuffix(s, " today") {
+		return strings.TrimSuffix(s, " today")
+	}
+	return s
 }
 
 // bareminFromDueby returns the formatted delta for tomorrow's daystamp,
