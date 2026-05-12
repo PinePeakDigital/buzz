@@ -544,6 +544,12 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if g.Rate == nil {
 		return g.Baremin
 	}
+	// Without recognised runits we can't safely convert the rate to a per-day
+	// amount, so fall back to the original baremin rather than producing a
+	// dimensionally-wrong bump.
+	if !isKnownRunits(g.Runits) {
+		return g.Baremin
+	}
 	value := ParseBareminValue(g.Baremin)
 	base, err := strconv.ParseFloat(value, 64)
 	if err != nil {
@@ -556,6 +562,17 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 		sign = ""
 	}
 	return fmt.Sprintf("%s%g in 1 day", sign, total)
+}
+
+// isKnownRunits reports whether the given runits string is one of the values
+// Beeminder uses (y/m/w/d/h). Callers that need a dimensionally-correct
+// per-day conversion should bail out for anything else.
+func isKnownRunits(runits string) bool {
+	switch runits {
+	case "y", "m", "w", "d", "h":
+		return true
+	}
+	return false
 }
 
 // ratePerDay converts a rate expressed in the given runits into an equivalent

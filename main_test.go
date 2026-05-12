@@ -293,6 +293,16 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			goal:     Goal{Losedate: todayDeadline, Baremin: "0:05 today", Rate: f(1), Runits: "d"},
 			expected: "0:05 today",
 		},
+		{
+			name:     "due today with empty runits falls back",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: ""},
+			expected: "+1 today",
+		},
+		{
+			name:     "due today with unknown runits falls back",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: "x"},
+			expected: "+1 today",
+		},
 	}
 
 	for _, tt := range tests {
