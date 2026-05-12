@@ -13,29 +13,41 @@ import (
 
 // Goal represents a Beeminder goal with relevant fields
 type Goal struct {
-	Slug        string       `json:"slug"`
-	Title       string       `json:"title"`
-	Fineprint   string       `json:"fineprint"` // User-provided description of what they're committing to
-	GoalType    string       `json:"goal_type"` // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
-	Losedate    int64        `json:"losedate"`
-	Pledge      float64      `json:"pledge"`
-	PledgeCap   *float64     `json:"pledge_cap"` // Pointer to handle null values from API
-	Safebuf     int          `json:"safebuf"`
-	Limsum      string       `json:"limsum"`
-	Baremin     string       `json:"baremin"`
-	Autodata    string       `json:"autodata"`
-	Autoratchet *float64     `json:"autoratchet"` // Pointer to handle null values from API
-	Rate        *float64     `json:"rate"`        // Pointer to handle null values from API
-	Runits      string       `json:"runits"`
-	Gunits      string       `json:"gunits"`     // Goal units, like "hours" or "pushups" or "pages"
-	Deadline    int          `json:"deadline"`   // Seconds by which deadline differs from midnight
-	Yaw         int          `json:"yaw"`        // Good side of the bright red line (+1 = above, -1 = below)
-	Dir         int          `json:"dir"`        // Direction the bright red line is sloping (+1 = up, -1 = down)
-	Curval      *float64     `json:"curval"`     // Most recent datapoint value
-	Goalval     *float64     `json:"goalval"`    // End value of the goal (may be null if computed from goaldate+rate)
-	Mathishard  []*float64   `json:"mathishard"` // [goaldate, goalval, rate] all filled in (may be null in error states)
-	Roadall     [][]*float64 `json:"roadall"`    // Full piecewise bright line: rows of [t, v, r] with exactly one of v/r null per row (except the first row, which anchors the road start)
-	Datapoints  []Datapoint  `json:"datapoints,omitempty"`
+	Slug        string                `json:"slug"`
+	Title       string                `json:"title"`
+	Fineprint   string                `json:"fineprint"` // User-provided description of what they're committing to
+	GoalType    string                `json:"goal_type"` // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
+	Losedate    int64                 `json:"losedate"`
+	Pledge      float64               `json:"pledge"`
+	PledgeCap   *float64              `json:"pledge_cap"` // Pointer to handle null values from API
+	Safebuf     int                   `json:"safebuf"`
+	Limsum      string                `json:"limsum"`
+	Baremin     string                `json:"baremin"`
+	Autodata    string                `json:"autodata"`
+	Autoratchet *float64              `json:"autoratchet"` // Pointer to handle null values from API
+	Rate        *float64              `json:"rate"`        // Pointer to handle null values from API
+	Runits      string                `json:"runits"`
+	Gunits      string                `json:"gunits"`     // Goal units, like "hours" or "pushups" or "pages"
+	Deadline    int                   `json:"deadline"`   // Seconds by which deadline differs from midnight
+	Yaw         int                   `json:"yaw"`        // Good side of the bright red line (+1 = above, -1 = below)
+	Dir         int                   `json:"dir"`        // Direction the bright red line is sloping (+1 = up, -1 = down)
+	Curval      *float64              `json:"curval"`     // Most recent datapoint value
+	Goalval     *float64              `json:"goalval"`    // End value of the goal (may be null if computed from goaldate+rate)
+	Mathishard  []*float64            `json:"mathishard"` // [goaldate, goalval, rate] all filled in (may be null in error states)
+	Roadall     [][]*float64          `json:"roadall"`    // Full piecewise bright line: rows of [t, v, r] with exactly one of v/r null per row (except the first row, which anchors the road start)
+	Dueby       map[string]DuebyEntry `json:"dueby"`      // Per-daystamp deltas/totals, pre-rounded to the goal's display precision. Keys are YYYYMMDD strings.
+	Datapoints  []Datapoint           `json:"datapoints,omitempty"`
+}
+
+// DuebyEntry is one entry in a goal's `dueby` map, keyed by daystamp.
+// Beeminder pre-rounds FormattedDelta and FormattedTotal to the goal's
+// configured Display Precision, so honouring those strings avoids the
+// trailing-decimals problem we'd hit doing float arithmetic ourselves.
+type DuebyEntry struct {
+	Delta          float64 `json:"delta"`
+	Total          float64 `json:"total"`
+	FormattedDelta string  `json:"formatted_delta_for_beedroid"`
+	FormattedTotal string  `json:"formatted_total_for_beedroid"`
 }
 
 // Datapoint represents a Beeminder datapoint

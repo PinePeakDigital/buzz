@@ -395,6 +395,73 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			},
 			expected: "+01:25:00 in 1 day",
 		},
+		{
+			// Real-world steps-goal scenario: API returns dueby pre-rounded
+			// to the goal's Display Precision, so we should honour the
+			// formatted tomorrow delta instead of doing our own float math
+			// (which would print "+10788.140000000001").
+			name: "due today with dueby uses Beeminder's formatted tomorrow delta",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+2283",
+				Rate:     f(8505.140000000001),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+2283"},
+					"20250116": {FormattedDelta: "+10789"},
+					"20250117": {FormattedDelta: "+10789"},
+				},
+			},
+			expected: "+10789 in 1 day",
+		},
+		{
+			// Timey goals also get pre-formatted dueby entries; honour them
+			// over our own colon-format reconstruction.
+			name: "due today with timey dueby honours Beeminder's tomorrow formatting",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+00:25 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+00:25"},
+					"20250116": {FormattedDelta: "+01:25"},
+				},
+			},
+			expected: "+01:25 in 1 day",
+		},
+		{
+			// Dueby with only today's entry can't tell us tomorrow's value —
+			// fall back to the existing slope-based bump.
+			name: "due today with single-entry dueby falls back to slope bump",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+1"},
+				},
+			},
+			expected: "+2 in 1 day",
+		},
+		{
+			// Dueby present but tomorrow's entry has an empty FormattedDelta
+			// (defensive — shouldn't happen in practice). Fall back so we
+			// still produce a useful display string.
+			name: "due today with empty tomorrow FormattedDelta falls back",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+1 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Dueby: map[string]DuebyEntry{
+					"20250115": {FormattedDelta: "+1"},
+					"20250116": {FormattedDelta: ""},
+				},
+			},
+			expected: "+2 in 1 day",
+		},
 	}
 
 	for _, tt := range tests {

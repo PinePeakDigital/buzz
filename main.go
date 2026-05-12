@@ -546,6 +546,9 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !dueLaterTodayAt(g, now) {
 		return g.Baremin
 	}
+	if bumped, ok := bareminFromDueby(g); ok {
+		return bumped + " in 1 day"
+	}
 	perDay, ok := slopePerDayAt(g, now)
 	if !ok {
 		return g.Baremin
@@ -575,6 +578,31 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 		sign = ""
 	}
 	return fmt.Sprintf("%s%g in 1 day", sign, total)
+}
+
+// bareminFromDueby returns the formatted delta for the day after the goal's
+// current "today" daystamp, taken from Beeminder's pre-rounded `dueby` map.
+// Beeminder rounds those strings to the goal's Display Precision, so honouring
+// them sidesteps float-formatting noise (e.g. "+10788.140000000001") that
+// arises when we add today's baremin to a per-day rate ourselves. Returns
+// ok=false when dueby is absent, has fewer than two entries, or the
+// tomorrow entry has no formatted delta — callers fall back to local
+// arithmetic in those cases. Daystamps are YYYYMMDD strings, so
+// lexicographic and chronological order coincide.
+func bareminFromDueby(g Goal) (string, bool) {
+	if len(g.Dueby) < 2 {
+		return "", false
+	}
+	keys := make([]string, 0, len(g.Dueby))
+	for k := range g.Dueby {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	tomorrow := g.Dueby[keys[1]].FormattedDelta
+	if tomorrow == "" {
+		return "", false
+	}
+	return tomorrow, true
 }
 
 // parseTimeValue parses a "[-]HH:MM" or "[-]HH:MM:SS" string into total
