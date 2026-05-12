@@ -31,6 +31,9 @@ type Goal struct {
 	Deadline    int         `json:"deadline"` // Seconds by which deadline differs from midnight
 	Yaw         int         `json:"yaw"`      // Good side of the bright red line (+1 = above, -1 = below)
 	Dir         int         `json:"dir"`      // Direction the bright red line is sloping (+1 = up, -1 = down)
+	Curval      *float64    `json:"curval"`   // Most recent datapoint value
+	Goalval     *float64    `json:"goalval"`  // End value of the goal (may be null if computed from goaldate+rate)
+	Mathishard  []*float64  `json:"mathishard"` // [goaldate, goalval, rate] all filled in (may be null in error states)
 	Datapoints  []Datapoint `json:"datapoints,omitempty"`
 }
 
@@ -297,6 +300,43 @@ func IsDueWithinAt(losedate int64, duration time.Duration, now time.Time) bool {
 
 	// Goal is due within the duration if it's not after the cutoff time
 	return !goalTime.After(cutoffTime)
+}
+
+// IsEndValueReached reports whether the goal's current value has already met or passed
+// its end value (goalval). When this is true the bright red line has plateaued and the
+// goal effectively has no remaining work, so it shouldn't be surfaced as "due".
+//
+// Returns false when the end value can't be determined (e.g., goalval and mathishard
+// are both nil, or direction is unknown), so callers don't accidentally hide goals.
+func IsEndValueReached(goal Goal) bool {
+	if goal.Curval == nil {
+		return false
+	}
+	goalval := resolveGoalval(goal)
+	if goalval == nil {
+		return false
+	}
+	switch {
+	case goal.Dir > 0:
+		return *goal.Curval >= *goalval
+	case goal.Dir < 0:
+		return *goal.Curval <= *goalval
+	default:
+		return false
+	}
+}
+
+// resolveGoalval returns the goal's end value, preferring the direct goalval field and
+// falling back to mathishard[1] (which Beeminder fills in even when goalval itself is
+// the computed-of-three value).
+func resolveGoalval(goal Goal) *float64 {
+	if goal.Goalval != nil {
+		return goal.Goalval
+	}
+	if len(goal.Mathishard) >= 2 && goal.Mathishard[1] != nil {
+		return goal.Mathishard[1]
+	}
+	return nil
 }
 
 // IsDoLess checks if a goal is a "do-less" type goal based on goal_type string.

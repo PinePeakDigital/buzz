@@ -500,14 +500,14 @@ func displayNextGoalWithTimestamp() {
 	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
 
-// isDueTodayFilter returns true if the goal is due today
+// isDueTodayFilter returns true if the goal is due today and hasn't already reached its end value
 func isDueTodayFilter(g Goal) bool {
-	return IsDueToday(g.Losedate)
+	return IsDueToday(g.Losedate) && !IsEndValueReached(g)
 }
 
-// isDueTomorrowFilter returns true if the goal is due tomorrow
+// isDueTomorrowFilter returns true if the goal is due tomorrow and hasn't already reached its end value
 func isDueTomorrowFilter(g Goal) bool {
-	return IsDueTomorrow(g.Losedate)
+	return IsDueTomorrow(g.Losedate) && !IsEndValueReached(g)
 }
 
 // isDoLessFilter returns true if the goal is a do-less type goal
