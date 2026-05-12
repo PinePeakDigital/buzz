@@ -591,7 +591,7 @@ func stripTimeWindowSuffix(s string) string {
 		return s
 	}
 	for _, sep := range []string{" within ", " in "} {
-		if i := strings.Index(s, sep); i >= 0 {
+		if i := strings.LastIndex(s, sep); i >= 0 {
 			return s[:i]
 		}
 	}
