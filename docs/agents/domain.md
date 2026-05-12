@@ -12,15 +12,14 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 
 ## File structure
 
-This repo is single-context:
+This repo is single-context. `CONTEXT.md` and `docs/adr/` don't exist yet — they'll be created lazily by `/grill-with-docs` when terms or decisions get resolved. When they do exist, the layout will look like:
 
 ```
 /
-├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
+├── CONTEXT.md           ← domain glossary (single-context)
+├── docs/adr/            ← architectural decision records
+│   └── NNNN-<slug>.md
+└── <source files>
 ```
 
 ## Use the glossary's vocabulary
