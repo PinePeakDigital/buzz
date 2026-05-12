@@ -289,9 +289,32 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			expected: "+1 today",
 		},
 		{
-			name:     "due today with non-numeric baremin is unchanged",
-			goal:     Goal{Losedate: todayDeadline, Baremin: "0:05 today", Rate: f(1), Runits: "d"},
-			expected: "0:05 today",
+			// Real-world scenario from a "clean" hours-valued goal: 25 minutes
+			// due today, rate 1 hour/day. Tomorrow needs today's 25 minutes
+			// plus another hour = 1:25.
+			name:     "due today with HH:MM baremin and rate 1/day bumps by 1 hour",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:25 in 8 hours", Rate: f(1), Runits: "d"},
+			expected: "+01:25 in 1 day",
+		},
+		{
+			name:     "due today with HH:MM baremin and rate 7/week bumps by 1 hour",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:30 today", Rate: f(7), Runits: "w"},
+			expected: "+01:30 in 1 day",
+		},
+		{
+			name:     "due today with HH:MM baremin and fractional rate rounds minutes",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:25 today", Rate: f(0.5), Runits: "d"},
+			expected: "+00:55 in 1 day",
+		},
+		{
+			name:     "due today with HH:MM:SS baremin (3 parts) falls back",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "1:30:00 today", Rate: f(1), Runits: "d"},
+			expected: "1:30:00 today",
+		},
+		{
+			name:     "due today with garbage baremin falls back",
+			goal:     Goal{Losedate: todayDeadline, Baremin: "garbage today", Rate: f(1), Runits: "d"},
+			expected: "garbage today",
 		},
 		{
 			name:     "due today with empty runits falls back",
@@ -310,6 +333,66 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			got := bareminByEndOfTomorrowAt(tt.goal, now)
 			if got != tt.expected {
 				t.Errorf("bareminByEndOfTomorrowAt = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestParseHoursMinutes verifies the HH:MM → fractional-hours parser used by
+// bareminByEndOfTomorrowAt for time-format baremin values.
+func TestParseHoursMinutes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected float64
+		ok       bool
+	}{
+		{"zero", "0:00", 0, true},
+		{"twenty-five minutes", "00:25", 25.0 / 60.0, true},
+		{"one and a half hours", "1:30", 1.5, true},
+		{"single digit hours", "9:15", 9.25, true},
+		{"double digit hours", "12:30", 12.5, true},
+		{"negative", "-0:15", -0.25, true},
+		{"three parts is rejected", "1:30:00", 0, false},
+		{"missing minutes is rejected", "1", 0, false},
+		{"non-numeric is rejected", "ab:cd", 0, false},
+		{"out-of-range minutes is rejected", "1:75", 0, false},
+		{"negative minutes field is rejected", "1:-05", 0, false},
+		{"double-negative is rejected", "--1:30", 0, false},
+		{"minutes at boundary (60) is rejected", "1:60", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseHoursMinutes(tt.input)
+			if ok != tt.ok {
+				t.Fatalf("parseHoursMinutes(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.expected {
+				t.Errorf("parseHoursMinutes(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatMinutesAsHHMM verifies the HH:MM formatter matches Beeminder's
+// zero-padded baremin style with a leading sign.
+func TestFormatMinutesAsHHMM(t *testing.T) {
+	tests := []struct {
+		minutes  int
+		expected string
+	}{
+		{0, "+00:00"},
+		{25, "+00:25"},
+		{85, "+01:25"},
+		{90, "+01:30"},
+		{605, "+10:05"},
+		{-15, "-00:15"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			got := formatMinutesAsHHMM(tt.minutes)
+			if got != tt.expected {
+				t.Errorf("formatMinutesAsHHMM(%d) = %q, want %q", tt.minutes, got, tt.expected)
 			}
 		})
 	}

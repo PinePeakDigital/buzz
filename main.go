@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"sort"
@@ -529,9 +530,12 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 // deadline). For goals due today, one day's worth of rate is added so the
 // displayed amount reflects what's required to avoid a beemergency tomorrow.
 //
-// If the baremin can't be parsed as a plain number (e.g. it's an HH:MM time
-// value) or rate information is missing, the original Baremin string is
-// returned unchanged.
+// Two baremin value shapes are recognised: plain numeric (e.g. "+2") and the
+// HH:MM time format used by hour-valued goals (e.g. "+00:25"). For both, the
+// goal's rate is interpreted as units-of-baremin per runits and converted to a
+// per-day amount before being added. If rate information is missing, runits
+// isn't one Beeminder uses, or the value can't be parsed, the original Baremin
+// string is returned unchanged.
 func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !IsDueTodayAt(g.Losedate, now) {
 		return g.Baremin
@@ -546,17 +550,71 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 		return g.Baremin
 	}
 	value := ParseBareminValue(g.Baremin)
+	perDay := ratePerDay(*g.Rate, g.Runits)
+
+	// HH:MM time format — e.g. "+00:25 in 8 hours". The base value and the rate
+	// share the same unit (hours), so add in hours and reformat as HH:MM.
+	if strings.Contains(value, ":") {
+		baseHours, ok := parseHoursMinutes(value)
+		if !ok {
+			return g.Baremin
+		}
+		totalMinutes := int(math.Round((baseHours + perDay) * 60))
+		return formatMinutesAsHHMM(totalMinutes) + " in 1 day"
+	}
+
+	// Plain numeric.
 	base, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return g.Baremin
 	}
-	perDay := ratePerDay(*g.Rate, g.Runits)
 	total := base + perDay
 	sign := "+"
 	if total < 0 {
 		sign = ""
 	}
 	return fmt.Sprintf("%s%g in 1 day", sign, total)
+}
+
+// parseHoursMinutes parses a "[-]HH:MM" string and returns the value as a
+// fractional hours float. Returns ok=false for anything that isn't exactly two
+// colon-separated integer fields.
+func parseHoursMinutes(s string) (float64, bool) {
+	sign := 1.0
+	if strings.HasPrefix(s, "-") {
+		sign = -1.0
+		s = strings.TrimPrefix(s, "-")
+	}
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return 0, false
+	}
+	hh, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, false
+	}
+	mm, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, false
+	}
+	// Reject malformed inputs (e.g. "1:75", "1:-05", "--1:30"). The leading
+	// sign has already been stripped into `sign`, so either field being
+	// negative — or minutes outside [0, 60) — means the string was malformed.
+	if hh < 0 || mm < 0 || mm >= 60 {
+		return 0, false
+	}
+	return sign * (float64(hh) + float64(mm)/60.0), true
+}
+
+// formatMinutesAsHHMM formats a signed minute count as Beeminder's HH:MM
+// baremin style (zero-padded hours and minutes, leading "+" for non-negative).
+func formatMinutesAsHHMM(totalMinutes int) string {
+	sign := "+"
+	if totalMinutes < 0 {
+		sign = "-"
+		totalMinutes = -totalMinutes
+	}
+	return fmt.Sprintf("%s%02d:%02d", sign, totalMinutes/60, totalMinutes%60)
 }
 
 // isKnownRunits reports whether the given runits string is one of the values
