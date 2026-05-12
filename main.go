@@ -989,6 +989,16 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	)
 }
 
+// sortGoalsByDisplayedLosedate reorders goals in place so the slice ends up
+// sorted by the timestamp that losedateFor would render. SliceStable preserves
+// the input order for ties so any prior sort (e.g. SortGoals's pledge/slug
+// tiebreakers) survives.
+func sortGoalsByDisplayedLosedate(goals []Goal, losedateFor func(Goal) int64) {
+	sort.SliceStable(goals, func(i, j int) bool {
+		return losedateFor(goals[i]) < losedateFor(goals[j])
+	})
+}
+
 // handleFilteredCommandWithDisplay is the most general filtered-output helper:
 // the caller can override both the displayed baremin string and the deadline
 // timestamp used for the timeframe/absolute-deadline columns. The tomorrow
@@ -1030,6 +1040,13 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		fmt.Printf("No %s goals found.\n", filterName)
 		return
 	}
+
+	// SortGoals ordered by each goal's own losedate, but the tomorrow view may
+	// show a bumped losedate for due-today goals. Re-sort by the displayed
+	// losedate so the rendered order matches the deadline column. SliceStable
+	// preserves the SortGoals tiebreakers (pledge desc, slug asc) when
+	// displayed losedates are equal.
+	sortGoalsByDisplayedLosedate(filteredGoals, losedateFor)
 
 	// Pre-calculate formatted values to avoid redundant formatting calls
 	type goalDisplay struct {

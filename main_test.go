@@ -513,6 +513,35 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 	})
 }
 
+// TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
+// order the user actually sees in the deadline column. The tomorrow view
+// bumps due-today losedates by one calendar day, which can flip the relative
+// order of goals if we don't resort using the same losedateFor projection.
+func TestSortGoalsByDisplayedLosedate(t *testing.T) {
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+
+	// Goal A: due today at 11 PM → displays as tomorrow 11 PM
+	// Goal B: due tomorrow at 9 AM → displays as tomorrow 9 AM (earlier)
+	dueToday11PM := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
+	dueTomorrow9AM := time.Date(2025, 1, 16, 9, 0, 0, 0, time.UTC).Unix()
+
+	// Pre-sort by original losedate, like SortGoals would. A comes first
+	// because its original losedate is earlier — but A's *displayed* losedate
+	// is later, so the resort must flip them.
+	goals := []Goal{
+		{Slug: "a", Losedate: dueToday11PM},
+		{Slug: "b", Losedate: dueTomorrow9AM},
+	}
+
+	sortGoalsByDisplayedLosedate(goals, losedateFor)
+
+	if goals[0].Slug != "b" || goals[1].Slug != "a" {
+		t.Errorf("expected [b, a] after resorting by displayed losedate, got [%s, %s]",
+			goals[0].Slug, goals[1].Slug)
+	}
+}
+
 // TestRoadallSlopePerDayAt verifies the segment-resolving helper that powers
 // piecewise-aware baremin bumping.
 func TestRoadallSlopePerDayAt(t *testing.T) {
