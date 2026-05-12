@@ -91,16 +91,16 @@ func (c *HTTPClient) FetchGoals() ([]Goal, error) {
 
 // GetLastDatapointValue fetches the last datapoint value for a goal.
 func (c *HTTPClient) GetLastDatapointValue(goalSlug string) (float64, error) {
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
-		c.baseURL(), c.config.Username, goalSlug, c.config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
+		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", url)
-	resp, err := c.http.Get(url)
+	LogRequest(c.config, "GET", apiURL)
+	resp, err := c.http.Get(apiURL)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, url)
+	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -130,7 +130,7 @@ func (c *HTTPClient) CreateDatapoint(goalSlug, timestamp, value, comment, reques
 // If daystamp is provided (format YYYYMMDD), it is used instead of timestamp.
 func (c *HTTPClient) CreateDatapointWithDaystamp(goalSlug, timestamp, daystamp, value, comment, requestid string) error {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
-		c.baseURL(), c.config.Username, goalSlug)
+		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
 
 	data := url.Values{}
 	data.Set("auth_token", c.config.AuthToken)
@@ -261,16 +261,16 @@ func (c *HTTPClient) FetchGoal(goalSlug string) (*Goal, error) {
 
 // FetchGoalWithDatapoints fetches goal details including recent datapoints.
 func (c *HTTPClient) FetchGoalWithDatapoints(goalSlug string) (*Goal, error) {
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
-		c.baseURL(), c.config.Username, goalSlug, c.config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
+		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", url)
-	resp, err := c.http.Get(url)
+	LogRequest(c.config, "GET", apiURL)
+	resp, err := c.http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, url)
+	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -400,16 +400,16 @@ func (c *HTTPClient) UpdateGoalDeadline(goalSlug string, deadline int) (*Goal, e
 // RefreshGoal forces a fetch of autodata and graph refresh for a goal.
 // Returns true if the goal was queued for refresh, false if not.
 func (c *HTTPClient) RefreshGoal(goalSlug string) (bool, error) {
-	url := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
-		c.baseURL(), c.config.Username, goalSlug, c.config.AuthToken)
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
+		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", url)
-	resp, err := c.http.Get(url)
+	LogRequest(c.config, "GET", apiURL)
+	resp, err := c.http.Get(apiURL)
 	if err != nil {
 		return false, fmt.Errorf("failed to refresh goal: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, url)
+	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("API returned status %d", resp.StatusCode)
