@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live in this repo's GitHub Issues (`pinepeakdigital/buzz`). Use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in this repo's GitHub Issues (`PinePeakDigital/buzz`). Use the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
