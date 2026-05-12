@@ -493,6 +493,53 @@ func TestRoadallSlopePerDayAt(t *testing.T) {
 			ok: false,
 		},
 		{
+			// Per Beeminder spec, a non-anchor row has exactly one of v/r
+			// set. Both set is ambiguous — must fail fast rather than
+			// silently preferring the rate field.
+			name: "row with both value and rate set fails fast",
+			goal: Goal{
+				Runits: "d",
+				Roadall: [][]*float64{
+					floatPtrRow(float64(startT), 0, math.NaN()),
+					floatPtrRow(float64(segEnd1), 30, 1.0), // both v and r set
+				},
+			},
+			ok: false,
+		},
+		{
+			name: "row with neither value nor rate set fails fast",
+			goal: Goal{
+				Runits: "d",
+				Roadall: [][]*float64{
+					floatPtrRow(float64(startT), 0, math.NaN()),
+					floatPtrRow(float64(segEnd1), math.NaN(), math.NaN()), // neither v nor r
+				},
+			},
+			ok: false,
+		},
+		{
+			name: "anchor row missing value fails fast",
+			goal: Goal{
+				Runits: "d",
+				Roadall: [][]*float64{
+					floatPtrRow(float64(startT), math.NaN(), math.NaN()), // anchor with no v
+					floatPtrRow(float64(segEnd1), math.NaN(), 1.0),
+				},
+			},
+			ok: false,
+		},
+		{
+			name: "anchor row with rate set fails fast",
+			goal: Goal{
+				Runits: "d",
+				Roadall: [][]*float64{
+					floatPtrRow(float64(startT), 0, 1.0), // anchor must not have r
+					floatPtrRow(float64(segEnd1), math.NaN(), 0.5),
+				},
+			},
+			ok: false,
+		},
+		{
 			// A malformed boundary row (missing time) makes the road
 			// ambiguous — must fail fast rather than silently jumping to the
 			// next segment, which would pick the wrong slope.

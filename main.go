@@ -714,8 +714,23 @@ func roadallSlopePerDayAt(g Goal, t time.Time) (float64, bool) {
 		if len(cur) < 3 || cur[0] == nil {
 			return 0, false
 		}
+		// Per Beeminder spec, non-anchor rows must have exactly one of
+		// value/rate set. Both nil or both set means the row is ambiguous.
+		if (cur[1] == nil) == (cur[2] == nil) {
+			return 0, false
+		}
 		prev := g.Roadall[i-1]
 		if len(prev) < 3 || prev[0] == nil {
+			return 0, false
+		}
+		// Validate prev's shape: the first row is the start anchor (value
+		// set, rate nil); subsequent rows follow the same one-of-v-or-r
+		// constraint as cur.
+		if i == 1 {
+			if prev[1] == nil || prev[2] != nil {
+				return 0, false
+			}
+		} else if (prev[1] == nil) == (prev[2] == nil) {
 			return 0, false
 		}
 		// `target` is before the road even starts — don't fall through to
