@@ -267,35 +267,38 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 		{
 			name:     "due today with rate 1/day bumps +1 to +2",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 in 0 days", Rate: f(1), Runits: "d"},
-			expected: "+2 in 1 day",
+			expected: "+2",
 		},
 		{
 			name:     "due today with rate 7/week bumps +0 to +1",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+0 today", Rate: f(7), Runits: "w"},
-			expected: "+1 in 1 day",
+			expected: "+1",
 		},
 		{
 			name:     "due today with negative baremin still adds rate",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "-2 today", Rate: f(1), Runits: "d"},
-			expected: "-1 in 1 day",
+			expected: "-1",
 		},
 		{
-			name:     "due tomorrow is unchanged",
+			// Goals already due tomorrow pass through with their time-window
+			// suffix stripped — every row in the tomorrow view shares the
+			// same horizon, so " in 1 day" is just noise.
+			name:     "due tomorrow strips trailing window suffix",
 			goal:     Goal{Losedate: tomorrowDeadline, Baremin: "+3 in 1 day", Rate: f(1), Runits: "d"},
-			expected: "+3 in 1 day",
+			expected: "+3",
 		},
 		{
-			name:     "due today with nil rate is unchanged",
+			name:     "due today with nil rate falls back, suffix stripped",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: nil, Runits: "d"},
-			expected: "+1 today",
+			expected: "+1",
 		},
 		{
-			// Overdue goals keep their original baremin paired with the
-			// original (overdue) losedate — bumping either would hide the
-			// fact that the goal has already derailed.
-			name:     "overdue is unchanged",
+			// Overdue goals keep their original (overdue) losedate so the
+			// OVERDUE indicator stays visible, but their Baremin window
+			// suffix is still stripped.
+			name:     "overdue strips trailing window suffix",
 			goal:     Goal{Losedate: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix(), Baremin: "+1 today", Rate: f(1), Runits: "d"},
-			expected: "+1 today",
+			expected: "+1",
 		},
 		{
 			// Real-world scenario from a "clean" hours-valued goal: 25 minutes
@@ -303,17 +306,17 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			// plus another hour = 1:25.
 			name:     "due today with HH:MM baremin and rate 1/day bumps by 1 hour",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:25 in 8 hours", Rate: f(1), Runits: "d"},
-			expected: "+01:25 in 1 day",
+			expected: "+01:25",
 		},
 		{
 			name:     "due today with HH:MM baremin and rate 7/week bumps by 1 hour",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:30 today", Rate: f(7), Runits: "w"},
-			expected: "+01:30 in 1 day",
+			expected: "+01:30",
 		},
 		{
 			name:     "due today with HH:MM baremin and fractional rate rounds minutes",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:25 today", Rate: f(0.5), Runits: "d"},
-			expected: "+00:55 in 1 day",
+			expected: "+00:55",
 		},
 		{
 			// Real-world "clean" goal: Beeminder returns HH:MM:SS for some
@@ -321,27 +324,27 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			// should preserve the HH:MM:SS format the input used.
 			name:     "due today with HH:MM:SS baremin bumps and preserves format",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:25:00 today", Rate: f(1), Runits: "d"},
-			expected: "+01:25:00 in 1 day",
+			expected: "+01:25:00",
 		},
 		{
 			name:     "due today with HH:MM:SS baremin with seconds bumps cleanly",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+00:25:30 today", Rate: f(1), Runits: "d"},
-			expected: "+01:25:30 in 1 day",
+			expected: "+01:25:30",
 		},
 		{
 			name:     "due today with garbage baremin falls back",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "garbage today", Rate: f(1), Runits: "d"},
-			expected: "garbage today",
+			expected: "garbage",
 		},
 		{
 			name:     "due today with empty runits falls back",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: ""},
-			expected: "+1 today",
+			expected: "+1",
 		},
 		{
 			name:     "due today with unknown runits falls back",
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: "x"},
-			expected: "+1 today",
+			expected: "+1",
 		},
 		{
 			// Real-world "clean" scenario: g.Rate reports the end-of-graph
@@ -363,7 +366,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					float64(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC).Unix()), 0.1,
 				),
 			},
-			expected: "+01:25:00 in 1 day",
+			expected: "+01:25:00",
 		},
 		{
 			// The goal is in its slower segment; use that slope.
@@ -381,7 +384,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					float64(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC).Unix()), 1.0,
 				),
 			},
-			expected: "+01:25:00 in 1 day",
+			expected: "+01:25:00",
 		},
 		{
 			// Short roadall (just the start anchor) — fall back to g.Rate.
@@ -393,7 +396,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 				Runits:   "d",
 				Roadall:  piecewiseRoadall(time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC).Unix(), 0),
 			},
-			expected: "+01:25:00 in 1 day",
+			expected: "+01:25:00",
 		},
 		{
 			// Real-world steps-goal scenario: API returns dueby pre-rounded
@@ -412,7 +415,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					"20250117": {FormattedDelta: "+10789"},
 				},
 			},
-			expected: "+10789 in 1 day",
+			expected: "+10789",
 		},
 		{
 			// Timey goals also get pre-formatted dueby entries; honour them
@@ -428,7 +431,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					"20250116": {FormattedDelta: "+01:25"},
 				},
 			},
-			expected: "+01:25 in 1 day",
+			expected: "+01:25",
 		},
 		{
 			// Dueby with only today's entry can't tell us tomorrow's value —
@@ -443,7 +446,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					"20250115": {FormattedDelta: "+1"},
 				},
 			},
-			expected: "+2 in 1 day",
+			expected: "+2",
 		},
 		{
 			// Dueby present but tomorrow's entry has an empty FormattedDelta
@@ -460,7 +463,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					"20250116": {FormattedDelta: ""},
 				},
 			},
-			expected: "+2 in 1 day",
+			expected: "+2",
 		},
 		{
 			// Dueby keyed only by past daystamps (defensive — Beeminder
@@ -477,7 +480,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					"20250114": {FormattedDelta: "+99"},
 				},
 			},
-			expected: "+2 in 1 day",
+			expected: "+2",
 		},
 		{
 			// Dueby includes a past daystamp alongside today and tomorrow.
@@ -496,7 +499,7 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 					"20250117": {FormattedDelta: "+9"},
 				},
 			},
-			expected: "+5 in 1 day",
+			expected: "+5",
 		},
 	}
 
