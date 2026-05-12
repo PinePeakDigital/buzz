@@ -418,9 +418,9 @@ func piecewiseRoadall(startT int64, startV float64, segments ...float64) [][]*fl
 }
 
 // TestLosedateByEndOfTomorrowAt verifies that due-today goals get their
-// displayed deadline advanced by 24 hours in the tomorrow view, so it lines
-// up with the bumped baremin's coverage. Goals already due tomorrow keep
-// their own losedate.
+// displayed deadline advanced by one calendar day in the tomorrow view (in
+// the caller's local zone, so DST transitions stay aligned), while goals
+// already due tomorrow or later keep their own losedate.
 func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
 	todayDeadline := time.Date(2025, 1, 15, 17, 59, 0, 0, time.UTC).Unix()
@@ -435,10 +435,11 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 		{
 			// User-reported real-world case: a clean goal due today at 5:59 PM
 			// should show tomorrow's 5:59 PM as the deadline in `buzz tomorrow`
-			// since the displayed baremin covers tomorrow.
-			name:     "due today bumps deadline by 24 hours",
+			// since the displayed baremin covers tomorrow. Outside DST
+			// transitions this is the same as +86400.
+			name:     "due today bumps deadline by one calendar day",
 			goal:     Goal{Losedate: todayDeadline},
-			expected: todayDeadline + 86400,
+			expected: time.Date(2025, 1, 16, 17, 59, 0, 0, time.UTC).Unix(),
 		},
 		{
 			name:     "due tomorrow keeps own losedate",
@@ -461,6 +462,31 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 			}
 		})
 	}
+
+	// DST boundary: in America/New_York the spring-forward jump means
+	// 5:59 PM the next calendar day is only 23 hours away in absolute terms,
+	// not 24. Using AddDate(0,0,1) preserves the wall-clock time, so the
+	// returned losedate is +82800 seconds rather than +86400.
+	t.Run("DST spring-forward preserves wall-clock", func(t *testing.T) {
+		ny, err := time.LoadLocation("America/New_York")
+		if err != nil {
+			t.Skipf("America/New_York not available: %v", err)
+		}
+		// 5:59 PM the day before spring-forward (2025-03-09).
+		losedate := time.Date(2025, 3, 8, 17, 59, 0, 0, ny)
+		nowDST := time.Date(2025, 3, 8, 14, 0, 0, 0, ny)
+		got := losedateByEndOfTomorrowAt(Goal{Losedate: losedate.Unix()}, nowDST)
+		want := time.Date(2025, 3, 9, 17, 59, 0, 0, ny).Unix()
+		if got != want {
+			t.Errorf("DST losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+				got, want, got-want)
+		}
+		// Sanity: a naive +86400 would land at the wrong wall-clock hour
+		// (6:59 PM instead of 5:59 PM after the spring-forward).
+		if losedate.Unix()+86400 == want {
+			t.Errorf("DST test would also pass with naive +86400 — losedate fixture isn't actually crossing the DST boundary")
+		}
+	})
 }
 
 // TestRoadallSlopePerDayAt verifies the segment-resolving helper that powers

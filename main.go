@@ -921,14 +921,14 @@ func handleTomorrowCommand() {
 
 // losedateByEndOfTomorrowAt returns the deadline timestamp to display for a
 // goal in the tomorrow view. For goals due today (whose baremin we're bumping
-// by one day's rate), advance the deadline by 24 hours so the displayed
-// deadline matches the bumped baremin's coverage; otherwise return the goal's
-// own losedate unchanged.
+// by one day's rate), advance the deadline by one calendar day in the
+// caller's local zone so the displayed wall-clock deadline stays correct
+// across DST transitions; otherwise return the goal's own losedate unchanged.
 func losedateByEndOfTomorrowAt(g Goal, now time.Time) int64 {
 	if !IsDueTodayAt(g.Losedate, now) {
 		return g.Losedate
 	}
-	return g.Losedate + 86400
+	return time.Unix(g.Losedate, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
 }
 
 // handleLessCommand outputs all do-less type goals
