@@ -884,6 +884,96 @@ func TestIsDueTomorrow(t *testing.T) {
 	}
 }
 
+// TestIsEndValueReached tests the IsEndValueReached function
+func TestIsEndValueReached(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected bool
+	}{
+		{
+			name:     "do-more goal with curval below goalval",
+			goal:     Goal{Dir: 1, Curval: f(50), Goalval: f(100)},
+			expected: false,
+		},
+		{
+			name:     "do-more goal with curval equal to goalval",
+			goal:     Goal{Dir: 1, Curval: f(100), Goalval: f(100)},
+			expected: true,
+		},
+		{
+			name:     "do-more goal with curval above goalval",
+			goal:     Goal{Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: true,
+		},
+		{
+			name:     "weight-loss goal with curval above goalval",
+			goal:     Goal{Dir: -1, Curval: f(180), Goalval: f(150)},
+			expected: false,
+		},
+		{
+			name:     "weight-loss goal with curval at goalval",
+			goal:     Goal{Dir: -1, Curval: f(150), Goalval: f(150)},
+			expected: true,
+		},
+		{
+			name:     "weight-loss goal with curval below goalval",
+			goal:     Goal{Dir: -1, Curval: f(140), Goalval: f(150)},
+			expected: true,
+		},
+		{
+			name:     "missing curval returns false",
+			goal:     Goal{Dir: 1, Goalval: f(100)},
+			expected: false,
+		},
+		{
+			name:     "missing goalval and mathishard returns false",
+			goal:     Goal{Dir: 1, Curval: f(120)},
+			expected: false,
+		},
+		{
+			name:     "goalval null but mathishard provides it",
+			goal:     Goal{Dir: 1, Curval: f(120), Mathishard: []*float64{f(1234567890), f(100), f(1)}},
+			expected: true,
+		},
+		{
+			name:     "goalval takes precedence over mathishard[1] when both present",
+			goal:     Goal{Dir: 1, Curval: f(110), Goalval: f(120), Mathishard: []*float64{f(1234567890), f(100), f(1)}},
+			expected: false, // 110 < 120 (goalval); would be true if mathishard[1]=100 were used
+		},
+		{
+			name:     "mathishard with nil goalval slot returns false",
+			goal:     Goal{Dir: 1, Curval: f(120), Mathishard: []*float64{f(1234567890), nil, f(1)}},
+			expected: false,
+		},
+		{
+			name:     "dir == 0 returns false (unknown direction)",
+			goal:     Goal{Dir: 0, Curval: f(120), Goalval: f(100)},
+			expected: false,
+		},
+		{
+			name:     "drinker do-less goal at/over cap is not 'reached' (must stay visible)",
+			goal:     Goal{GoalType: "drinker", Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: false,
+		},
+		{
+			name:     "WEEN do-less goal (yaw=-1, dir=+1) at cap is not 'reached'",
+			goal:     Goal{Yaw: -1, Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsEndValueReached(tt.goal); got != tt.expected {
+				t.Errorf("IsEndValueReached(%+v) = %v, want %v", tt.goal, got, tt.expected)
+			}
+		})
+	}
+}
+
 // TestFetchGoalWithMockServer tests FetchGoal function with a mock HTTP server
 func TestFetchGoalWithMockServer(t *testing.T) {
 	// Test case 1: successful fetch

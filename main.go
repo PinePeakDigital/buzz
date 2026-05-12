@@ -500,14 +500,26 @@ func displayNextGoalWithTimestamp() {
 	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
 }
 
-// isDueTodayFilter returns true if the goal is due today
-func isDueTodayFilter(g Goal) bool {
-	return IsDueToday(g.Losedate)
+// isDueTodayFilterAt returns true if the goal is due today (relative to now) and
+// hasn't already reached its end value. Exposed for deterministic time-based tests.
+func isDueTodayFilterAt(g Goal, now time.Time) bool {
+	return IsDueTodayAt(g.Losedate, now) && !IsEndValueReached(g)
 }
 
-// isDueTomorrowFilter returns true if the goal is due tomorrow
+// isDueTodayFilter returns true if the goal is due today and hasn't already reached its end value
+func isDueTodayFilter(g Goal) bool {
+	return isDueTodayFilterAt(g, time.Now())
+}
+
+// isDueTomorrowFilterAt returns true if the goal is due tomorrow (relative to now) and
+// hasn't already reached its end value. Exposed for deterministic time-based tests.
+func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
+	return IsDueTomorrowAt(g.Losedate, now) && !IsEndValueReached(g)
+}
+
+// isDueTomorrowFilter returns true if the goal is due tomorrow and hasn't already reached its end value
 func isDueTomorrowFilter(g Goal) bool {
-	return IsDueTomorrow(g.Losedate)
+	return isDueTomorrowFilterAt(g, time.Now())
 }
 
 // isDoLessFilter returns true if the goal is a do-less type goal
