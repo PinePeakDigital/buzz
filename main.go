@@ -523,11 +523,6 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 	return IsDueTodayAt(g.Losedate, now) || IsDueTomorrowAt(g.Losedate, now)
 }
 
-// isDueTomorrowFilter returns true if the goal is due by the end of tomorrow and hasn't already reached its end value
-func isDueTomorrowFilter(g Goal) bool {
-	return isDueTomorrowFilterAt(g, time.Now())
-}
-
 // bareminByEndOfTomorrowAt returns the baremin string to display for a goal in
 // the "due tomorrow" view. For goals already due tomorrow, the goal's existing
 // Baremin string is returned (it already reflects what's needed by tomorrow's
