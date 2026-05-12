@@ -530,28 +530,27 @@ func isDueTomorrowFilterAt(g Goal, now time.Time) bool {
 // deadline). For goals due today, one day's worth of rate is added so the
 // displayed amount reflects what's required to avoid a beemergency tomorrow.
 //
+// The per-day slope is taken from the bright-line segment containing `now`
+// (via roadall) rather than from g.Rate, because g.Rate reports the goal's
+// end-of-graph rate which can differ from the current segment's rate for
+// goals with piecewise schedules.
+//
 // Two baremin value shapes are recognised: plain numeric (e.g. "+2") and the
 // colon-separated time format used by hour-valued goals — both "HH:MM" (e.g.
-// "+00:25") and "HH:MM:SS" (e.g. "+00:25:00"). For both, the goal's rate is
-// interpreted as units-of-baremin per runits and converted to a per-day amount
-// before being added. The output preserves whichever colon format the input
-// used. If rate information is missing, runits isn't one Beeminder uses, or
-// the value can't be parsed, the original Baremin string is returned unchanged.
+// "+00:25") and "HH:MM:SS" (e.g. "+00:25:00"). For both, the slope is
+// interpreted as units-of-baremin per day before being added. The output
+// preserves whichever colon format the input used. If the slope can't be
+// determined or the value can't be parsed, the original Baremin string is
+// returned unchanged.
 func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 	if !IsDueTodayAt(g.Losedate, now) {
 		return g.Baremin
 	}
-	if g.Rate == nil {
-		return g.Baremin
-	}
-	// Without recognised runits we can't safely convert the rate to a per-day
-	// amount, so fall back to the original baremin rather than producing a
-	// dimensionally-wrong bump.
-	if !isKnownRunits(g.Runits) {
+	perDay, ok := slopePerDayAt(g, now)
+	if !ok {
 		return g.Baremin
 	}
 	value := ParseBareminValue(g.Baremin)
-	perDay := ratePerDay(*g.Rate, g.Runits)
 
 	// Colon-separated time formats — HH:MM or HH:MM:SS. The base value and
 	// the rate share the same hour unit, so add in seconds and reformat in
@@ -669,6 +668,71 @@ func ratePerDay(rate float64, runits string) float64 {
 	default:
 		return rate
 	}
+}
+
+// slopePerDayAt returns the slope of the goal's bright line at the given
+// moment, expressed in the goal's gunits per day.
+//
+// For goals with a piecewise schedule (rate changes scheduled in the future),
+// g.Rate reports the rate at the *end* of the graph rather than the rate of
+// the segment the user is currently on — so a "1 h/day now, dropping to
+// 0.1 h/day later" goal would otherwise be bumped by the wrong amount. Resolve
+// the current segment from g.Roadall and use its slope; fall back to g.Rate
+// only when roadall isn't usable.
+func slopePerDayAt(g Goal, t time.Time) (float64, bool) {
+	if slope, ok := roadallSlopePerDayAt(g, t); ok {
+		return slope, true
+	}
+	if g.Rate == nil {
+		return 0, false
+	}
+	if !isKnownRunits(g.Runits) {
+		return 0, false
+	}
+	return ratePerDay(*g.Rate, g.Runits), true
+}
+
+// roadallSlopePerDayAt walks Beeminder's piecewise bright line (roadall) and
+// returns the slope of the segment containing t, in gunits/day. Rows are
+// [t, v, r] triples with exactly one of v/r null per row past the first
+// anchor row. When the row's rate is given, it's converted via ratePerDay;
+// when only values are given, the slope is computed directly from
+// (Δvalue / Δtime) so the goal's runits don't matter.
+//
+// Returns ok=false for a missing/short roadall, unparseable rows, or when t
+// is past the goal's end date (caller falls back to g.Rate in that case).
+func roadallSlopePerDayAt(g Goal, t time.Time) (float64, bool) {
+	if len(g.Roadall) < 2 {
+		return 0, false
+	}
+	target := float64(t.Unix())
+	for i := 1; i < len(g.Roadall); i++ {
+		cur := g.Roadall[i]
+		if len(cur) < 3 || cur[0] == nil {
+			continue
+		}
+		if target > *cur[0] {
+			continue
+		}
+		// `t` falls in the segment ending at this row.
+		if cur[2] != nil {
+			if !isKnownRunits(g.Runits) {
+				return 0, false
+			}
+			return ratePerDay(*cur[2], g.Runits), true
+		}
+		// Rate not specified — derive from (Δvalue / Δtime).
+		prev := g.Roadall[i-1]
+		if len(prev) < 3 || prev[0] == nil || prev[1] == nil || cur[1] == nil {
+			return 0, false
+		}
+		seconds := *cur[0] - *prev[0]
+		if seconds <= 0 {
+			return 0, false
+		}
+		return (*cur[1] - *prev[1]) / seconds * 86400.0, true
+	}
+	return 0, false
 }
 
 // isDoLessFilter returns true if the goal is a do-less type goal

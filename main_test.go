@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -334,6 +335,58 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			goal:     Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: "x"},
 			expected: "+1 today",
 		},
+		{
+			// Real-world "clean" scenario: g.Rate reports the end-of-graph
+			// rate (0.1 h/day) but the current segment is 1 h/day. The bump
+			// must use the current segment, not g.Rate, so today's 25 min →
+			// tomorrow's 1:25:00, not 0:31:00.
+			name: "due today with piecewise roadall uses current segment, not end-of-graph rate",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+00:25:00 today",
+				Rate:     f(0.1),
+				Runits:   "d",
+				Roadall: piecewiseRoadall(
+					// Start anchor: 2024-12-01 at value 0
+					time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC).Unix(), 0,
+					// First segment ends 2025-02-01 at rate 1 h/day
+					float64(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC).Unix()), 1.0,
+					// Second segment runs to 2025-12-31 at 0.1 h/day
+					float64(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC).Unix()), 0.1,
+				),
+			},
+			expected: "+01:25:00 in 1 day",
+		},
+		{
+			// The goal is in its slower segment; use that slope.
+			name: "due today picks slope from the later piecewise segment",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+00:25:00 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Roadall: piecewiseRoadall(
+					time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC).Unix(), 0,
+					// First segment ends 2025-01-10 (before todayDeadline) at 0.1 h/day
+					float64(time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC).Unix()), 0.1,
+					// Second segment ends 2025-12-31 (after todayDeadline) at 1 h/day
+					float64(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC).Unix()), 1.0,
+				),
+			},
+			expected: "+01:25:00 in 1 day",
+		},
+		{
+			// Short roadall (just the start anchor) — fall back to g.Rate.
+			name: "due today with short roadall falls back to g.Rate",
+			goal: Goal{
+				Losedate: todayDeadline,
+				Baremin:  "+00:25:00 today",
+				Rate:     f(1),
+				Runits:   "d",
+				Roadall:  piecewiseRoadall(time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC).Unix(), 0),
+			},
+			expected: "+01:25:00 in 1 day",
+		},
 	}
 
 	for _, tt := range tests {
@@ -344,6 +397,122 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 			}
 		})
 	}
+}
+
+// piecewiseRoadall builds a roadall matrix from a start anchor (t, v) followed
+// by zero or more (t, r) rate-segment pairs. Mirrors the rate-only form
+// Beeminder typically emits.
+func piecewiseRoadall(startT int64, startV float64, segments ...float64) [][]*float64 {
+	if len(segments)%2 != 0 {
+		panic("piecewiseRoadall: segments must be (t, rate) pairs")
+	}
+	t := float64(startT)
+	v := startV
+	rows := [][]*float64{{&t, &v, nil}}
+	for i := 0; i < len(segments); i += 2 {
+		segT := segments[i]
+		segR := segments[i+1]
+		rows = append(rows, []*float64{&segT, nil, &segR})
+	}
+	return rows
+}
+
+// TestRoadallSlopePerDayAt verifies the segment-resolving helper that powers
+// piecewise-aware baremin bumping.
+func TestRoadallSlopePerDayAt(t *testing.T) {
+	target := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	startT := time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC).Unix()
+	segEnd1 := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC).Unix()
+	segEnd2 := time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC).Unix()
+
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected float64
+		ok       bool
+	}{
+		{
+			name: "empty roadall returns false",
+			goal: Goal{Runits: "d"},
+			ok:   false,
+		},
+		{
+			name: "start-anchor only returns false",
+			goal: Goal{Runits: "d", Roadall: piecewiseRoadall(startT, 0)},
+			ok:   false,
+		},
+		{
+			name:     "first segment (target before segEnd1) uses segment 1 rate",
+			goal:     Goal{Runits: "d", Roadall: piecewiseRoadall(startT, 0, float64(segEnd1), 1.0, float64(segEnd2), 0.1)},
+			expected: 1.0,
+			ok:       true,
+		},
+		{
+			name:     "second segment (target after segEnd1, before segEnd2) uses segment 2 rate",
+			goal:     Goal{Runits: "d", Roadall: piecewiseRoadall(startT, 0, float64(target.Unix()-1), 0.1, float64(segEnd2), 1.0)},
+			expected: 1.0,
+			ok:       true,
+		},
+		{
+			name:     "weekly runits converts to per-day",
+			goal:     Goal{Runits: "w", Roadall: piecewiseRoadall(startT, 0, float64(segEnd1), 7.0)},
+			expected: 1.0,
+			ok:       true,
+		},
+		{
+			name: "value-only segment computes slope from Δv/Δt",
+			goal: Goal{
+				Runits: "d",
+				Roadall: [][]*float64{
+					floatPtrRow(float64(startT), 0, math.NaN()),
+					// Segment ends at segEnd1 with value 30 (≈ 0.477 / day over 63 days)
+					floatPtrRow(float64(segEnd1), 30, math.NaN()),
+				},
+			},
+			expected: 30.0 / float64(segEnd1-startT) * 86400.0,
+			ok:       true,
+		},
+		{
+			name: "target past last segment returns false",
+			goal: Goal{
+				Runits: "d",
+				// Segment ending before target — target is "past goal end".
+				Roadall: piecewiseRoadall(startT, 0, float64(target.Unix()-86400), 1.0),
+			},
+			ok: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t2 *testing.T) {
+			got, ok := roadallSlopePerDayAt(tt.goal, target)
+			if ok != tt.ok {
+				t2.Fatalf("roadallSlopePerDayAt ok = %v, want %v", ok, tt.ok)
+			}
+			if !ok {
+				return
+			}
+			if math.Abs(got-tt.expected) > 1e-9 {
+				t2.Errorf("roadallSlopePerDayAt = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// floatPtrRow builds a [t, v, r] row. NaN signals "this field is nil" so we
+// can describe value-only or rate-only rows inline in the table.
+func floatPtrRow(t, v, r float64) []*float64 {
+	row := []*float64{nil, nil, nil}
+	if !math.IsNaN(t) {
+		row[0] = &t
+	}
+	if !math.IsNaN(v) {
+		row[1] = &v
+	}
+	if !math.IsNaN(r) {
+		row[2] = &r
+	}
+	return row
 }
 
 // TestParseTimeValue verifies the colon-separated time parser used by
