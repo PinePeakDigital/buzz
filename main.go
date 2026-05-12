@@ -708,8 +708,11 @@ func roadallSlopePerDayAt(g Goal, t time.Time) (float64, bool) {
 	target := float64(t.Unix())
 	for i := 1; i < len(g.Roadall); i++ {
 		cur := g.Roadall[i]
+		// A malformed boundary row makes the road ambiguous; fail fast so
+		// the caller falls back to g.Rate rather than silently advancing
+		// to a later segment that doesn't actually contain `target`.
 		if len(cur) < 3 || cur[0] == nil {
-			continue
+			return 0, false
 		}
 		if target > *cur[0] {
 			continue

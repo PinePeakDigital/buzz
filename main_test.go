@@ -481,6 +481,21 @@ func TestRoadallSlopePerDayAt(t *testing.T) {
 			},
 			ok: false,
 		},
+		{
+			// A malformed boundary row (missing time) makes the road
+			// ambiguous — must fail fast rather than silently jumping to the
+			// next segment, which would pick the wrong slope.
+			name: "malformed boundary row fails fast",
+			goal: Goal{
+				Runits: "d",
+				Roadall: [][]*float64{
+					floatPtrRow(float64(startT), 0, math.NaN()),
+					floatPtrRow(math.NaN(), math.NaN(), 0.1),                 // malformed: no time
+					floatPtrRow(float64(target.Unix()+86400), math.NaN(), 1), // would otherwise be selected
+				},
+			},
+			ok: false,
+		},
 	}
 
 	for _, tt := range tests {
