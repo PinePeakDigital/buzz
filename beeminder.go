@@ -247,4 +247,3 @@ func IsDoLessGoal(goal Goal) bool {
 	}
 	return false
 }
-
