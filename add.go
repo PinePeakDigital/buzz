@@ -65,6 +65,14 @@ func handleAddCommand() {
 	// Try to read value from stdin first (for piped input)
 	stdinValue, err := readValueFromStdin()
 	if err == nil && stdinValue != "" {
+		// Reject the ambiguous case where a value is piped AND a positional
+		// value is supplied — the previous behaviour silently took stdin and
+		// reinterpreted the positional as part of the comment, which could
+		// submit a different datapoint than the user intended for a write
+		// operation like `buzz add`.
+		if len(args) >= 2 {
+			printAddUsageAndExit("Provide value either via stdin or as a positional argument, not both")
+		}
 		// Value provided via stdin
 		value = stdinValue
 		commentStartIndex = 1 // Comment starts at index 1 when value is piped
