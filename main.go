@@ -933,20 +933,9 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		}
 	}
 
-	// Define color styles based on GetBufferColor logic
-	colorStyles := map[string]lipgloss.Style{
-		"red":    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		"orange": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
-		"blue":   lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
-		"green":  lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		"gray":   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-	}
-
 	// Output each goal on a separate line with aligned columns and color coding
 	for _, display := range displays {
-		// Get the color for this goal based on its safebuf
-		color := GetBufferColor(display.goal.Safebuf)
-		style := colorStyles[color]
+		style := UrgencyFor(display.goal.Safebuf).TextStyle()
 
 		// Format the line with proper spacing
 		line := fmt.Sprintf("%-*s  %-*s  %-*s  %s",
@@ -1264,7 +1253,7 @@ func handleViewCommand() {
 
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
-	fmt.Print(formatGoalDetails(goal, config, CreateColorStyles()))
+	fmt.Print(formatGoalDetails(goal, config))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())

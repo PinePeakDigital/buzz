@@ -27,10 +27,6 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 	}
 	s += "\n\n"
 
-	// Get grid styles
-	styles := CreateGridStyles()
-	highlightedStyles := CreateHighlightedGridStyles()
-
 	// Calculate grid dimensions based on terminal width
 	cols := calculateColumns(width)
 	totalRows := (len(goals) + cols - 1) / cols
@@ -53,25 +49,15 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 			}
 
 			goal := goals[idx]
+			urgency := UrgencyFor(goal.Safebuf)
 
-			// Get color based on buffer
-			color := GetBufferColor(goal.Safebuf)
-
-			// Choose style based on whether this goal is selected and user has navigated
+			// Selected goal (after navigation) gets the highlighted cell; everything else
+			// uses the normal cell style. Both share the urgency's foreground colour.
 			var style lipgloss.Style
-			var exists bool
 			if idx == cursor && hasNavigated {
-				// Use highlighted style for selected goal (only after navigation)
-				style, exists = highlightedStyles[color]
-				if !exists {
-					style = highlightedStyles["gray"]
-				}
+				style = urgency.HighlightedGridCellStyle()
 			} else {
-				// Use normal style for non-selected goals or when not navigated yet
-				style, exists = styles[color]
-				if !exists {
-					style = styles["gray"]
-				}
+				style = urgency.GridCellStyle()
 			}
 
 			// Format goal display
@@ -157,7 +143,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 		pledgeDisplay,
 		goal.Safebuf,
 		FormatDueDate(goal.Losedate),
-		GetBufferColor(goal.Safebuf))
+		UrgencyFor(goal.Safebuf))
 
 	// Add recent datapoints if available
 	if len(goal.Datapoints) > 0 {

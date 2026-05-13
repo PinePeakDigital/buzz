@@ -84,28 +84,6 @@ func SortGoalsBySlug(goals []Goal) {
 	})
 }
 
-// GetBufferColor returns the color name based on safebuf value
-// 0 days buffer (safebuf < 1) = red
-// 1 day buffer (safebuf < 2) = orange
-// 2 days buffer (safebuf < 3) = blue
-// 3-6 days (safebuf < 7) = green
-// 7+ days = gray
-func GetBufferColor(safebuf int) string {
-	if safebuf < 1 {
-		return "red"
-	}
-	if safebuf < 2 {
-		return "orange"
-	}
-	if safebuf < 3 {
-		return "blue"
-	}
-	if safebuf < 7 {
-		return "green"
-	}
-	return "gray"
-}
-
 // ParseLimsumValue extracts the delta value from limsum string
 // e.g., "+2 within 1 day" -> "2", "+1 in 3 hours" -> "1", "0 today" -> "0"
 // Time formats are preserved: "+00:05 within 1 day" -> "00:05", "+1:30 in 2 hours" -> "1:30"
