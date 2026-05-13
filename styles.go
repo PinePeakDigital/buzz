@@ -27,4 +27,3 @@ func CreateOverlayStyle() lipgloss.Style {
 		Background(lipgloss.Color("8")).
 		Foreground(lipgloss.Color("0"))
 }
-

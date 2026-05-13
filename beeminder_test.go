@@ -421,7 +421,6 @@ func TestSortGoals(t *testing.T) {
 	}
 }
 
-
 // TestFormatDueDate tests the FormatDueDate function
 func TestFormatDueDate(t *testing.T) {
 	// Use a fixed time for deterministic tests
