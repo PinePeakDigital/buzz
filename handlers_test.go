@@ -1394,8 +1394,14 @@ func TestHandleAddDatapointPrefillsLastValue(t *testing.T) {
 func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 	// API returned the goal but the last datapoint value was zero — buzz
 	// treats that as "no useful default" and falls back to "1".
+	// Track whether the client was called so a future change that stops
+	// querying it (and just hard-codes "1") would fail this test.
+	called := false
 	fake := &FakeClient{
-		GetLastDatapointValueFunc: func(string) (float64, error) { return 0, nil },
+		GetLastDatapointValueFunc: func(string) (float64, error) {
+			called = true
+			return 0, nil
+		},
 	}
 	m := model{
 		state: "app",
@@ -1407,6 +1413,9 @@ func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 	}
 
 	updated, _ := handleAddDatapoint(m)
+	if !called {
+		t.Error("expected GetLastDatapointValue to be called")
+	}
 	if got := updated.(model).appModel.inputValue; got != "1" {
 		t.Errorf("inputValue with zero last value = %q, want %q", got, "1")
 	}
@@ -1414,8 +1423,11 @@ func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 
 func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
 	// API errored — same fallback to "1" rather than blocking the modal.
+	// Track the call so the fallback can't accidentally short-circuit it.
+	called := false
 	fake := &FakeClient{
 		GetLastDatapointValueFunc: func(string) (float64, error) {
+			called = true
 			return 0, errFakeNotConfigured
 		},
 	}
@@ -1429,6 +1441,9 @@ func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
 	}
 
 	updated, _ := handleAddDatapoint(m)
+	if !called {
+		t.Error("expected GetLastDatapointValue to be called")
+	}
 	if got := updated.(model).appModel.inputValue; got != "1" {
 		t.Errorf("inputValue on fetch error = %q, want %q", got, "1")
 	}
