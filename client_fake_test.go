@@ -16,11 +16,12 @@ import (
 // command tests and Bubble Tea handler tests can use it because everything is
 // in `package main`.
 //
-// The *Func signatures intentionally omit the context.Context argument —
-// every Client method takes one, but the value is rarely interesting to
-// assertion-side code. Tests that need to check cancellation/deadlines can
-// wrap a *Func that closes over the context, or use FakeClient.LastCtx
-// (currently unimplemented; add if a test needs it).
+// The *Func signatures intentionally omit context.Context — every Client
+// method takes one, but the fake drops it before invoking *Func, so the
+// callback can't observe it. Tests that need to assert
+// cancellation/deadline propagation should drive HTTPClient against
+// httptest (see TestHTTPClientCancellation) or extend this fake with an
+// explicit context-capture field when the need arises.
 type FakeClient struct {
 	FetchGoalsFunc                  func() ([]Goal, error)
 	FetchGoalFunc                   func(goalSlug string) (*Goal, error)
