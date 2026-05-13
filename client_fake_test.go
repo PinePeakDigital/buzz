@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 )
@@ -14,6 +15,12 @@ import (
 // Lives in a _test.go file so it never ships in the production binary; both
 // command tests and Bubble Tea handler tests can use it because everything is
 // in `package main`.
+//
+// The *Func signatures intentionally omit the context.Context argument —
+// every Client method takes one, but the value is rarely interesting to
+// assertion-side code. Tests that need to check cancellation/deadlines can
+// wrap a *Func that closes over the context, or use FakeClient.LastCtx
+// (currently unimplemented; add if a test needs it).
 type FakeClient struct {
 	FetchGoalsFunc                  func() ([]Goal, error)
 	FetchGoalFunc                   func(goalSlug string) (*Goal, error)
@@ -34,84 +41,84 @@ type FakeClient struct {
 // surface that rather than letting an unconfigured path succeed silently.
 var errFakeNotConfigured = errors.New("FakeClient method not configured for this test")
 
-func (c *FakeClient) FetchGoals() ([]Goal, error) {
+func (c *FakeClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	if c.FetchGoalsFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.FetchGoalsFunc()
 }
 
-func (c *FakeClient) FetchGoal(goalSlug string) (*Goal, error) {
+func (c *FakeClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, error) {
 	if c.FetchGoalFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.FetchGoalFunc(goalSlug)
 }
 
-func (c *FakeClient) FetchGoalWithDatapoints(goalSlug string) (*Goal, error) {
+func (c *FakeClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error) {
 	if c.FetchGoalWithDatapointsFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.FetchGoalWithDatapointsFunc(goalSlug)
 }
 
-func (c *FakeClient) FetchGoalRawJSON(goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
+func (c *FakeClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
 	if c.FetchGoalRawJSONFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.FetchGoalRawJSONFunc(goalSlug, includeDatapoints)
 }
 
-func (c *FakeClient) GetLastDatapointValue(goalSlug string) (float64, error) {
+func (c *FakeClient) GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error) {
 	if c.GetLastDatapointValueFunc == nil {
 		return 0, errFakeNotConfigured
 	}
 	return c.GetLastDatapointValueFunc(goalSlug)
 }
 
-func (c *FakeClient) CreateDatapoint(goalSlug, timestamp, value, comment, requestid string) error {
+func (c *FakeClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error {
 	if c.CreateDatapointFunc == nil {
 		return errFakeNotConfigured
 	}
 	return c.CreateDatapointFunc(goalSlug, timestamp, value, comment, requestid)
 }
 
-func (c *FakeClient) CreateDatapointWithDaystamp(goalSlug, timestamp, daystamp, value, comment, requestid string) error {
+func (c *FakeClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
 	if c.CreateDatapointWithDaystampFunc == nil {
 		return errFakeNotConfigured
 	}
 	return c.CreateDatapointWithDaystampFunc(goalSlug, timestamp, daystamp, value, comment, requestid)
 }
 
-func (c *FakeClient) CreateCharge(amount float64, note string, dryrun bool) (*Charge, error) {
+func (c *FakeClient) CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error) {
 	if c.CreateChargeFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.CreateChargeFunc(amount, note, dryrun)
 }
 
-func (c *FakeClient) CreateGoal(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+func (c *FakeClient) CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
 	if c.CreateGoalFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.CreateGoalFunc(slug, title, goalType, gunits, goaldate, goalval, rate)
 }
 
-func (c *FakeClient) CallUncle(goalSlug string) (*Goal, error) {
+func (c *FakeClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, error) {
 	if c.CallUncleFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.CallUncleFunc(goalSlug)
 }
 
-func (c *FakeClient) UpdateGoalDeadline(goalSlug string, deadline int) (*Goal, error) {
+func (c *FakeClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {
 	if c.UpdateGoalDeadlineFunc == nil {
 		return nil, errFakeNotConfigured
 	}
 	return c.UpdateGoalDeadlineFunc(goalSlug, deadline)
 }
 
-func (c *FakeClient) RefreshGoal(goalSlug string) (bool, error) {
+func (c *FakeClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, error) {
 	if c.RefreshGoalFunc == nil {
 		return false, errFakeNotConfigured
 	}

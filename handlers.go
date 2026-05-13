@@ -297,7 +297,7 @@ func handleAddDatapoint(m model) (tea.Model, tea.Cmd) {
 		m.appModel.inputComment = "Added via buzz"
 
 		// Try to get the last datapoint value, default to "1" if it fails
-		if lastValue, err := m.appModel.client.GetLastDatapointValue(m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
+		if lastValue, err := m.appModel.client.GetLastDatapointValue(m.appModel.ctx, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
 			m.appModel.inputValue = fmt.Sprintf("%.1f", lastValue)
 		} else {
 			m.appModel.inputValue = "1"
@@ -500,7 +500,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 
 		// Set creating state and submit goal creation asynchronously
 		m.appModel.creatingGoal = true
-		return m, createGoalCmd(m.appModel.client, m.appModel.createSlug, m.appModel.createTitle,
+		return m, createGoalCmd(m.appModel.ctx, m.appModel.client, m.appModel.createSlug, m.appModel.createTitle,
 			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
 			m.appModel.createGoalval, m.appModel.createRate)
 	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
@@ -519,7 +519,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 
 		// Set submitting state and submit datapoint asynchronously
 		m.appModel.submitting = true
-		return m, submitDatapointCmd(m.appModel.client, m.appModel.modalGoal.Slug,
+		return m, submitDatapointCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug,
 			timestamp, m.appModel.inputValue, m.appModel.inputComment)
 	} else if !m.appModel.showModal {
 		// Show goal details modal (existing functionality)
@@ -538,7 +538,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 			}
 
 			// Load detailed goal information including datapoints
-			return m, loadGoalDetailsCmd(m.appModel.client, m.appModel.modalGoal.Slug)
+			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
 		}
 	}
 	return m, nil
@@ -592,7 +592,7 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 			m.appModel.cursor--
 			m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
 			// Load detailed goal information including datapoints
-			return m, loadGoalDetailsCmd(m.appModel.client, m.appModel.modalGoal.Slug)
+			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
 		}
 	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
@@ -620,7 +620,7 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 			m.appModel.cursor++
 			m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
 			// Load detailed goal information including datapoints
-			return m, loadGoalDetailsCmd(m.appModel.client, m.appModel.modalGoal.Slug)
+			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
 		}
 	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
 		displayGoals := m.appModel.getDisplayGoals()
@@ -666,7 +666,7 @@ func handleScrollDown(m model) (tea.Model, tea.Cmd) {
 func handleRefresh(m model) (tea.Model, tea.Cmd) {
 	if !m.appModel.showModal && !m.appModel.showCreateModal {
 		m.appModel.loading = true
-		return m, loadGoalsCmd(m.appModel.client)
+		return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 	}
 	return m, nil
 }

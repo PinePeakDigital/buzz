@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -66,7 +67,7 @@ func handleDeadlineCommand() {
 		// confirmation prompt — with --yes set, the pre-fetch is just an
 		// extra API call that can fail before UpdateGoalDeadline gets a
 		// chance to run.
-		currentGoal, err := client.FetchGoal(goalSlug)
+		currentGoal, err := client.FetchGoal(context.Background(), goalSlug)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
 			os.Exit(1)
@@ -88,7 +89,7 @@ func handleDeadlineCommand() {
 		}
 	}
 
-	goal, err := client.UpdateGoalDeadline(goalSlug, offset)
+	goal, err := client.UpdateGoalDeadline(context.Background(), goalSlug, offset)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to update deadline: %s\n", redactError(err))
 		os.Exit(1)

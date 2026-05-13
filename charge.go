@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -71,7 +72,7 @@ func handleChargeCommand() {
 	client := NewHTTPClient(config)
 
 	// Create the charge (API returns the created/dry-run charge)
-	ch, err := client.CreateCharge(amount, note, dryrun)
+	ch, err := client.CreateCharge(context.Background(), amount, note, dryrun)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to create charge: %s\n", redactError(err))
 		os.Exit(1)

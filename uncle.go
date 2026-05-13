@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -70,7 +71,7 @@ func handleUncleCommand() {
 		}
 	}
 
-	goal, err := client.CallUncle(goalSlug)
+	goal, err := client.CallUncle(context.Background(), goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to call uncle: %s\n", redactError(err))
 		os.Exit(1)
