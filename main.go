@@ -38,7 +38,7 @@ func (m model) Init() tea.Cmd {
 	}
 	// In app state, load goals and start refresh timer
 	return tea.Batch(
-		loadGoalsCmd(m.appModel.config),
+		loadGoalsCmd(m.appModel.client),
 		refreshTickCmd(),
 		checkRefreshFlagCmd(),
 	)
@@ -67,7 +67,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appModel = initialAppModel(msg.config)
 			m.appModel.width = m.width
 			m.appModel.height = m.height
-			return m, loadGoalsCmd(msg.config)
+			return m, loadGoalsCmd(m.appModel.client)
 		default:
 			var cmd tea.Cmd
 			updatedModel, cmd := m.authModel.Update(msg)
@@ -104,7 +104,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Time to refresh data
 		if m.appModel.refreshActive {
 			return m, tea.Batch(
-				loadGoalsCmd(m.appModel.config),
+				loadGoalsCmd(m.appModel.client),
 				refreshTickCmd(), // Schedule the next refresh
 			)
 		}
@@ -121,7 +121,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appModel.inputFocus = 0
 			m.appModel.inputError = ""
 			// Don't set loading = true here to avoid the full-app loading state
-			return m, loadGoalsCmd(m.appModel.config)
+			return m, loadGoalsCmd(m.appModel.client)
 		}
 		return m, nil
 
@@ -148,7 +148,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Success - close modal and refresh goals
 			m.appModel.showCreateModal = false
 			m.appModel.createError = ""
-			return m, loadGoalsCmd(m.appModel.config)
+			return m, loadGoalsCmd(m.appModel.client)
 		}
 		return m, nil
 
@@ -159,7 +159,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// New refresh event detected - update our last processed timestamp
 			m.lastRefreshTimestamp = flagTimestamp
 			return m, tea.Batch(
-				loadGoalsCmd(m.appModel.config),
+				loadGoalsCmd(m.appModel.client),
 				checkRefreshFlagCmd(), // Schedule next check
 			)
 		}
@@ -410,30 +410,33 @@ func handleNextCommand() {
 	}
 }
 
-// loadConfigAndGoals loads configuration and fetches sorted goals from Beeminder
-func loadConfigAndGoals() (*Config, []Goal, error) {
+// loadConfigAndGoals loads configuration, constructs an HTTP client, and fetches
+// sorted goals from Beeminder. Returns the client so callers can make further API
+// calls without rebuilding it.
+func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 	if !ConfigExists() {
-		return nil, nil, fmt.Errorf("no configuration found. Please run 'buzz' first to authenticate")
+		return nil, nil, nil, fmt.Errorf("no configuration found. Please run 'buzz' first to authenticate")
 	}
 
 	config, err := LoadConfig()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	goals, err := FetchGoals(config)
+	client := NewHTTPClient(config)
+	goals, err := client.FetchGoals()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch goals: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to fetch goals: %w", err)
 	}
 
 	SortGoals(goals)
-	return config, goals, nil
+	return config, client, goals, nil
 }
 
 // displayNextGoal fetches and displays the next due goal
 // Returns error instead of calling os.Exit() for reusability in watch mode
 func displayNextGoal() error {
-	_, goals, err := loadConfigAndGoals()
+	_, _, goals, err := loadConfigAndGoals()
 	if err != nil {
 		return err
 	}
@@ -842,8 +845,10 @@ func handleListCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Fetch goals
-	goals, err := FetchGoals(config)
+	goals, err := client.FetchGoals()
 	if err != nil {
 		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
@@ -1074,8 +1079,10 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Fetch goals
-	goals, err := FetchGoals(config)
+	goals, err := client.FetchGoals()
 	if err != nil {
 		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
@@ -1255,6 +1262,8 @@ func handleAddCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Parse and validate daystamp if provided
 	var daystampForAPI string
 	if *daystamp != "" {
@@ -1287,7 +1296,7 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = CreateDatapointWithDaystamp(config, goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
+	err = client.CreateDatapointWithDaystamp(goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
 		os.Exit(1)
@@ -1312,7 +1321,7 @@ func handleAddCommand() {
 	time.Sleep(limsumFetchDelay)
 
 	// Fetch the goal to display the updated limsum
-	goal, err := FetchGoal(config, goalSlug)
+	goal, err := client.FetchGoal(goalSlug)
 	if err != nil {
 		// Don't fail the command if fetching limsum fails, just skip displaying it
 		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %s\n", redactError(err))
@@ -1347,8 +1356,10 @@ func handleRefreshCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Refresh the goal
-	queued, err := RefreshGoal(config, goalSlug)
+	queued, err := client.RefreshGoal(goalSlug)
 	if err != nil {
 		fmt.Printf("Error: Failed to refresh goal: %s\n", redactError(err))
 		os.Exit(1)
@@ -1425,6 +1436,8 @@ func handleViewCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// If --web flag is present, open in browser and exit
 	if webFlag {
 		if err := openBrowser(config, goalSlug); err != nil {
@@ -1436,7 +1449,7 @@ func handleViewCommand() {
 
 	// If --json flag is present, fetch and output raw JSON
 	if jsonFlag {
-		rawJSON, err := FetchGoalRawJSON(config, goalSlug, datapointsFlag)
+		rawJSON, err := client.FetchGoalRawJSON(goalSlug, datapointsFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 			os.Exit(1)
@@ -1458,7 +1471,7 @@ func handleViewCommand() {
 	}
 
 	// Fetch the goal for human-readable output
-	goal, err := FetchGoal(config, goalSlug)
+	goal, err := client.FetchGoal(goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
@@ -1486,8 +1499,10 @@ func handleReviewCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Fetch goals
-	goals, err := FetchGoals(config)
+	goals, err := client.FetchGoals()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
@@ -1562,8 +1577,10 @@ func handleChargeCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Create the charge (API returns the created/dry-run charge)
-	ch, err := CreateCharge(config, amount, note, dryrun)
+	ch, err := client.CreateCharge(amount, note, dryrun)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to create charge: %s\n", redactError(err))
 		os.Exit(1)
@@ -1667,8 +1684,10 @@ func handleDeadlineCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	// Fetch current goal to show existing deadline
-	currentGoal, err := FetchGoal(config, goalSlug)
+	currentGoal, err := client.FetchGoal(goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
 		os.Exit(1)
@@ -1688,7 +1707,7 @@ func handleDeadlineCommand() {
 		}
 	}
 
-	goal, err := UpdateGoalDeadline(config, goalSlug, offset)
+	goal, err := client.UpdateGoalDeadline(goalSlug, offset)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to update deadline: %s\n", redactError(err))
 		os.Exit(1)
@@ -1709,7 +1728,7 @@ type timeSlot struct {
 // handleScheduleCommand displays a visual representation of goal deadline distribution throughout a 24-hour day
 func handleScheduleCommand() {
 	// Load config and goals
-	_, goals, err := loadConfigAndGoals()
+	_, _, goals, err := loadConfigAndGoals()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
@@ -2032,6 +2051,8 @@ func handleUncleCommand() {
 		os.Exit(1)
 	}
 
+	client := NewHTTPClient(config)
+
 	if !skipConfirm {
 		fmt.Printf("Call uncle on %s? This will instantly derail the goal and charge the pledge. [y/N] ", goalSlug)
 		var response string
@@ -2043,7 +2064,7 @@ func handleUncleCommand() {
 		}
 	}
 
-	goal, err := CallUncle(config, goalSlug)
+	goal, err := client.CallUncle(goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to call uncle: %s\n", redactError(err))
 		os.Exit(1)

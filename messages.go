@@ -42,9 +42,9 @@ type checkRefreshFlagMsg struct{}
 type navigationTimeoutMsg struct{}
 
 // loadGoalsCmd fetches goals from Beeminder API
-func loadGoalsCmd(config *Config) tea.Cmd {
+func loadGoalsCmd(client Client) tea.Cmd {
 	return func() tea.Msg {
-		goals, err := FetchGoals(config)
+		goals, err := client.FetchGoals()
 		if err != nil {
 			return goalsLoadedMsg{err: err}
 		}
@@ -61,25 +61,25 @@ func refreshTickCmd() tea.Cmd {
 }
 
 // submitDatapointCmd submits a datapoint to Beeminder API
-func submitDatapointCmd(config *Config, goalSlug, timestamp, value, comment string) tea.Cmd {
+func submitDatapointCmd(client Client, goalSlug, timestamp, value, comment string) tea.Cmd {
 	return func() tea.Msg {
-		err := CreateDatapoint(config, goalSlug, timestamp, value, comment, "")
+		err := client.CreateDatapoint(goalSlug, timestamp, value, comment, "")
 		return datapointSubmittedMsg{err: err}
 	}
 }
 
 // loadGoalDetailsCmd fetches detailed goal information including datapoints
-func loadGoalDetailsCmd(config *Config, goalSlug string) tea.Cmd {
+func loadGoalDetailsCmd(client Client, goalSlug string) tea.Cmd {
 	return func() tea.Msg {
-		goal, err := FetchGoalWithDatapoints(config, goalSlug)
+		goal, err := client.FetchGoalWithDatapoints(goalSlug)
 		return goalDetailsLoadedMsg{goal: goal, err: err}
 	}
 }
 
 // createGoalCmd submits a new goal to Beeminder API
-func createGoalCmd(config *Config, slug, title, goalType, gunits, goaldate, goalval, rate string) tea.Cmd {
+func createGoalCmd(client Client, slug, title, goalType, gunits, goaldate, goalval, rate string) tea.Cmd {
 	return func() tea.Msg {
-		goal, err := CreateGoal(config, slug, title, goalType, gunits, goaldate, goalval, rate)
+		goal, err := client.CreateGoal(slug, title, goalType, gunits, goaldate, goalval, rate)
 		return goalCreatedMsg{goal: goal, err: err}
 	}
 }

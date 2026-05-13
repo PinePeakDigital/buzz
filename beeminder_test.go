@@ -1013,7 +1013,7 @@ func TestFetchGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := FetchGoal(config, "testgoal")
+		goal, err := NewHTTPClient(config).FetchGoal("testgoal")
 		if err != nil {
 			t.Fatalf("FetchGoal failed: %v", err)
 		}
@@ -1038,7 +1038,7 @@ func TestFetchGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		_, err := FetchGoal(config, "nonexistent")
+		_, err := NewHTTPClient(config).FetchGoal("nonexistent")
 		if err == nil {
 			t.Error("Expected error for 404 status, got nil")
 		}
@@ -1060,7 +1060,7 @@ func TestFetchGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		_, err := FetchGoal(config, "testgoal")
+		_, err := NewHTTPClient(config).FetchGoal("testgoal")
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
@@ -1094,7 +1094,7 @@ func TestFetchGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := FetchGoal(config, "test goal")
+		goal, err := NewHTTPClient(config).FetchGoal("test goal")
 		if err != nil {
 			t.Fatalf("FetchGoal failed: %v", err)
 		}
@@ -1137,7 +1137,7 @@ func TestFetchGoalsWithGoalType(t *testing.T) {
 		BaseURL:   mockServer.URL,
 	}
 
-	goals, err := FetchGoals(config)
+	goals, err := NewHTTPClient(config).FetchGoals()
 	if err != nil {
 		t.Fatalf("FetchGoals failed: %v", err)
 	}
@@ -1222,7 +1222,7 @@ func TestRefreshGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		queued, err := RefreshGoal(config, "testgoal")
+		queued, err := NewHTTPClient(config).RefreshGoal("testgoal")
 		if err != nil {
 			t.Fatalf("RefreshGoal failed: %v", err)
 		}
@@ -1246,7 +1246,7 @@ func TestRefreshGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		queued, err := RefreshGoal(config, "testgoal")
+		queued, err := NewHTTPClient(config).RefreshGoal("testgoal")
 		if err != nil {
 			t.Fatalf("RefreshGoal failed: %v", err)
 		}
@@ -1269,7 +1269,7 @@ func TestRefreshGoalWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		_, err := RefreshGoal(config, "testgoal")
+		_, err := NewHTTPClient(config).RefreshGoal("testgoal")
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
@@ -1335,7 +1335,7 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		ch, err := CreateCharge(config, 10.00, "Test charge", false)
+		ch, err := NewHTTPClient(config).CreateCharge(10.00, "Test charge", false)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
 		}
@@ -1375,7 +1375,7 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		ch, err := CreateCharge(config, 5.00, "Test charge with dryrun", true)
+		ch, err := NewHTTPClient(config).CreateCharge(5.00, "Test charge with dryrun", true)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
 		}
@@ -1397,7 +1397,7 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		ch, err := CreateCharge(config, 10.00, "Test charge", false)
+		ch, err := NewHTTPClient(config).CreateCharge(10.00, "Test charge", false)
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
@@ -1439,7 +1439,7 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		ch, err := CreateCharge(config, 10.00, specialNote, false)
+		ch, err := NewHTTPClient(config).CreateCharge(10.00, specialNote, false)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
 		}
@@ -1477,7 +1477,7 @@ func TestCreateChargeWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		ch, err := CreateCharge(config, 10.5, "Test", false)
+		ch, err := NewHTTPClient(config).CreateCharge(10.5, "Test", false)
 		if err != nil {
 			t.Fatalf("CreateCharge failed: %v", err)
 		}
@@ -1507,7 +1507,7 @@ func TestGoalFineprintField(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := FetchGoal(config, "testgoal")
+		goal, err := NewHTTPClient(config).FetchGoal("testgoal")
 		if err != nil {
 			t.Fatalf("FetchGoal failed: %v", err)
 		}
@@ -1534,7 +1534,7 @@ func TestGoalFineprintField(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := FetchGoal(config, "testgoal")
+		goal, err := NewHTTPClient(config).FetchGoal("testgoal")
 		if err != nil {
 			t.Fatalf("FetchGoal failed: %v", err)
 		}
@@ -1578,7 +1578,7 @@ func TestGoalTypeField(t *testing.T) {
 				BaseURL:   mockServer.URL,
 			}
 
-			goal, err := FetchGoal(config, "testgoal")
+			goal, err := NewHTTPClient(config).FetchGoal("testgoal")
 			if err != nil {
 				t.Fatalf("FetchGoal failed: %v", err)
 			}
@@ -1646,7 +1646,7 @@ func TestCreateDatapointWithRequestID(t *testing.T) {
 			}
 
 			// Call CreateDatapoint
-			err := CreateDatapoint(config, "testgoal", "1234567890", "5.0", "test comment", tt.requestid)
+			err := NewHTTPClient(config).CreateDatapoint("testgoal", "1234567890", "5.0", "test comment", tt.requestid)
 			if err != nil {
 				t.Fatalf("CreateDatapoint failed: %v", err)
 			}
@@ -1728,7 +1728,7 @@ func TestCreateDatapointWithDaystamp(t *testing.T) {
 			}
 
 			// Call CreateDatapointWithDaystamp
-			err := CreateDatapointWithDaystamp(config, "testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
+			err := NewHTTPClient(config).CreateDatapointWithDaystamp("testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
 			if err != nil {
 				t.Fatalf("CreateDatapointWithDaystamp failed: %v", err)
 			}
@@ -2067,7 +2067,7 @@ func TestUpdateGoalDeadline(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := UpdateGoalDeadline(config, "testgoal", -32400)
+		goal, err := NewHTTPClient(config).UpdateGoalDeadline("testgoal", -32400)
 		if err != nil {
 			t.Fatalf("UpdateGoalDeadline failed: %v", err)
 		}
@@ -2092,7 +2092,7 @@ func TestUpdateGoalDeadline(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		_, err := UpdateGoalDeadline(config, "testgoal", 0)
+		_, err := NewHTTPClient(config).UpdateGoalDeadline("testgoal", 0)
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
@@ -2136,7 +2136,7 @@ func TestCallUncleWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := CallUncle(config, "testgoal")
+		goal, err := NewHTTPClient(config).CallUncle("testgoal")
 		if err != nil {
 			t.Fatalf("CallUncle failed: %v", err)
 		}
@@ -2158,7 +2158,7 @@ func TestCallUncleWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := CallUncle(config, "testgoal")
+		goal, err := NewHTTPClient(config).CallUncle("testgoal")
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
@@ -2194,7 +2194,7 @@ func TestCallUncleWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := CallUncle(config, rawSlug)
+		goal, err := NewHTTPClient(config).CallUncle(rawSlug)
 		if err != nil {
 			t.Fatalf("CallUncle failed: %v", err)
 		}
@@ -2216,7 +2216,7 @@ func TestCallUncleWithMockServer(t *testing.T) {
 			BaseURL:   mockServer.URL,
 		}
 
-		goal, err := CallUncle(config, "testgoal")
+		goal, err := NewHTTPClient(config).CallUncle("testgoal")
 		if err == nil {
 			t.Error("Expected error for non-200 status, got nil")
 		}
