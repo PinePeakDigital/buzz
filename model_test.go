@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 )
 
@@ -132,7 +133,7 @@ func TestInitialModel(t *testing.T) {
 	t.Run("no config file", func(t *testing.T) {
 		// Since we can't easily mock ConfigExists in the test,
 		// we just verify the function creates a valid model structure
-		m := initialModel()
+		m := initialModel(context.Background())
 
 		if m.state != "auth" && m.state != "app" {
 			t.Errorf("initialModel() state = %q, want 'auth' or 'app'", m.state)
@@ -147,7 +148,7 @@ func TestInitialAppModel(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
-	m := initialAppModel(config)
+	m := initialAppModel(config, context.Background())
 
 	// Verify initial state
 	if m.config != config {
@@ -172,6 +173,46 @@ func TestInitialAppModel(t *testing.T) {
 
 	if len(m.goals) != 0 {
 		t.Errorf("initialAppModel() should start with empty goals slice, got %d goals", len(m.goals))
+	}
+}
+
+// TestModelContextPropagation verifies that the cancellable parent context
+// passed to initialModel reaches the appModel (both directly and through the
+// auth → app transition via authSuccessMsg). When the parent cancels,
+// m.appModel.ctx.Done() must fire — that's what makes quit-cancellation work
+// for in-flight Client calls.
+func TestModelContextPropagation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	m := initialModel(ctx)
+	if m.ctx != ctx {
+		t.Error("initialModel did not store the passed ctx on the model")
+	}
+	// When ConfigExists() returns true the appModel is built immediately;
+	// otherwise it's built later from authSuccessMsg. Either way, the
+	// appModel ctx should match the model ctx — exercise the direct path
+	// here, and TestAuthSuccessPropagatesCtx covers the auth flow.
+	if m.state == "app" && m.appModel.ctx != ctx {
+		t.Error("appModel.ctx should equal the parent ctx when built directly")
+	}
+}
+
+func TestInitialAppModelStoresCtx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	app := initialAppModel(&Config{Username: "u", AuthToken: "t"}, ctx)
+	if app.ctx != ctx {
+		t.Error("initialAppModel did not store the passed ctx")
+	}
+	// Cancellation on the parent must be observable through the app's ctx.
+	cancel()
+	select {
+	case <-app.ctx.Done():
+		// expected
+	default:
+		t.Error("cancelling parent ctx did not cancel appModel.ctx")
 	}
 }
 

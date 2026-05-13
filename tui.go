@@ -51,7 +51,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// initial goal load — without these, auto-refresh wouldn't kick
 			// in until the user quit and relaunched.
 			m.state = "app"
-			m.appModel = initialAppModel(msg.config)
+			m.appModel = initialAppModel(msg.config, m.ctx)
 			m.appModel.width = m.width
 			m.appModel.height = m.height
 			return m, tea.Batch(
