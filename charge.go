@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -39,6 +40,13 @@ func handleChargeCommand() {
 	amount, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Amount must be a valid number, got: %s\n", amountStr)
+		os.Exit(1)
+	}
+	// ParseFloat accepts "NaN"/"+Inf"/"-Inf"; reject those explicitly before
+	// the lower-bound check (NaN comparisons are always false, so NaN would
+	// otherwise sneak past `amount < 1.00` and reach the API).
+	if math.IsNaN(amount) || math.IsInf(amount, 0) {
+		fmt.Fprintf(os.Stderr, "Error: Amount must be a finite number, got: %s\n", amountStr)
 		os.Exit(1)
 	}
 
