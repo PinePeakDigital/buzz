@@ -61,17 +61,18 @@ func handleDeadlineCommand() {
 
 	client := NewHTTPClient(config)
 
-	// Fetch current goal to show existing deadline
-	currentGoal, err := client.FetchGoal(goalSlug)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	newTime := formatDueTime(offset)
-	currentTime := formatDueTime(currentGoal.Deadline)
-
 	if !skipConfirm {
+		// Fetch the current goal only when we actually need to render the
+		// confirmation prompt — with --yes set, the pre-fetch is just an
+		// extra API call that can fail before UpdateGoalDeadline gets a
+		// chance to run.
+		currentGoal, err := client.FetchGoal(goalSlug)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
+			os.Exit(1)
+		}
+		newTime := formatDueTime(offset)
+		currentTime := formatDueTime(currentGoal.Deadline)
 		fmt.Printf("Change deadline for %s from %s to %s? [y/N] ", goalSlug, currentTime, newTime)
 		var response string
 		if _, err := fmt.Scanln(&response); err != nil {
