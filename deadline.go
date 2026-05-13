@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 )
 
@@ -74,9 +76,15 @@ func ParseDuration(durationStr string) (time.Duration, bool) {
 	// Get the numeric part
 	numStr := durationStr[:len(durationStr)-1]
 
-	// Parse the number
-	var num float64
-	if _, err := fmt.Sscanf(numStr, "%f", &num); err != nil {
+	// Parse the number. strconv.ParseFloat rejects empty input and trailing
+	// garbage; the explicit NaN/Inf check below catches "NaNh" / "Infh" which
+	// would otherwise convert to a 0-duration via Go's NaN→int64 fallback and
+	// produce a misleading ok=true return.
+	num, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0, false
+	}
+	if math.IsNaN(num) || math.IsInf(num, 0) {
 		return 0, false
 	}
 

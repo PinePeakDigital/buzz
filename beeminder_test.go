@@ -1908,6 +1908,18 @@ func TestParseDuration(t *testing.T) {
 			valid:    false,
 		},
 		{
+			name:     "NaN hours",
+			input:    "NaNh",
+			expected: 0,
+			valid:    false,
+		},
+		{
+			name:     "Inf hours",
+			input:    "Infh",
+			expected: 0,
+			valid:    false,
+		},
+		{
 			name:     "zero hours",
 			input:    "0h",
 			expected: 0,
