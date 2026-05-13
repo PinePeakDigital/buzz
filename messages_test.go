@@ -118,6 +118,21 @@ func TestLoadGoalDetailsCmdPassesSlug(t *testing.T) {
 	}
 }
 
+func TestLoadGoalDetailsCmdError(t *testing.T) {
+	wantErr := errors.New("goal not found")
+	fake := &FakeClient{
+		FetchGoalWithDatapointsFunc: func(string) (*Goal, error) { return nil, wantErr },
+	}
+
+	msg := loadGoalDetailsCmd(fake, "missing")().(goalDetailsLoadedMsg)
+	if !errors.Is(msg.err, wantErr) {
+		t.Errorf("loadGoalDetailsCmd err = %v, want %v", msg.err, wantErr)
+	}
+	if msg.goal != nil {
+		t.Errorf("loadGoalDetailsCmd returned goal=%v on error path, want nil", msg.goal)
+	}
+}
+
 // createGoalCmd forwards every positional argument to client.CreateGoal and
 // wraps the result in goalCreatedMsg. Use a single happy-path test to verify
 // argument plumbing — the seven-arg signature is what matters here.
@@ -149,5 +164,20 @@ func TestCreateGoalCmdPassesArgs(t *testing.T) {
 		gotGoaldate != "20260101" || gotGoalval != "null" || gotRate != "5" {
 		t.Errorf("createGoalCmd passed (%q, %q, %q, %q, %q, %q, %q), want (newg, New Goal, hustler, pages, 20260101, null, 5)",
 			gotSlug, gotTitle, gotType, gotGunits, gotGoaldate, gotGoalval, gotRate)
+	}
+}
+
+func TestCreateGoalCmdError(t *testing.T) {
+	wantErr := errors.New("slug already exists")
+	fake := &FakeClient{
+		CreateGoalFunc: func(_, _, _, _, _, _, _ string) (*Goal, error) { return nil, wantErr },
+	}
+
+	msg := createGoalCmd(fake, "dup", "", "", "", "", "", "")().(goalCreatedMsg)
+	if !errors.Is(msg.err, wantErr) {
+		t.Errorf("createGoalCmd err = %v, want %v", msg.err, wantErr)
+	}
+	if msg.goal != nil {
+		t.Errorf("createGoalCmd returned goal=%v on error path, want nil", msg.goal)
 	}
 }
