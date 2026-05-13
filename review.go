@@ -99,26 +99,22 @@ func (m reviewModel) View() string {
 		Foreground(lipgloss.Color("241")).
 		Padding(0, 1)
 
-	// Add colored status indicator based on buffer
-	color := GetBufferColor(goal.Safebuf)
+	// Colored status indicator. Uses bright-palette variants (9/214/12/10/241)
+	// rather than the main urgency colours so the dot stands out next to the
+	// title text, which already uses the main palette.
 	var statusColor lipgloss.Color
-	var statusSymbol string
-	switch color {
-	case "red":
+	statusSymbol := "●"
+	switch UrgencyFor(goal.Safebuf) {
+	case UrgencyOverdue:
 		statusColor = lipgloss.Color("9")
-		statusSymbol = "●"
-	case "orange":
+	case UrgencyDueToday:
 		statusColor = lipgloss.Color("214")
-		statusSymbol = "●"
-	case "blue":
+	case UrgencyDueTomorrow:
 		statusColor = lipgloss.Color("12")
-		statusSymbol = "●"
-	case "green":
+	case UrgencyThisWeek:
 		statusColor = lipgloss.Color("10")
-		statusSymbol = "●"
 	default:
 		statusColor = lipgloss.Color("241")
-		statusSymbol = "●"
 	}
 
 	statusStyle := lipgloss.NewStyle().
@@ -132,7 +128,7 @@ func (m reviewModel) View() string {
 	detailStyle := lipgloss.NewStyle().
 		Padding(0, 2)
 
-	details := formatGoalDetails(&goal, m.config, CreateColorStyles())
+	details := formatGoalDetails(&goal, m.config)
 
 	view += detailStyle.Render(details) + "\n"
 
@@ -200,7 +196,7 @@ func formatRate(rate float64, runits, gunits string) string {
 }
 
 // formatGoalDetails formats the goal details in a consistent way for both view and review commands
-func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipgloss.Style) string {
+func formatGoalDetails(goal *Goal, config *Config) string {
 	var details string
 
 	// Display title only if not empty
@@ -209,16 +205,7 @@ func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipglo
 	}
 
 	// Display limsum with color coding based on urgency
-	color := GetBufferColor(goal.Safebuf)
-	style, exists := colorStyles[color]
-	if !exists {
-		// Fallback to gray if color not found
-		style, exists = colorStyles["gray"]
-		if !exists {
-			// Ultimate fallback: unstyled (if gray is also missing)
-			style = lipgloss.NewStyle()
-		}
-	}
+	style := UrgencyFor(goal.Safebuf).TextStyle()
 	coloredLimsum := style.Render(goal.Limsum)
 	details += fmt.Sprintf("Limsum:      %s\n", coloredLimsum)
 

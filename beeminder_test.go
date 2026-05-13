@@ -421,39 +421,6 @@ func TestSortGoals(t *testing.T) {
 	}
 }
 
-// TestGetBufferColor tests the GetBufferColor function
-func TestGetBufferColor(t *testing.T) {
-	tests := []struct {
-		name     string
-		safebuf  int
-		expected string
-	}{
-		{"zero buffer", 0, "red"},
-		{"less than 1 day", 0, "red"},
-		{"exactly 1 day", 1, "orange"},
-		{"less than 2 days", 1, "orange"},
-		{"exactly 2 days", 2, "blue"},
-		{"less than 3 days", 2, "blue"},
-		{"exactly 3 days", 3, "green"},
-		{"4 days", 4, "green"},
-		{"5 days", 5, "green"},
-		{"6 days", 6, "green"},
-		{"exactly 7 days", 7, "gray"},
-		{"more than 7 days", 10, "gray"},
-		{"large buffer", 100, "gray"},
-		{"negative buffer", -1, "red"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GetBufferColor(tt.safebuf)
-			if result != tt.expected {
-				t.Errorf("GetBufferColor(%d) = %q, want %q", tt.safebuf, result, tt.expected)
-			}
-		})
-	}
-}
-
 // TestFormatDueDate tests the FormatDueDate function
 func TestFormatDueDate(t *testing.T) {
 	// Use a fixed time for deterministic tests

@@ -593,7 +593,7 @@ func TestFineprintOrderInOutput(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
-	output := formatGoalDetails(&goal, config, CreateColorStyles())
+	output := formatGoalDetails(&goal, config)
 
 	// Find positions of URL and Fine print in the output
 	urlIndex := strings.Index(output, "URL:")
