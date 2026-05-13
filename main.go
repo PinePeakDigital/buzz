@@ -185,4 +185,3 @@ func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 	SortGoals(goals)
 	return config, client, goals, nil
 }
-
