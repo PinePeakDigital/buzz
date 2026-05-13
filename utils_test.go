@@ -346,6 +346,8 @@ func TestTimeToDecimalHours(t *testing.T) {
 		{"decimal hours", "1.5:30", 0, false, 0},
 		{"trailing .0 minutes", "1:30.0", 0, false, 0},
 		{"trailing .0 seconds", "1:30:45.0", 0, false, 0},
+		{"explicit plus on minutes", "1:+30", 0, false, 0},
+		{"explicit plus on seconds", "1:30:+45", 0, false, 0},
 		{"NaN hours", "NaN:00", 0, false, 0},
 		{"Inf hours", "Inf:00", 0, false, 0},
 		{"large hours", "100:30", 100.5, true, 0.0001},

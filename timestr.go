@@ -24,6 +24,13 @@ import (
 // semantics differ; co-locating them in one file makes the parsing surface
 // findable in one place rather than spread across main.go, utils.go, review.go.
 
+// hasSignPrefix reports whether s starts with "+" or "-". Used to reject
+// per-field signs in colon-separated time strings before calling strconv.Atoi
+// (which would otherwise accept them).
+func hasSignPrefix(s string) bool {
+	return strings.HasPrefix(s, "+") || strings.HasPrefix(s, "-")
+}
+
 // parseTimeValue parses a "[-]HH:MM" or "[-]HH:MM:SS" string into total
 // seconds. The second return value reports whether the input included a
 // seconds component, so callers can preserve the original format on output.
@@ -37,6 +44,15 @@ func parseTimeValue(s string) (totalSeconds int, includeSeconds bool, ok bool) {
 	}
 	parts := strings.Split(s, ":")
 	if len(parts) != 2 && len(parts) != 3 {
+		return 0, false, false
+	}
+	// strconv.Atoi accepts "+30" / "-30"; the grammar here permits a sign only
+	// on the whole value (handled above), so any per-field sign means the
+	// input was malformed (e.g. "1:+30", "1:30:-45", "1:-30").
+	if hasSignPrefix(parts[1]) {
+		return 0, false, false
+	}
+	if len(parts) == 3 && hasSignPrefix(parts[2]) {
 		return 0, false, false
 	}
 	hh, err := strconv.Atoi(parts[0])
@@ -110,6 +126,15 @@ func timeToDecimalHours(timeStr string) (float64, bool) {
 	// Split by colon
 	parts := strings.Split(timeStr, ":")
 	if len(parts) < 2 || len(parts) > 3 {
+		return 0, false
+	}
+	// strconv.Atoi accepts "+30" / "-30"; the grammar here permits a sign only
+	// on the whole value (handled above), so any per-field sign means the
+	// input was malformed (e.g. "1:+30", "1:30:-45").
+	if hasSignPrefix(parts[1]) {
+		return 0, false
+	}
+	if len(parts) == 3 && hasSignPrefix(parts[2]) {
 		return 0, false
 	}
 
