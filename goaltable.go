@@ -16,8 +16,9 @@ import (
 // Column is one column in a goal table.
 //
 // Cell is a pure function from a Goal to its rendered string value. The
-// renderer calls it once per goal during measure and again during print, so it
-// must be cheap and deterministic.
+// renderer calls it once per goal to measure column widths, caches the result,
+// and reuses it during print — so it must be deterministic but doesn't need to
+// be especially cheap.
 type Column struct {
 	Header string
 	Cell   func(Goal) string
