@@ -50,8 +50,12 @@ func handleViewCommand() {
 		}
 	}
 
-	if len(filteredArgs) < 1 {
-		fmt.Fprintln(os.Stderr, "Error: Missing required argument")
+	if len(filteredArgs) != 1 {
+		if len(filteredArgs) == 0 {
+			fmt.Fprintln(os.Stderr, "Error: Missing required argument")
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: Too many arguments: %v\n", filteredArgs[1:])
+		}
 		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
 		os.Exit(1)
 	}
