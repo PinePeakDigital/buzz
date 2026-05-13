@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"runtime"
 	"time"
@@ -10,6 +11,45 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// handleReviewCommand launches an interactive review of all goals
+func handleReviewCommand() {
+	// Load config
+	if !ConfigExists() {
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	client := NewHTTPClient(config)
+
+	// Fetch goals
+	goals, err := client.FetchGoals()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	if len(goals) == 0 {
+		fmt.Println("No goals found.")
+		return
+	}
+
+	// Sort goals alphabetically by slug as specified
+	SortGoalsBySlug(goals)
+
+	// Launch the interactive review TUI
+	p := tea.NewProgram(initialReviewModel(goals, config), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
+		os.Exit(1)
+	}
+}
 
 // reviewModel holds the state for the review command
 type reviewModel struct {
