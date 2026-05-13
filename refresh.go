@@ -8,8 +8,12 @@ import (
 // handleRefreshCommand refreshes autodata for a goal
 func handleRefreshCommand() {
 	// Check arguments: buzz refresh <goalslug>
-	if len(os.Args) < 3 {
-		fmt.Println("Error: Missing required argument")
+	if len(os.Args) != 3 {
+		if len(os.Args) < 3 {
+			fmt.Println("Error: Missing required argument")
+		} else {
+			fmt.Printf("Error: Too many arguments: %v\n", os.Args[3:])
+		}
 		fmt.Println("Usage: buzz refresh <goalslug>")
 		os.Exit(1)
 	}
