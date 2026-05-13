@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -177,7 +178,7 @@ func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 	}
 
 	client := NewHTTPClient(config)
-	goals, err := client.FetchGoals()
+	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to fetch goals: %w", err)
 	}

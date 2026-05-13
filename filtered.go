@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -127,7 +128,7 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	client := NewHTTPClient(config)
 
 	// Fetch goals
-	goals, err := client.FetchGoals()
+	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)

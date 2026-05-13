@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -29,7 +30,7 @@ func handleReviewCommand() {
 	client := NewHTTPClient(config)
 
 	// Fetch goals
-	goals, err := client.FetchGoals()
+	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)

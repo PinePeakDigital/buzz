@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -136,7 +137,7 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = client.CreateDatapointWithDaystamp(goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
+	err = client.CreateDatapointWithDaystamp(context.Background(), goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
 		os.Exit(1)
@@ -161,7 +162,7 @@ func handleAddCommand() {
 	time.Sleep(limsumFetchDelay)
 
 	// Fetch the goal to display the updated limsum
-	goal, err := client.FetchGoal(goalSlug)
+	goal, err := client.FetchGoal(context.Background(), goalSlug)
 	if err != nil {
 		// Don't fail the command if fetching limsum fails, just skip displaying it
 		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %s\n", redactError(err))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -41,10 +42,15 @@ type checkRefreshFlagMsg struct{}
 // navigationTimeoutMsg is sent when navigation highlight should be auto-disabled
 type navigationTimeoutMsg struct{}
 
-// loadGoalsCmd fetches goals from Beeminder API
-func loadGoalsCmd(client Client) tea.Cmd {
+// loadGoalsCmd fetches goals from Beeminder API.
+//
+// The ctx is captured into the returned Cmd so cancellation from the caller
+// propagates through to the in-flight HTTP request. Today the only ctx
+// callers pass is the appModel's ctx (currently context.Background); future
+// quit-cancellation wiring will turn that into a cancellable parent.
+func loadGoalsCmd(ctx context.Context, client Client) tea.Cmd {
 	return func() tea.Msg {
-		goals, err := client.FetchGoals()
+		goals, err := client.FetchGoals(ctx)
 		if err != nil {
 			return goalsLoadedMsg{err: err}
 		}
@@ -61,25 +67,25 @@ func refreshTickCmd() tea.Cmd {
 }
 
 // submitDatapointCmd submits a datapoint to Beeminder API
-func submitDatapointCmd(client Client, goalSlug, timestamp, value, comment string) tea.Cmd {
+func submitDatapointCmd(ctx context.Context, client Client, goalSlug, timestamp, value, comment string) tea.Cmd {
 	return func() tea.Msg {
-		err := client.CreateDatapoint(goalSlug, timestamp, value, comment, "")
+		err := client.CreateDatapoint(ctx, goalSlug, timestamp, value, comment, "")
 		return datapointSubmittedMsg{err: err}
 	}
 }
 
 // loadGoalDetailsCmd fetches detailed goal information including datapoints
-func loadGoalDetailsCmd(client Client, goalSlug string) tea.Cmd {
+func loadGoalDetailsCmd(ctx context.Context, client Client, goalSlug string) tea.Cmd {
 	return func() tea.Msg {
-		goal, err := client.FetchGoalWithDatapoints(goalSlug)
+		goal, err := client.FetchGoalWithDatapoints(ctx, goalSlug)
 		return goalDetailsLoadedMsg{goal: goal, err: err}
 	}
 }
 
 // createGoalCmd submits a new goal to Beeminder API
-func createGoalCmd(client Client, slug, title, goalType, gunits, goaldate, goalval, rate string) tea.Cmd {
+func createGoalCmd(ctx context.Context, client Client, slug, title, goalType, gunits, goaldate, goalval, rate string) tea.Cmd {
 	return func() tea.Msg {
-		goal, err := client.CreateGoal(slug, title, goalType, gunits, goaldate, goalval, rate)
+		goal, err := client.CreateGoal(ctx, slug, title, goalType, gunits, goaldate, goalval, rate)
 		return goalCreatedMsg{goal: goal, err: err}
 	}
 }

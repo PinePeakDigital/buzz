@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -20,7 +21,7 @@ func TestLoadGoalsCmdSuccess(t *testing.T) {
 		},
 	}
 
-	msg, ok := loadGoalsCmd(fake)().(goalsLoadedMsg)
+	msg, ok := loadGoalsCmd(context.Background(), fake)().(goalsLoadedMsg)
 	if !ok {
 		t.Fatalf("loadGoalsCmd produced %T, want goalsLoadedMsg", msg)
 	}
@@ -41,7 +42,7 @@ func TestLoadGoalsCmdError(t *testing.T) {
 		FetchGoalsFunc: func() ([]Goal, error) { return nil, wantErr },
 	}
 
-	msg, ok := loadGoalsCmd(fake)().(goalsLoadedMsg)
+	msg, ok := loadGoalsCmd(context.Background(), fake)().(goalsLoadedMsg)
 	if !ok {
 		t.Fatalf("loadGoalsCmd produced %T, want goalsLoadedMsg", msg)
 	}
@@ -65,7 +66,7 @@ func TestSubmitDatapointCmdPassesArgs(t *testing.T) {
 		},
 	}
 
-	msg, ok := submitDatapointCmd(fake, "exercise", "1700000000", "1.5", "morning run")().(datapointSubmittedMsg)
+	msg, ok := submitDatapointCmd(context.Background(), fake, "exercise", "1700000000", "1.5", "morning run")().(datapointSubmittedMsg)
 	if !ok {
 		t.Fatalf("submitDatapointCmd produced %T, want datapointSubmittedMsg", msg)
 	}
@@ -87,7 +88,7 @@ func TestSubmitDatapointCmdError(t *testing.T) {
 		CreateDatapointFunc: func(_, _, _, _, _ string) error { return wantErr },
 	}
 
-	msg := submitDatapointCmd(fake, "any", "0", "1", "")().(datapointSubmittedMsg)
+	msg := submitDatapointCmd(context.Background(), fake, "any", "0", "1", "")().(datapointSubmittedMsg)
 	if !errors.Is(msg.err, wantErr) {
 		t.Errorf("submitDatapointCmd err = %v, want %v", msg.err, wantErr)
 	}
@@ -106,7 +107,7 @@ func TestLoadGoalDetailsCmdPassesSlug(t *testing.T) {
 		},
 	}
 
-	msg := loadGoalDetailsCmd(fake, "x")().(goalDetailsLoadedMsg)
+	msg := loadGoalDetailsCmd(context.Background(), fake, "x")().(goalDetailsLoadedMsg)
 	if gotSlug != "x" {
 		t.Errorf("client called with slug=%q, want x", gotSlug)
 	}
@@ -124,7 +125,7 @@ func TestLoadGoalDetailsCmdError(t *testing.T) {
 		FetchGoalWithDatapointsFunc: func(string) (*Goal, error) { return nil, wantErr },
 	}
 
-	msg := loadGoalDetailsCmd(fake, "missing")().(goalDetailsLoadedMsg)
+	msg := loadGoalDetailsCmd(context.Background(), fake, "missing")().(goalDetailsLoadedMsg)
 	if !errors.Is(msg.err, wantErr) {
 		t.Errorf("loadGoalDetailsCmd err = %v, want %v", msg.err, wantErr)
 	}
@@ -153,7 +154,7 @@ func TestCreateGoalCmdPassesArgs(t *testing.T) {
 		},
 	}
 
-	msg := createGoalCmd(fake, "newg", "New Goal", "hustler", "pages", "20260101", "null", "5")().(goalCreatedMsg)
+	msg := createGoalCmd(context.Background(), fake, "newg", "New Goal", "hustler", "pages", "20260101", "null", "5")().(goalCreatedMsg)
 	if msg.goal != wantGoal {
 		t.Errorf("createGoalCmd goal = %v, want %v", msg.goal, wantGoal)
 	}
@@ -173,7 +174,7 @@ func TestCreateGoalCmdError(t *testing.T) {
 		CreateGoalFunc: func(_, _, _, _, _, _, _ string) (*Goal, error) { return nil, wantErr },
 	}
 
-	msg := createGoalCmd(fake, "dup", "", "", "", "", "", "")().(goalCreatedMsg)
+	msg := createGoalCmd(context.Background(), fake, "dup", "", "", "", "", "", "")().(goalCreatedMsg)
 	if !errors.Is(msg.err, wantErr) {
 		t.Errorf("createGoalCmd err = %v, want %v", msg.err, wantErr)
 	}

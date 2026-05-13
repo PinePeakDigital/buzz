@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -86,7 +87,7 @@ func handleViewCommand() {
 
 	// If --json flag is present, fetch and output raw JSON
 	if jsonFlag {
-		rawJSON, err := client.FetchGoalRawJSON(goalSlug, datapointsFlag)
+		rawJSON, err := client.FetchGoalRawJSON(context.Background(), goalSlug, datapointsFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 			os.Exit(1)
@@ -108,7 +109,7 @@ func handleViewCommand() {
 	}
 
 	// Fetch the goal for human-readable output
-	goal, err := client.FetchGoal(goalSlug)
+	goal, err := client.FetchGoal(context.Background(), goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)

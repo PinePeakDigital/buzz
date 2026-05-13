@@ -1,23 +1,27 @@
 package main
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // appModel is the main application model (previously just "model")
 type appModel struct {
-	goals              []Goal    // Beeminder goals
-	cursor             int       // which goal our cursor is pointing at
-	config             *Config   // Beeminder credentials (kept for openBrowser URL building)
-	client             Client    // Beeminder API client
-	loading            bool      // whether we're loading goals
-	err                error     // error from loading goals
-	width              int       // terminal width
-	height             int       // terminal height
-	scrollRow          int       // current scroll position (in rows)
-	refreshActive      bool      // whether auto-refresh is active
-	showModal          bool      // whether to show goal details modal
-	modalGoal          *Goal     // the goal to show in modal
-	hasNavigated       bool      // whether user has used arrow keys
-	lastNavigationTime time.Time // last time user navigated with arrow keys
+	goals              []Goal          // Beeminder goals
+	cursor             int             // which goal our cursor is pointing at
+	config             *Config         // Beeminder credentials (kept for openBrowser URL building)
+	client             Client          // Beeminder API client
+	ctx                context.Context // long-lived context passed to every Client call; today context.Background, future quit-cancellation wiring will replace it with a cancellable parent
+	loading            bool            // whether we're loading goals
+	err                error           // error from loading goals
+	width              int             // terminal width
+	height             int             // terminal height
+	scrollRow          int             // current scroll position (in rows)
+	refreshActive      bool            // whether auto-refresh is active
+	showModal          bool            // whether to show goal details modal
+	modalGoal          *Goal           // the goal to show in modal
+	hasNavigated       bool            // whether user has used arrow keys
+	lastNavigationTime time.Time       // last time user navigated with arrow keys
 
 	// Modal input fields
 	inputDate    string // date input (YYYY-MM-DD format)
@@ -61,6 +65,7 @@ func initialAppModel(config *Config) appModel {
 		goals:         []Goal{},
 		config:        config,
 		client:        NewHTTPClient(config),
+		ctx:           context.Background(),
 		loading:       true,
 		refreshActive: true,
 		searchMode:    false,

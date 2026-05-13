@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 )
@@ -35,7 +36,7 @@ func handleRefreshCommand() {
 	client := NewHTTPClient(config)
 
 	// Refresh the goal
-	queued, err := client.RefreshGoal(goalSlug)
+	queued, err := client.RefreshGoal(context.Background(), goalSlug)
 	if err != nil {
 		fmt.Printf("Error: Failed to refresh goal: %s\n", redactError(err))
 		os.Exit(1)

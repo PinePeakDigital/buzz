@@ -22,7 +22,7 @@ func (m model) Init() tea.Cmd {
 	}
 	// In app state, load goals and start refresh timer
 	return tea.Batch(
-		loadGoalsCmd(m.appModel.client),
+		loadGoalsCmd(m.appModel.ctx, m.appModel.client),
 		refreshTickCmd(),
 		checkRefreshFlagCmd(),
 	)
@@ -55,7 +55,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appModel.width = m.width
 			m.appModel.height = m.height
 			return m, tea.Batch(
-				loadGoalsCmd(m.appModel.client),
+				loadGoalsCmd(m.appModel.ctx, m.appModel.client),
 				refreshTickCmd(),
 				checkRefreshFlagCmd(),
 			)
@@ -95,7 +95,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Time to refresh data
 		if m.appModel.refreshActive {
 			return m, tea.Batch(
-				loadGoalsCmd(m.appModel.client),
+				loadGoalsCmd(m.appModel.ctx, m.appModel.client),
 				refreshTickCmd(), // Schedule the next refresh
 			)
 		}
@@ -112,7 +112,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appModel.inputFocus = 0
 			m.appModel.inputError = ""
 			// Don't set loading = true here to avoid the full-app loading state
-			return m, loadGoalsCmd(m.appModel.client)
+			return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 		}
 		return m, nil
 
@@ -139,7 +139,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Success - close modal and refresh goals
 			m.appModel.showCreateModal = false
 			m.appModel.createError = ""
-			return m, loadGoalsCmd(m.appModel.client)
+			return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 		}
 		return m, nil
 
@@ -150,7 +150,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// New refresh event detected - update our last processed timestamp
 			m.lastRefreshTimestamp = flagTimestamp
 			return m, tea.Batch(
-				loadGoalsCmd(m.appModel.client),
+				loadGoalsCmd(m.appModel.ctx, m.appModel.client),
 				checkRefreshFlagCmd(), // Schedule next check
 			)
 		}

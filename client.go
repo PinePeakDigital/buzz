@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,29 +11,30 @@ import (
 	"time"
 )
 
-// httpClientTimeout caps every Beeminder request so a stalled connection can't
-// freeze the CLI or block a Bubble Tea Cmd indefinitely. A real cancellation
-// story (per-request context, user-quit propagation) is tracked in issue #253;
-// this timeout is the cheap stopgap until then.
+// httpClientTimeout caps every Beeminder request so a stalled connection
+// can't freeze the CLI or block a Bubble Tea Cmd indefinitely. Per-request
+// context (this file) layers on top: callers can cancel a request before
+// the timeout fires, e.g. when the user quits the TUI.
 const httpClientTimeout = 30 * time.Second
 
-// Client is the Beeminder API seam. Production code depends on this interface;
-// HTTPClient is the only adapter today, and tests use it via NewHTTPClient
-// pointed at httptest. Future work (see issue #244 follow-on) can introduce a
-// fake adapter so command/handler tests don't need an HTTP server.
+// Client is the Beeminder API seam. Every method takes a context.Context as
+// its first parameter; callers should pass either the long-lived appModel
+// context (TUI) or context.Background() (short-lived CLI commands). The
+// context.Context support enables future quit-cancellation wiring without
+// further interface changes — that wiring is tracked in a follow-up.
 type Client interface {
-	FetchGoals() ([]Goal, error)
-	FetchGoal(goalSlug string) (*Goal, error)
-	FetchGoalWithDatapoints(goalSlug string) (*Goal, error)
-	FetchGoalRawJSON(goalSlug string, includeDatapoints bool) (json.RawMessage, error)
-	GetLastDatapointValue(goalSlug string) (float64, error)
-	CreateDatapoint(goalSlug, timestamp, value, comment, requestid string) error
-	CreateDatapointWithDaystamp(goalSlug, timestamp, daystamp, value, comment, requestid string) error
-	CreateCharge(amount float64, note string, dryrun bool) (*Charge, error)
-	CreateGoal(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
-	CallUncle(goalSlug string) (*Goal, error)
-	UpdateGoalDeadline(goalSlug string, deadline int) (*Goal, error)
-	RefreshGoal(goalSlug string) (bool, error)
+	FetchGoals(ctx context.Context) ([]Goal, error)
+	FetchGoal(ctx context.Context, goalSlug string) (*Goal, error)
+	FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error)
+	FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error)
+	GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error)
+	CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error
+	CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error
+	CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error)
+	CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
+	CallUncle(ctx context.Context, goalSlug string) (*Goal, error)
+	UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error)
+	RefreshGoal(ctx context.Context, goalSlug string) (bool, error)
 }
 
 // HTTPClient is the HTTP-backed Client. Construct with NewHTTPClient.
@@ -64,18 +66,37 @@ func (c *HTTPClient) baseURL() string {
 	return getBaseURL(c.config)
 }
 
+// doRequest builds a context-aware request, executes it, and emits the
+// LogRequest/LogResponse pair. The contentType argument is set as the
+// Content-Type header when non-empty (POST/PUT bodies). Per-method callers
+// own status-code interpretation and body decoding.
+func (c *HTTPClient) doRequest(ctx context.Context, method, url string, body io.Reader, contentType string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	LogRequest(c.config, method, url)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	LogResponse(c.config, resp.StatusCode, url)
+	return resp, nil
+}
+
 // FetchGoals fetches the user's goals from Beeminder API.
-func (c *HTTPClient) FetchGoals() ([]Goal, error) {
+func (c *HTTPClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals.json?auth_token=%s",
 		c.baseURL(), c.config.Username, c.config.AuthToken)
 
-	LogRequest(c.config, "GET", url)
-	resp, err := c.http.Get(url)
+	resp, err := c.doRequest(ctx, http.MethodGet, url, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goals: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, url)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -90,17 +111,15 @@ func (c *HTTPClient) FetchGoals() ([]Goal, error) {
 }
 
 // GetLastDatapointValue fetches the last datapoint value for a goal.
-func (c *HTTPClient) GetLastDatapointValue(goalSlug string) (float64, error) {
+func (c *HTTPClient) GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", apiURL)
-	resp, err := c.http.Get(apiURL)
+	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -122,13 +141,13 @@ func (c *HTTPClient) GetLastDatapointValue(goalSlug string) (float64, error) {
 }
 
 // CreateDatapoint submits a new datapoint to a Beeminder goal.
-func (c *HTTPClient) CreateDatapoint(goalSlug, timestamp, value, comment, requestid string) error {
-	return c.CreateDatapointWithDaystamp(goalSlug, timestamp, "", value, comment, requestid)
+func (c *HTTPClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error {
+	return c.CreateDatapointWithDaystamp(ctx, goalSlug, timestamp, "", value, comment, requestid)
 }
 
 // CreateDatapointWithDaystamp submits a new datapoint with optional daystamp.
 // If daystamp is provided (format YYYYMMDD), it is used instead of timestamp.
-func (c *HTTPClient) CreateDatapointWithDaystamp(goalSlug, timestamp, daystamp, value, comment, requestid string) error {
+func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
 
@@ -147,14 +166,11 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(goalSlug, timestamp, daystamp, 
 		data.Set("requestid", requestid)
 	}
 
-	LogRequest(c.config, "POST", apiURL)
-	resp, err := c.http.Post(apiURL, "application/x-www-form-urlencoded",
-		strings.NewReader(data.Encode()))
+	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
 		return fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -164,7 +180,7 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(goalSlug, timestamp, daystamp, 
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it.
-func (c *HTTPClient) CreateCharge(amount float64, note string, dryrun bool) (*Charge, error) {
+func (c *HTTPClient) CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/charges.json", c.baseURL())
 
 	data := url.Values{}
@@ -176,14 +192,11 @@ func (c *HTTPClient) CreateCharge(amount float64, note string, dryrun bool) (*Ch
 		data.Set("dryrun", "true")
 	}
 
-	LogRequest(c.config, "POST", apiURL)
-	resp, err := c.http.Post(apiURL, "application/x-www-form-urlencoded",
-		strings.NewReader(data.Encode()))
+	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create charge: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(resp.Body)
@@ -202,17 +215,15 @@ func (c *HTTPClient) CreateCharge(amount float64, note string, dryrun bool) (*Ch
 
 // CallUncle instantly derails a goal that is in the red (safebuf <= 0).
 // It charges the pledge amount and inserts the post-derail respite into the graph.
-func (c *HTTPClient) CallUncle(goalSlug string) (*Goal, error) {
+func (c *HTTPClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/uncleme.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "POST", apiURL)
-	resp, err := c.http.Post(apiURL, "application/x-www-form-urlencoded", strings.NewReader(""))
+	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(""), "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, fmt.Errorf("failed to call uncle: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	body, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
@@ -231,17 +242,15 @@ func (c *HTTPClient) CallUncle(goalSlug string) (*Goal, error) {
 }
 
 // FetchGoal fetches a single goal by slug.
-func (c *HTTPClient) FetchGoal(goalSlug string) (*Goal, error) {
+func (c *HTTPClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", apiURL)
-	resp, err := c.http.Get(apiURL)
+	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("goal not found: %s", goalSlug)
@@ -260,17 +269,15 @@ func (c *HTTPClient) FetchGoal(goalSlug string) (*Goal, error) {
 }
 
 // FetchGoalWithDatapoints fetches goal details including recent datapoints.
-func (c *HTTPClient) FetchGoalWithDatapoints(goalSlug string) (*Goal, error) {
+func (c *HTTPClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", apiURL)
-	resp, err := c.http.Get(apiURL)
+	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -286,7 +293,7 @@ func (c *HTTPClient) FetchGoalWithDatapoints(goalSlug string) (*Goal, error) {
 
 // FetchGoalRawJSON fetches a goal and returns the raw JSON response.
 // This preserves all fields from the API, not just the ones defined in the Goal struct.
-func (c *HTTPClient) FetchGoalRawJSON(goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
+func (c *HTTPClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
@@ -294,13 +301,11 @@ func (c *HTTPClient) FetchGoalRawJSON(goalSlug string, includeDatapoints bool) (
 		apiURL += "&datapoints=true"
 	}
 
-	LogRequest(c.config, "GET", apiURL)
-	resp, err := c.http.Get(apiURL)
+	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch goal: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("goal not found: %s", goalSlug)
@@ -320,7 +325,7 @@ func (c *HTTPClient) FetchGoalRawJSON(goalSlug string, includeDatapoints bool) (
 
 // CreateGoal creates a new goal for the user.
 // Requires slug, title, goal_type, gunits, and exactly 2 of 3: goaldate, goalval, rate.
-func (c *HTTPClient) CreateGoal(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+func (c *HTTPClient) CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals.json",
 		c.baseURL(), c.config.Username)
 
@@ -334,14 +339,11 @@ func (c *HTTPClient) CreateGoal(slug, title, goalType, gunits, goaldate, goalval
 	data.Set("goalval", goalval)
 	data.Set("rate", rate)
 
-	LogRequest(c.config, "POST", apiURL)
-	resp, err := c.http.Post(apiURL, "application/x-www-form-urlencoded",
-		strings.NewReader(data.Encode()))
+	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create goal: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
@@ -358,7 +360,7 @@ func (c *HTTPClient) CreateGoal(slug, title, goalType, gunits, goaldate, goalval
 // UpdateGoalDeadline updates the deadline (seconds from midnight) for a goal.
 // The deadline parameter is undocumented in the official API but is supported:
 // https://forum.beeminder.com/t/api-deadline/10666
-func (c *HTTPClient) UpdateGoalDeadline(goalSlug string, deadline int) (*Goal, error) {
+func (c *HTTPClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {
 	escapedSlug := url.PathEscape(goalSlug)
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json",
 		c.baseURL(), c.config.Username, escapedSlug)
@@ -367,19 +369,11 @@ func (c *HTTPClient) UpdateGoalDeadline(goalSlug string, deadline int) (*Goal, e
 	data.Set("auth_token", c.config.AuthToken)
 	data.Set("deadline", fmt.Sprintf("%d", deadline))
 
-	req, err := http.NewRequest(http.MethodPut, apiURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	LogRequest(c.config, "PUT", apiURL)
-	resp, err := c.http.Do(req)
+	resp, err := c.doRequest(ctx, http.MethodPut, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, fmt.Errorf("failed to update goal deadline: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(resp.Body)
@@ -399,17 +393,15 @@ func (c *HTTPClient) UpdateGoalDeadline(goalSlug string, deadline int) (*Goal, e
 
 // RefreshGoal forces a fetch of autodata and graph refresh for a goal.
 // Returns true if the goal was queued for refresh, false if not.
-func (c *HTTPClient) RefreshGoal(goalSlug string) (bool, error) {
+func (c *HTTPClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	LogRequest(c.config, "GET", apiURL)
-	resp, err := c.http.Get(apiURL)
+	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
 	if err != nil {
 		return false, fmt.Errorf("failed to refresh goal: %w", err)
 	}
 	defer resp.Body.Close()
-	LogResponse(c.config, resp.StatusCode, apiURL)
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("API returned status %d", resp.StatusCode)
