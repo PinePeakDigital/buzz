@@ -11,56 +11,55 @@ import (
 
 // handleViewCommand displays detailed information about a specific goal
 func handleViewCommand() {
-	// Parse flags for the view command
+	// Parse flags for the view command. We support flags on either side of
+	// the positional goal slug, so we loop over `viewFlags.Parse` until only
+	// non-flag args remain — that way every valid Go-flag spelling
+	// (`--web`, `-web`, `--json=true`, etc.) works whether it appears before
+	// or after the slug, and unknown tokens still surface as errors instead
+	// of being silently dropped.
 	viewFlags := flag.NewFlagSet("view", flag.ContinueOnError)
 	web := viewFlags.Bool("web", false, "Open the goal in the browser")
 	jsonOutput := viewFlags.Bool("json", false, "Output goal data as JSON")
 	datapoints := viewFlags.Bool("datapoints", false, "Include datapoints in output (use with --json)")
-	if err := viewFlags.Parse(os.Args[2:]); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			// Help was requested; print usage and exit 0
-			fmt.Println("Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
-			return
+
+	const usage = "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]"
+	var positional []string
+	remaining := os.Args[2:]
+	for len(remaining) > 0 {
+		if err := viewFlags.Parse(remaining); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				fmt.Println(usage)
+				return
+			}
+			fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
+			fmt.Fprintln(os.Stderr, usage)
+			os.Exit(2)
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
-		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
-		os.Exit(2)
+		rest := viewFlags.Args()
+		if len(rest) == 0 {
+			break
+		}
+		// Pull off the first non-flag token as a positional, then continue
+		// re-parsing from the remainder so trailing flags get consumed.
+		positional = append(positional, rest[0])
+		remaining = rest[1:]
 	}
 
-	// Get goal slug from remaining arguments
-	args := viewFlags.Args()
-
-	// Check if flags appear after the goal slug (handle both positions)
 	webFlag := *web
 	jsonFlag := *jsonOutput
 	datapointsFlag := *datapoints
-	var goalSlug string
-	var filteredArgs []string
 
-	for _, arg := range args {
-		switch arg {
-		case "--web":
-			webFlag = true
-		case "--json":
-			jsonFlag = true
-		case "--datapoints":
-			datapointsFlag = true
-		default:
-			filteredArgs = append(filteredArgs, arg)
-		}
-	}
-
-	if len(filteredArgs) != 1 {
-		if len(filteredArgs) == 0 {
+	if len(positional) != 1 {
+		if len(positional) == 0 {
 			fmt.Fprintln(os.Stderr, "Error: Missing required argument")
 		} else {
-			fmt.Fprintf(os.Stderr, "Error: Too many arguments: %v\n", filteredArgs[1:])
+			fmt.Fprintf(os.Stderr, "Error: Too many arguments: %v\n", positional[1:])
 		}
-		fmt.Fprintln(os.Stderr, "Usage: buzz view <goalslug> [--web] [--json] [--datapoints]")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(1)
 	}
 
-	goalSlug = filteredArgs[0]
+	goalSlug := positional[0]
 
 	// Load config
 	if !ConfigExists() {
