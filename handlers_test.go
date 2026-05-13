@@ -1416,8 +1416,15 @@ func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 	if !called {
 		t.Error("expected GetLastDatapointValue to be called")
 	}
-	if got := updated.(model).appModel.inputValue; got != "1" {
-		t.Errorf("inputValue with zero last value = %q, want %q", got, "1")
+	got := updated.(model).appModel
+	if got.inputValue != "1" {
+		t.Errorf("inputValue with zero last value = %q, want %q", got.inputValue, "1")
+	}
+	if !got.inputMode {
+		t.Error("expected inputMode to be true after handleAddDatapoint")
+	}
+	if got.inputComment != "Added via buzz" {
+		t.Errorf("inputComment = %q, want default %q", got.inputComment, "Added via buzz")
 	}
 }
 
@@ -1444,7 +1451,14 @@ func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
 	if !called {
 		t.Error("expected GetLastDatapointValue to be called")
 	}
-	if got := updated.(model).appModel.inputValue; got != "1" {
-		t.Errorf("inputValue on fetch error = %q, want %q", got, "1")
+	got := updated.(model).appModel
+	if got.inputValue != "1" {
+		t.Errorf("inputValue on fetch error = %q, want %q", got.inputValue, "1")
+	}
+	if !got.inputMode {
+		t.Error("expected inputMode to be true after handleAddDatapoint")
+	}
+	if got.inputComment != "Added via buzz" {
+		t.Errorf("inputComment = %q, want default %q", got.inputComment, "Added via buzz")
 	}
 }
