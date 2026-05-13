@@ -155,8 +155,14 @@ func main() {
 		}
 	}
 
-	// No arguments, run the interactive TUI
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	// No arguments, run the interactive TUI. The cancellable context is
+	// stored on the model and threaded into every Client call; the deferred
+	// cancel fires when p.Run() returns (user quit, error, or signal) so
+	// any in-flight HTTP request aborts instead of hanging until the 30s
+	// http.Client.Timeout fires.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := tea.NewProgram(initialModel(ctx), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %s", redactError(err))
 		os.Exit(1)
