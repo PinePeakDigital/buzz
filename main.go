@@ -659,70 +659,22 @@ func handleListCommand() {
 	// Print summary header
 	fmt.Printf("Total goals: %d\n\n", len(goals))
 
-	// Calculate column widths
-	maxSlugWidth := 4   // minimum for "Slug" header
-	maxTitleWidth := 5  // minimum for "Title" header
-	maxUnitsWidth := 5  // minimum for "Units" header
-	maxRateWidth := 4   // minimum for "Rate" header
-	maxStakesWidth := 6 // minimum for "Stakes" header
-
-	for _, goal := range goals {
-		if len(goal.Slug) > maxSlugWidth {
-			maxSlugWidth = len(goal.Slug)
-		}
-		if len(goal.Title) > maxTitleWidth {
-			maxTitleWidth = len(goal.Title)
-		}
-		// Calculate units width
-		units := getDisplayUnits(goal.Gunits)
-		if len(units) > maxUnitsWidth {
-			maxUnitsWidth = len(units)
-		}
-		// Format rate to calculate its width
-		rateStr := formatListRate(goal.Rate, goal.Runits)
-		if len(rateStr) > maxRateWidth {
-			maxRateWidth = len(rateStr)
-		}
-		// Format stakes to calculate its width
-		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
-		if len(stakesStr) > maxStakesWidth {
-			maxStakesWidth = len(stakesStr)
-		}
+	table := Table{
+		ShowHeader: true,
+		Columns: []Column{
+			{Header: "Slug", Cell: func(g Goal) string { return g.Slug }},
+			{Header: "Title", Cell: func(g Goal) string {
+				if g.Title == "" {
+					return "-"
+				}
+				return g.Title
+			}},
+			{Header: "Units", Cell: func(g Goal) string { return getDisplayUnits(g.Gunits) }},
+			{Header: "Rate", Cell: func(g Goal) string { return formatListRate(g.Rate, g.Runits) }},
+			{Header: "Stakes", Cell: func(g Goal) string { return fmt.Sprintf("$%.2f", g.Pledge) }},
+		},
 	}
-
-	// Print header
-	fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
-		maxSlugWidth, "Slug",
-		maxTitleWidth, "Title",
-		maxUnitsWidth, "Units",
-		maxRateWidth, "Rate",
-		"Stakes")
-
-	// Print separator
-	fmt.Printf("%s  %s  %s  %s  %s\n",
-		strings.Repeat("-", maxSlugWidth),
-		strings.Repeat("-", maxTitleWidth),
-		strings.Repeat("-", maxUnitsWidth),
-		strings.Repeat("-", maxRateWidth),
-		strings.Repeat("-", maxStakesWidth))
-
-	// Print each goal
-	for _, goal := range goals {
-		title := goal.Title
-		if title == "" {
-			title = "-"
-		}
-		units := getDisplayUnits(goal.Gunits)
-		rateStr := formatListRate(goal.Rate, goal.Runits)
-		stakesStr := fmt.Sprintf("$%.2f", goal.Pledge)
-
-		fmt.Printf("%-*s  %-*s  %-*s  %-*s  %s\n",
-			maxSlugWidth, goal.Slug,
-			maxTitleWidth, title,
-			maxUnitsWidth, units,
-			maxRateWidth, rateStr,
-			stakesStr)
-	}
+	fmt.Print(table.Render(goals))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
@@ -897,56 +849,16 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	// displayed losedates are equal.
 	sortGoalsByDisplayedLosedate(filteredGoals, losedateFor)
 
-	// Pre-calculate formatted values to avoid redundant formatting calls
-	type goalDisplay struct {
-		goal             Goal
-		baremin          string
-		timeframe        string
-		absoluteDeadline string
+	table := Table{
+		Colorize: true,
+		Columns: []Column{
+			{Cell: func(g Goal) string { return g.Slug }},
+			{Cell: func(g Goal) string { return bareminFor(g) }},
+			{Cell: func(g Goal) string { return FormatDueDate(losedateFor(g)) }},
+			{Cell: func(g Goal) string { return FormatAbsoluteDeadline(losedateFor(g)) }},
+		},
 	}
-
-	displays := make([]goalDisplay, len(filteredGoals))
-	maxSlugWidth := 0
-	maxBareminWidth := 0
-	maxRelativeWidth := 0
-
-	for i, goal := range filteredGoals {
-		losedate := losedateFor(goal)
-		timeframe := FormatDueDate(losedate)
-		absoluteDeadline := FormatAbsoluteDeadline(losedate)
-		baremin := bareminFor(goal)
-		displays[i] = goalDisplay{
-			goal:             goal,
-			baremin:          baremin,
-			timeframe:        timeframe,
-			absoluteDeadline: absoluteDeadline,
-		}
-
-		if len(goal.Slug) > maxSlugWidth {
-			maxSlugWidth = len(goal.Slug)
-		}
-		if len(baremin) > maxBareminWidth {
-			maxBareminWidth = len(baremin)
-		}
-		if len(timeframe) > maxRelativeWidth {
-			maxRelativeWidth = len(timeframe)
-		}
-	}
-
-	// Output each goal on a separate line with aligned columns and color coding
-	for _, display := range displays {
-		style := UrgencyFor(display.goal.Safebuf).TextStyle()
-
-		// Format the line with proper spacing
-		line := fmt.Sprintf("%-*s  %-*s  %-*s  %s",
-			maxSlugWidth, display.goal.Slug,
-			maxBareminWidth, display.baremin,
-			maxRelativeWidth, display.timeframe,
-			display.absoluteDeadline)
-
-		// Apply color and print
-		fmt.Println(style.Render(line))
-	}
+	fmt.Print(table.Render(filteredGoals))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
