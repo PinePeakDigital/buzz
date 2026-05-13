@@ -199,23 +199,16 @@ func parseTimeToDeadlineOffset(timeStr string) (int, error) {
 	return offset, nil
 }
 
-// formatDueTime formats the deadline offset (seconds from midnight) as a time string
-// Negative offset means before midnight, positive means after midnight
+// formatDueTime formats the deadline offset (seconds from midnight) as a time
+// string. Negative offset means before midnight, positive means after midnight.
+//
+// The offset is normalized into the [0, 86400) range before formatting so a
+// second-precision negative input like -3599 (which is 59:59 before midnight,
+// i.e. 23:00:01) rounds the same way as its positive counterpart 82801 instead
+// of drifting by a minute from hand-rolled hour/minute arithmetic.
 func formatDueTime(deadlineOffset int) string {
-	// Calculate hours and minutes from seconds
-	hours := deadlineOffset / 3600
-	minutes := (deadlineOffset % 3600) / 60
-
-	// Handle negative offsets (before midnight)
-	if deadlineOffset < 0 {
-		hours = 24 + hours // Convert to hours before midnight
-		if minutes != 0 {
-			minutes = 60 + minutes
-			hours--
-		}
-	}
-
-	// Create a time at the specified hour and minute
-	t := time.Date(0, 1, 1, hours, minutes, 0, 0, time.UTC)
+	const secondsPerDay = 24 * 60 * 60
+	normalized := ((deadlineOffset % secondsPerDay) + secondsPerDay) % secondsPerDay
+	t := time.Unix(int64(normalized), 0).UTC()
 	return t.Format("3:04 PM")
 }
