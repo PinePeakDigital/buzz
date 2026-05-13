@@ -243,7 +243,6 @@ func displayTimeline(slots []timeSlot) {
 
 	for _, slot := range slots {
 		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
-		goalsStr := strings.Join(slot.goals, ", ")
 
 		// Build the full line and wrap it to terminal width, indenting wrapped lines
 		// Color the time and tree separately using lipgloss
@@ -268,12 +267,10 @@ func displayTimeline(slots []timeSlot) {
 			available = 10 // minimal safety width
 		}
 
-		// Split on commas to get individual goals
-		goals := strings.Split(goalsStr, ", ")
 		var line strings.Builder
 		line.WriteString(prefix)
 		current := 0
-		for _, goal := range goals {
+		for _, goal := range slot.goals {
 			// Determine separator
 			sep := ""
 			if current > 0 {
