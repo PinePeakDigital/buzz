@@ -1353,3 +1353,83 @@ func TestLimsumFetchDelay(t *testing.T) {
 		}
 	})
 }
+
+// handleAddDatapoint is the modal-open path that pre-fills the input form
+// with the goal's last datapoint value (defaulting to "1" if the value is
+// zero or the API errors). It was previously untestable because every
+// invocation hit the real HTTPClient; now FakeClient lets us cover all
+// three branches cheaply.
+
+func TestHandleAddDatapointPrefillsLastValue(t *testing.T) {
+	fake := &FakeClient{
+		GetLastDatapointValueFunc: func(slug string) (float64, error) {
+			if slug != "exercise" {
+				t.Errorf("client called with slug=%q, want exercise", slug)
+			}
+			return 2.5, nil
+		},
+	}
+	m := model{
+		state: "app",
+		appModel: appModel{
+			client:    fake,
+			modalGoal: &Goal{Slug: "exercise"},
+			showModal: true,
+		},
+	}
+
+	updated, _ := handleAddDatapoint(m)
+	got := updated.(model).appModel
+	if got.inputValue != "2.5" {
+		t.Errorf("inputValue = %q, want %q", got.inputValue, "2.5")
+	}
+	if !got.inputMode {
+		t.Error("expected inputMode to be true after handleAddDatapoint")
+	}
+	if got.inputComment != "Added via buzz" {
+		t.Errorf("inputComment = %q, want default %q", got.inputComment, "Added via buzz")
+	}
+}
+
+func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
+	// API returned the goal but the last datapoint value was zero — buzz
+	// treats that as "no useful default" and falls back to "1".
+	fake := &FakeClient{
+		GetLastDatapointValueFunc: func(string) (float64, error) { return 0, nil },
+	}
+	m := model{
+		state: "app",
+		appModel: appModel{
+			client:    fake,
+			modalGoal: &Goal{Slug: "any"},
+			showModal: true,
+		},
+	}
+
+	updated, _ := handleAddDatapoint(m)
+	if got := updated.(model).appModel.inputValue; got != "1" {
+		t.Errorf("inputValue with zero last value = %q, want %q", got, "1")
+	}
+}
+
+func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
+	// API errored — same fallback to "1" rather than blocking the modal.
+	fake := &FakeClient{
+		GetLastDatapointValueFunc: func(string) (float64, error) {
+			return 0, errFakeNotConfigured
+		},
+	}
+	m := model{
+		state: "app",
+		appModel: appModel{
+			client:    fake,
+			modalGoal: &Goal{Slug: "any"},
+			showModal: true,
+		},
+	}
+
+	updated, _ := handleAddDatapoint(m)
+	if got := updated.(model).appModel.inputValue; got != "1" {
+		t.Errorf("inputValue on fetch error = %q, want %q", got, "1")
+	}
+}
