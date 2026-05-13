@@ -2208,15 +2208,15 @@ func TestCallUncleWithMockServer(t *testing.T) {
 }
 
 // TestHTTPClientCancellation verifies that a cancelled context propagates
-// into the in-flight HTTP request. The mock server blocks until the test
-// signals it; we cancel the parent context partway through and assert that
-// the call returns context.Canceled (rather than the success it would have
-// produced after the server eventually responded).
+// into the in-flight HTTP request. The mock server signals `started` as soon
+// as it begins handling, then blocks until `released`; the test cancels the
+// parent context strictly after `started` fires so cancellation is guaranteed
+// to land mid-request rather than racing against a fixed sleep.
 func TestHTTPClientCancellation(t *testing.T) {
+	started := make(chan struct{})
 	released := make(chan struct{})
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Block until the test side closes `released` so we exercise the
-		// cancellation path deterministically rather than racing the response.
+		close(started)
 		<-released
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`[]`))
@@ -2228,10 +2228,8 @@ func TestHTTPClientCancellation(t *testing.T) {
 	client := NewHTTPClient(config)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel after a short delay so FetchGoals has started but the mock
-	// server hasn't responded yet.
 	go func() {
-		time.Sleep(20 * time.Millisecond)
+		<-started
 		cancel()
 	}()
 
