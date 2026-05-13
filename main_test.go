@@ -891,6 +891,8 @@ func TestParseTimeValue(t *testing.T) {
 		{"double-negative is rejected", "--1:30", 0, false, false},
 		{"minutes at boundary (60) is rejected", "1:60", 0, false, false},
 		{"seconds at boundary (60) is rejected", "1:30:60", 0, false, false},
+		{"explicit plus on minutes is rejected", "1:+30", 0, false, false},
+		{"explicit plus on seconds is rejected", "1:30:+45", 0, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

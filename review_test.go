@@ -439,6 +439,9 @@ func TestFormatDueTime(t *testing.T) {
 		{"before midnight (-1 hour)", -1 * 3600, "11:00 PM"},
 		{"before midnight (-30 min)", -30 * 60, "11:30 PM"},
 		{"before midnight (-6 hours)", -6 * 3600, "6:00 PM"},
+		// Regression: -3599s (59:59 before midnight = 23:00:01) used to drift
+		// to 11:01 PM under the hand-rolled negative branch.
+		{"before midnight (-3599s)", -3599, "11:00 PM"},
 	}
 
 	for _, tt := range tests {
