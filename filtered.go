@@ -220,7 +220,15 @@ func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
 		if !ok {
 			return stripTimeWindowSuffix(g.Baremin)
 		}
-		totalSeconds := baseSeconds + int(math.Round(perDay*3600))
+		// Guard against overflow when converting deltaSeconds to int on
+		// 32-bit systems. 1e9 seconds is ~31 years per day, well past any
+		// realistic Beeminder rate; treat anything above as a malformed
+		// rate and fall back to the un-bumped baremin.
+		deltaSeconds := perDay * 3600
+		if deltaSeconds > 1e9 || deltaSeconds < -1e9 {
+			return stripTimeWindowSuffix(g.Baremin)
+		}
+		totalSeconds := baseSeconds + int(math.Round(deltaSeconds))
 		return formatTimeValue(totalSeconds, includeSeconds)
 	}
 
