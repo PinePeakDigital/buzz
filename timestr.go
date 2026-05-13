@@ -113,11 +113,14 @@ func timeToDecimalHours(timeStr string) (float64, bool) {
 		return 0, false
 	}
 
-	// Parse hours
-	hours, err := strconv.ParseFloat(parts[0], 64)
+	// Parse hours as integer. Using Atoi rather than ParseFloat rejects
+	// decimal hours ("1.5:30"), NaN, and Inf in one shot — matching how
+	// minutes and seconds are parsed below.
+	hoursInt, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return 0, false
 	}
+	hours := float64(hoursInt)
 
 	// Parse minutes (must be integer)
 	minutes, err := strconv.ParseFloat(parts[1], 64)
