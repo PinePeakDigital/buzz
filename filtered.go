@@ -1,0 +1,303 @@
+package main
+
+import (
+	"fmt"
+	"math"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Filtered list views: `buzz all`, `buzz today`, `buzz tomorrow`, `buzz due`,
+// `buzz less`. They share an orchestration helper (load → filter → sort →
+// render via the goaltable.Table) and a small family of filter predicates +
+// tomorrow-view baremin bumping helpers.
+
+// isDoLessFilter returns true if the goal is a do-less type goal
+func isDoLessFilter(g Goal) bool {
+	return IsDoLessGoal(g)
+}
+
+// allGoalsFilter returns true for all goals
+func allGoalsFilter(g Goal) bool {
+	return true
+}
+
+// handleAllCommand outputs all goals
+func handleAllCommand() {
+	handleFilteredCommand("all", allGoalsFilter)
+}
+
+// handleTodayCommand outputs all goals that are due today
+func handleTodayCommand() {
+	handleFilteredCommand("today", isDueTodayFilter)
+}
+
+// handleTomorrowCommand outputs all goals that are due tomorrow. Goals that
+// are already due today are included with their baremin bumped by one day's
+// rate, so the user sees the total amount they would need to do for the goal
+// to not be due tomorrow. The displayed deadline is bumped to match — the
+// bumped baremin is what's needed by *tomorrow's* deadline, not today's.
+func handleTomorrowCommand() {
+	now := time.Now()
+	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
+	bareminFor := func(g Goal) string { return bareminByEndOfTomorrowAt(g, now) }
+	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor)
+}
+
+// handleLessCommand outputs all do-less type goals
+func handleLessCommand() {
+	handleFilteredCommand("do-less", isDoLessFilter)
+}
+
+// handleDueCommand outputs all goals due within the specified duration
+func handleDueCommand() {
+	// Check arguments: buzz due <duration>
+	if len(os.Args) < 3 {
+		fmt.Println("Error: Missing required duration argument")
+		fmt.Println("Usage: buzz due <duration>")
+		fmt.Println("  Examples: buzz due 10m, buzz due 1h, buzz due 5d, buzz due 1w")
+		fmt.Println("  Supported units: m (minutes), h (hours), d (days), w (weeks)")
+		os.Exit(1)
+	}
+
+	durationStr := os.Args[2]
+
+	// Parse the duration
+	duration, ok := ParseDuration(durationStr)
+	if !ok {
+		fmt.Printf("Error: Invalid duration format: %s\n", durationStr)
+		fmt.Println("Usage: buzz due <duration>")
+		fmt.Println("  Examples: buzz due 10m, buzz due 1h, buzz due 5d, buzz due 1w")
+		fmt.Println("  Supported units: m (minutes), h (hours), d (days), w (weeks)")
+		os.Exit(1)
+	}
+
+	// Create filter function that captures the duration
+	isDueWithinFilter := func(g Goal) bool {
+		return IsDueWithin(g.Losedate, duration)
+	}
+
+	// Format the filter name for display
+	filterName := fmt.Sprintf("due within %s", durationStr)
+	handleFilteredCommand(filterName, isDueWithinFilter)
+}
+
+// handleFilteredCommand is a shared helper that outputs all goals matching the given filter
+// filterName is used in messages (e.g., "today", "tomorrow", or "do-less")
+// filter is a function that takes a Goal and returns true if the goal matches
+func handleFilteredCommand(filterName string, filter func(Goal) bool) {
+	handleFilteredCommandWithDisplay(filterName, filter,
+		func(g Goal) string { return g.Baremin },
+		func(g Goal) int64 { return g.Losedate },
+	)
+}
+
+// sortGoalsByDisplayedLosedate reorders goals in place so the slice ends up
+// sorted by the timestamp that losedateFor would render. SliceStable preserves
+// the input order for ties so any prior sort (e.g. SortGoals's pledge/slug
+// tiebreakers) survives.
+func sortGoalsByDisplayedLosedate(goals []Goal, losedateFor func(Goal) int64) {
+	sort.SliceStable(goals, func(i, j int) bool {
+		return losedateFor(goals[i]) < losedateFor(goals[j])
+	})
+}
+
+// handleFilteredCommandWithDisplay is the most general filtered-output helper:
+// the caller can override both the displayed baremin string and the deadline
+// timestamp used for the timeframe/absolute-deadline columns. The tomorrow
+// view uses this to bump both for due-today goals so the bumped baremin and
+// the displayed deadline are aligned to the same target moment.
+func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool, bareminFor func(Goal) string, losedateFor func(Goal) int64) {
+	// Load config
+	if !ConfigExists() {
+		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		os.Exit(1)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	client := NewHTTPClient(config)
+
+	// Fetch goals
+	goals, err := client.FetchGoals()
+	if err != nil {
+		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
+		os.Exit(1)
+	}
+
+	// Sort goals (by due date ascending, then by stakes descending, then by name)
+	SortGoals(goals)
+
+	// Filter goals that match the criteria
+	var filteredGoals []Goal
+	for _, goal := range goals {
+		if filter(goal) {
+			filteredGoals = append(filteredGoals, goal)
+		}
+	}
+
+	// If no matching goals, exit
+	if len(filteredGoals) == 0 {
+		fmt.Printf("No %s goals found.\n", filterName)
+		return
+	}
+
+	// SortGoals ordered by each goal's own losedate, but the tomorrow view may
+	// show a bumped losedate for due-today goals. Re-sort by the displayed
+	// losedate so the rendered order matches the deadline column. SliceStable
+	// preserves the SortGoals tiebreakers (pledge desc, slug asc) when
+	// displayed losedates are equal.
+	sortGoalsByDisplayedLosedate(filteredGoals, losedateFor)
+
+	table := Table{
+		Colorize: true,
+		Columns: []Column{
+			{Cell: func(g Goal) string { return g.Slug }},
+			{Cell: func(g Goal) string { return bareminFor(g) }},
+			{Cell: func(g Goal) string { return FormatDueDate(losedateFor(g)) }},
+			{Cell: func(g Goal) string { return FormatAbsoluteDeadline(losedateFor(g)) }},
+		},
+	}
+	fmt.Print(table.Render(filteredGoals))
+
+	// Check for updates and display message if available
+	fmt.Print(getUpdateMessage())
+}
+
+// Tomorrow-view baremin bumping helpers. They project a goal's "what's needed
+// by tomorrow's deadline" baremin string from the API's "what's needed by
+// today's deadline" string, by adding one day's worth of rate. Beeminder's
+// `dueby` map already carries pre-rounded per-daystamp deltas; we use that
+// when available and fall back to local arithmetic otherwise.
+
+// bareminByEndOfTomorrowAt returns the baremin string to display for a goal in
+// the "due tomorrow" view. For goals already due tomorrow, the goal's existing
+// Baremin string is returned (it already reflects what's needed by tomorrow's
+// deadline). For goals due today, one day's worth of rate is added so the
+// displayed amount reflects what's required to avoid a beemergency tomorrow.
+//
+// The per-day slope is taken from the bright-line segment containing `now`
+// (via roadall) rather than from g.Rate, because g.Rate reports the goal's
+// end-of-graph rate which can differ from the current segment's rate for
+// goals with piecewise schedules.
+//
+// Two baremin value shapes are recognised: plain numeric (e.g. "+2") and the
+// colon-separated time format used by hour-valued goals — both "HH:MM" (e.g.
+// "+00:25") and "HH:MM:SS" (e.g. "+00:25:00"). For both, the slope is
+// interpreted as units-of-baremin per day before being added. The output
+// preserves whichever colon format the input used. If the slope can't be
+// determined or the value can't be parsed, the original Baremin string is
+// returned with any trailing time-window qualifier removed. The returned
+// string never carries that qualifier (e.g. " in 1 day", " within 1 day",
+// " today") — every row in the tomorrow view shares the same horizon, so
+// the suffix is just noise.
+func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
+	if !dueLaterTodayAt(g, now) {
+		return stripTimeWindowSuffix(g.Baremin)
+	}
+	if bumped, ok := bareminFromDueby(g, now); ok {
+		return stripTimeWindowSuffix(bumped)
+	}
+	perDay, ok := slopePerDayAt(g, now)
+	if !ok {
+		return stripTimeWindowSuffix(g.Baremin)
+	}
+	value := ParseBareminValue(g.Baremin)
+
+	// Colon-separated time formats — HH:MM or HH:MM:SS. The base value and
+	// the rate share the same hour unit, so add in seconds and reformat in
+	// whichever colon format the input used.
+	if strings.Contains(value, ":") {
+		baseSeconds, includeSeconds, ok := parseTimeValue(value)
+		if !ok {
+			return stripTimeWindowSuffix(g.Baremin)
+		}
+		totalSeconds := baseSeconds + int(math.Round(perDay*3600))
+		return formatTimeValue(totalSeconds, includeSeconds)
+	}
+
+	// Plain numeric.
+	base, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return stripTimeWindowSuffix(g.Baremin)
+	}
+	total := base + perDay
+	sign := "+"
+	if total < 0 {
+		sign = ""
+	}
+	return fmt.Sprintf("%s%g", sign, total)
+}
+
+// stripTimeWindowSuffix removes Beeminder's trailing time-window phrase from a
+// baremin/limsum string (e.g. " in 1 day", " within 1 day", " in 3 hours",
+// " today"), leaving just the leading signed value. Used by the tomorrow view,
+// where every row shares the same horizon so the suffix only adds noise.
+func stripTimeWindowSuffix(s string) string {
+	if s == "" {
+		return s
+	}
+	for _, sep := range []string{" within ", " in "} {
+		if i := strings.LastIndex(s, sep); i >= 0 {
+			return s[:i]
+		}
+	}
+	// Handle "+0 today" / "0 today" style: drop the trailing " today" word.
+	if strings.HasSuffix(s, " today") {
+		return strings.TrimSuffix(s, " today")
+	}
+	return s
+}
+
+// bareminFromDueby returns the formatted delta for tomorrow's daystamp,
+// taken from Beeminder's pre-rounded `dueby` map. Beeminder rounds those
+// strings to the goal's Display Precision, so honouring them sidesteps
+// float-formatting noise (e.g. "+10788.140000000001") that arises when we
+// add today's baremin to a per-day rate ourselves. Returns ok=false when
+// dueby is absent or the tomorrow entry is missing/empty — callers fall
+// back to local arithmetic in those cases.
+func bareminFromDueby(g Goal, now time.Time) (string, bool) {
+	if len(g.Dueby) == 0 {
+		return "", false
+	}
+	entry, ok := g.Dueby[tomorrowDaystampFor(g, now)]
+	if !ok || entry.FormattedDelta == "" {
+		return "", false
+	}
+	return entry.FormattedDelta, true
+}
+
+// tomorrowDaystampFor returns the YYYYMMDD daystamp representing the day
+// after the goal's current Beeminder day. Beeminder shifts day boundaries
+// by the goal's `deadline` seconds — positive deadlines push the boundary
+// past midnight (e.g. +10800 = 3am cutoff), negative deadlines pull it
+// before (e.g. -10800 = 9pm cutoff). Subtracting the deadline from `now`
+// produces a wall-clock time inside the user's calendar date that matches
+// the goal's current daystamp; the next calendar day is tomorrow's.
+func tomorrowDaystampFor(g Goal, now time.Time) string {
+	shifted := now.Add(-time.Duration(g.Deadline) * time.Second).In(now.Location())
+	tomorrow := time.Date(shifted.Year(), shifted.Month(), shifted.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
+	return tomorrow.Format("20060102")
+}
+
+// losedateByEndOfTomorrowAt returns the deadline timestamp to display for a
+// goal in the tomorrow view. For goals due later today (whose baremin we're
+// bumping by one day's rate), advance the deadline by one calendar day in
+// the caller's local zone so the displayed wall-clock deadline stays correct
+// across DST transitions. Overdue goals (losedate already in the past) keep
+// their own losedate so the OVERDUE indicator remains visible — bumping them
+// would silently hide the fact that they've already derailed.
+func losedateByEndOfTomorrowAt(g Goal, now time.Time) int64 {
+	if !dueLaterTodayAt(g, now) {
+		return g.Losedate
+	}
+	return time.Unix(g.Losedate, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
+}
