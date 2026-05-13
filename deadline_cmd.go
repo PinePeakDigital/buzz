@@ -74,7 +74,12 @@ func handleDeadlineCommand() {
 	if !skipConfirm {
 		fmt.Printf("Change deadline for %s from %s to %s? [y/N] ", goalSlug, currentTime, newTime)
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			// EOF or read error in non-interactive contexts — treat as
+			// "no" so we never change a deadline without explicit consent.
+			fmt.Println("Cancelled.")
+			return
+		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
 			fmt.Println("Cancelled.")

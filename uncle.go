@@ -56,7 +56,13 @@ func handleUncleCommand() {
 	if !skipConfirm {
 		fmt.Printf("Call uncle on %s? This will instantly derail the goal and charge the pledge. [y/N] ", goalSlug)
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			// EOF or read error in non-interactive contexts (e.g. piped
+			// stdin with no input) — treat as a "no" so we never derail
+			// without an explicit affirmative.
+			fmt.Println("Cancelled.")
+			return
+		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
 			fmt.Println("Cancelled.")
