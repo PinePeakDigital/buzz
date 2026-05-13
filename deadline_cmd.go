@@ -31,7 +31,7 @@ func handleDeadlineCommand() {
 	args := deadlineFlags.Args()
 	if len(args) < 2 {
 		fmt.Fprintln(os.Stderr, "Error: Missing required arguments")
-		fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes] <goalslug> <time>")
+		fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes|-y] <goalslug> <time>")
 		fmt.Fprintln(os.Stderr, "  <time> can be:")
 		fmt.Fprintln(os.Stderr, "    - 12-hour format: \"3:00 PM\", \"11:30 AM\"")
 		fmt.Fprintln(os.Stderr, "    - 24-hour format: \"15:00\", \"23:30\"")
