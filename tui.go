@@ -46,12 +46,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle auth state
 		switch msg := msg.(type) {
 		case authSuccessMsg:
-			// Authentication succeeded, switch to app
+			// Authentication succeeded, switch to app. Start the refresh
+			// ticker and the refresh-flag poller in the same Batch as the
+			// initial goal load — without these, auto-refresh wouldn't kick
+			// in until the user quit and relaunched.
 			m.state = "app"
 			m.appModel = initialAppModel(msg.config)
 			m.appModel.width = m.width
 			m.appModel.height = m.height
-			return m, loadGoalsCmd(m.appModel.client)
+			return m, tea.Batch(
+				loadGoalsCmd(m.appModel.client),
+				refreshTickCmd(),
+				checkRefreshFlagCmd(),
+			)
 		default:
 			var cmd tea.Cmd
 			updatedModel, cmd := m.authModel.Update(msg)
