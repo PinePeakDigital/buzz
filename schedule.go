@@ -252,7 +252,7 @@ func displayTimeline(slots []timeSlot) {
 
 		// Determine terminal width; fallback to 80 if unavailable
 		width := 80
-		fd := uintptr(os.Stdout.Fd())
+		fd := os.Stdout.Fd()
 		if term.IsTerminal(fd) {
 			if w, _, err := term.GetSize(fd); err == nil && w > 0 {
 				width = w
