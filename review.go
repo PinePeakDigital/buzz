@@ -199,27 +199,6 @@ func formatRate(rate float64, runits, gunits string) string {
 	return fmt.Sprintf("%g/%s", rate, unitName)
 }
 
-// formatDueTime formats the deadline offset (seconds from midnight) as a time string
-// Negative offset means before midnight, positive means after midnight
-func formatDueTime(deadlineOffset int) string {
-	// Calculate hours and minutes from seconds
-	hours := deadlineOffset / 3600
-	minutes := (deadlineOffset % 3600) / 60
-
-	// Handle negative offsets (before midnight)
-	if deadlineOffset < 0 {
-		hours = 24 + hours // Convert to hours before midnight
-		if minutes != 0 {
-			minutes = 60 + minutes
-			hours--
-		}
-	}
-
-	// Create a time at the specified hour and minute
-	t := time.Date(0, 1, 1, hours, minutes, 0, 0, time.UTC)
-	return t.Format("3:04 PM")
-}
-
 // formatGoalDetails formats the goal details in a consistent way for both view and review commands
 func formatGoalDetails(goal *Goal, config *Config, colorStyles map[string]lipgloss.Style) string {
 	var details string
