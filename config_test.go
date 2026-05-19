@@ -499,3 +499,44 @@ func TestLoggingRedactsAuthToken(t *testing.T) {
 		}
 	})
 }
+
+func TestConfigMultiAccountSupport(t *testing.T) {
+	t.Run("unmarshal with accounts and no top-level credentials", func(t *testing.T) {
+		jsonData := `{
+			"accounts":[
+				{"username":"alice","auth_token":"token-a"},
+				{"username":"bob","auth_token":"token-b"}
+			]
+		}`
+
+		var cfg Config
+		if err := json.Unmarshal([]byte(jsonData), &cfg); err != nil {
+			t.Fatalf("Failed to unmarshal config: %v", err)
+		}
+		cfg.ensurePrimaryFromAccounts()
+
+		if cfg.Username != "alice" {
+			t.Fatalf("primary username = %q, want %q", cfg.Username, "alice")
+		}
+		if cfg.AuthToken != "token-a" {
+			t.Fatalf("primary auth token = %q, want %q", cfg.AuthToken, "token-a")
+		}
+		accounts := cfg.accountCredentials()
+		if len(accounts) != 2 {
+			t.Fatalf("accountCredentials length = %d, want 2", len(accounts))
+		}
+	})
+
+	t.Run("display username is generic for multiple accounts", func(t *testing.T) {
+		cfg := &Config{
+			Username:  "alice",
+			AuthToken: "token-a",
+			Accounts: []AccountConfig{
+				{Username: "bob", AuthToken: "token-b"},
+			},
+		}
+		if got := displayUsername(cfg); got != "multiple accounts" {
+			t.Fatalf("displayUsername = %q, want %q", got, "multiple accounts")
+		}
+	})
+}

@@ -11,10 +11,19 @@ import (
 
 // Config holds the Beeminder API credentials
 type Config struct {
+	Username  string          `json:"username"`
+	AuthToken string          `json:"auth_token"`
+	BaseURL   string          `json:"base_url,omitempty"` // Optional base URL for API, defaults to https://www.beeminder.com
+	LogFile   string          `json:"log_file,omitempty"` // Optional path to log file
+	Accounts  []AccountConfig `json:"accounts,omitempty"`
+}
+
+// AccountConfig holds credentials for an additional Beeminder account.
+type AccountConfig struct {
 	Username  string `json:"username"`
 	AuthToken string `json:"auth_token"`
-	BaseURL   string `json:"base_url,omitempty"` // Optional base URL for API, defaults to https://www.beeminder.com
-	LogFile   string `json:"log_file,omitempty"` // Optional path to log file
+	BaseURL   string `json:"base_url,omitempty"`
+	LogFile   string `json:"log_file,omitempty"`
 }
 
 // getConfigPath returns the path to the config file
@@ -52,6 +61,7 @@ func LoadConfig() (*Config, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
+	config.ensurePrimaryFromAccounts()
 
 	return &config, nil
 }
@@ -74,6 +84,86 @@ func SaveConfig(config *Config) error {
 	}
 
 	return nil
+}
+
+// accountCredentials returns all configured accounts, supporting both legacy
+// single-account config and the multi-account "accounts" list.
+func (c *Config) accountCredentials() []Config {
+	if c == nil {
+		return nil
+	}
+
+	var out []Config
+	seen := make(map[string]struct{})
+	appendUnique := func(cfg Config) {
+		if cfg.Username == "" || cfg.AuthToken == "" {
+			return
+		}
+		key := cfg.Username + "|" + cfg.AuthToken + "|" + cfg.BaseURL
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, cfg)
+	}
+
+	appendUnique(Config{
+		Username:  c.Username,
+		AuthToken: c.AuthToken,
+		BaseURL:   c.BaseURL,
+		LogFile:   c.LogFile,
+	})
+
+	for _, account := range c.Accounts {
+		baseURL := account.BaseURL
+		if baseURL == "" {
+			baseURL = c.BaseURL
+		}
+		logFile := account.LogFile
+		if logFile == "" {
+			logFile = c.LogFile
+		}
+		appendUnique(Config{
+			Username:  account.Username,
+			AuthToken: account.AuthToken,
+			BaseURL:   baseURL,
+			LogFile:   logFile,
+		})
+	}
+
+	return out
+}
+
+func (c *Config) hasCredentials() bool {
+	return len(c.accountCredentials()) > 0
+}
+
+func (c *Config) ensurePrimaryFromAccounts() {
+	if c == nil || (c.Username != "" && c.AuthToken != "") {
+		return
+	}
+	accounts := c.accountCredentials()
+	if len(accounts) == 0 {
+		return
+	}
+	c.Username = accounts[0].Username
+	c.AuthToken = accounts[0].AuthToken
+	if c.BaseURL == "" {
+		c.BaseURL = accounts[0].BaseURL
+	}
+	if c.LogFile == "" {
+		c.LogFile = accounts[0].LogFile
+	}
+}
+
+func displayUsername(config *Config) string {
+	if config == nil {
+		return ""
+	}
+	if len(config.accountCredentials()) > 1 {
+		return "multiple accounts"
+	}
+	return config.Username
 }
 
 // getRefreshFlagPath returns the path to the refresh flag file

@@ -78,7 +78,7 @@ func handleViewCommand() {
 
 	// If --web flag is present, open in browser and exit
 	if webFlag {
-		if err := openBrowser(config, goalSlug); err != nil {
+		if err := openBrowserBySlug(context.Background(), config, client, goalSlug); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to open browser: %s\n", redactError(err))
 			os.Exit(1)
 		}

@@ -43,13 +43,39 @@ type HTTPClient struct {
 	http   *http.Client
 }
 
+// MultiClient fans out reads across multiple Beeminder accounts and routes
+// goal-specific operations to the first account where the goal exists.
+type MultiClient struct {
+	clients []Client
+}
+
 // NewHTTPClient returns a Client backed by net/http using credentials in config.
 // The returned value can be assigned to a Client interface variable; downstream
 // code should depend on Client, not *HTTPClient.
-func NewHTTPClient(config *Config) *HTTPClient {
-	return &HTTPClient{
-		config: config,
-		http:   &http.Client{Timeout: httpClientTimeout},
+func NewHTTPClient(config *Config) Client {
+	accounts := config.accountCredentials()
+	if len(accounts) <= 1 {
+		cfg := config
+		if len(accounts) == 1 {
+			account := accounts[0]
+			cfg = &account
+		}
+		return &HTTPClient{
+			config: cfg,
+			http:   &http.Client{Timeout: httpClientTimeout},
+		}
+	}
+
+	clients := make([]Client, 0, len(accounts))
+	for _, account := range accounts {
+		accountCopy := account
+		clients = append(clients, &HTTPClient{
+			config: &accountCopy,
+			http:   &http.Client{Timeout: httpClientTimeout},
+		})
+	}
+	return &MultiClient{
+		clients: clients,
 	}
 }
 
@@ -105,6 +131,11 @@ func (c *HTTPClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	var goals []Goal
 	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
 		return nil, fmt.Errorf("failed to decode goals: %w", err)
+	}
+	for i := range goals {
+		if goals[i].Username == "" {
+			goals[i].Username = c.config.Username
+		}
 	}
 
 	return goals, nil
@@ -264,6 +295,9 @@ func (c *HTTPClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, err
 	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
 		return nil, fmt.Errorf("failed to decode goal: %w", err)
 	}
+	if goal.Username == "" {
+		goal.Username = c.config.Username
+	}
 
 	return &goal, nil
 }
@@ -286,6 +320,9 @@ func (c *HTTPClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug strin
 	var goal Goal
 	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
 		return nil, fmt.Errorf("failed to decode goal details: %w", err)
+	}
+	if goal.Username == "" {
+		goal.Username = c.config.Username
 	}
 
 	return &goal, nil
@@ -353,6 +390,9 @@ func (c *HTTPClient) CreateGoal(ctx context.Context, slug, title, goalType, guni
 	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
 		return nil, fmt.Errorf("failed to decode created goal: %w", err)
 	}
+	if goal.Username == "" {
+		goal.Username = c.config.Username
+	}
 
 	return &goal, nil
 }
@@ -387,6 +427,9 @@ func (c *HTTPClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, de
 	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
 		return nil, fmt.Errorf("failed to decode updated goal: %w", err)
 	}
+	if goal.Username == "" {
+		goal.Username = c.config.Username
+	}
 
 	return &goal, nil
 }
@@ -413,4 +456,180 @@ func (c *HTTPClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, er
 	}
 
 	return result, nil
+}
+
+func isGoalNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "goal not found") || strings.Contains(errStr, "status 404")
+}
+
+func (c *MultiClient) FetchGoals(ctx context.Context) ([]Goal, error) {
+	var allGoals []Goal
+	seen := make(map[string]struct{})
+	for _, client := range c.clients {
+		goals, err := client.FetchGoals(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, goal := range goals {
+			if _, exists := seen[goal.Slug]; exists {
+				continue
+			}
+			seen[goal.Slug] = struct{}{}
+			allGoals = append(allGoals, goal)
+		}
+	}
+	return allGoals, nil
+}
+
+func (c *MultiClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		goal, err := client.FetchGoal(ctx, goalSlug)
+		if err == nil {
+			return goal, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *MultiClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		goal, err := client.FetchGoalWithDatapoints(ctx, goalSlug)
+		if err == nil {
+			return goal, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *MultiClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		raw, err := client.FetchGoalRawJSON(ctx, goalSlug, includeDatapoints)
+		if err == nil {
+			return raw, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *MultiClient) GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		value, err := client.GetLastDatapointValue(ctx, goalSlug)
+		if err == nil {
+			return value, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return 0, lastErr
+}
+
+func (c *MultiClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error {
+	var lastErr error
+	for _, client := range c.clients {
+		err := client.CreateDatapoint(ctx, goalSlug, timestamp, value, comment, requestid)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return lastErr
+}
+
+func (c *MultiClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
+	var lastErr error
+	for _, client := range c.clients {
+		err := client.CreateDatapointWithDaystamp(ctx, goalSlug, timestamp, daystamp, value, comment, requestid)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return lastErr
+}
+
+func (c *MultiClient) CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error) {
+	if len(c.clients) == 0 {
+		return nil, fmt.Errorf("no configured clients")
+	}
+	return c.clients[0].CreateCharge(ctx, amount, note, dryrun)
+}
+
+func (c *MultiClient) CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+	if len(c.clients) == 0 {
+		return nil, fmt.Errorf("no configured clients")
+	}
+	return c.clients[0].CreateGoal(ctx, slug, title, goalType, gunits, goaldate, goalval, rate)
+}
+
+func (c *MultiClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		goal, err := client.CallUncle(ctx, goalSlug)
+		if err == nil {
+			return goal, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *MultiClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		goal, err := client.UpdateGoalDeadline(ctx, goalSlug, deadline)
+		if err == nil {
+			return goal, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *MultiClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, error) {
+	var lastErr error
+	for _, client := range c.clients {
+		queued, err := client.RefreshGoal(ctx, goalSlug)
+		if err == nil {
+			return queued, nil
+		}
+		lastErr = err
+		if isGoalNotFoundError(err) {
+			continue
+		}
+	}
+	return false, lastErr
 }

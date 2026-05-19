@@ -63,11 +63,12 @@ func (m authModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Validate that required fields are present
-			if config.Username == "" || config.AuthToken == "" {
-				m.err = fmt.Errorf("username and auth_token are required")
+			if !config.hasCredentials() {
+				m.err = fmt.Errorf("username and auth_token are required (or provide at least one valid entry in accounts)")
 				m.textInput.SetValue("")
 				return m, nil
 			}
+			config.ensurePrimaryFromAccounts()
 
 			// Save the config
 			if err := SaveConfig(&config); err != nil {

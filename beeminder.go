@@ -7,6 +7,7 @@ import (
 
 // Goal represents a Beeminder goal with relevant fields
 type Goal struct {
+	Username    string                `json:"username,omitempty"`
 	Slug        string                `json:"slug"`
 	Title       string                `json:"title"`
 	Fineprint   string                `json:"fineprint"` // User-provided description of what they're committing to

@@ -107,7 +107,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open current goal in browser
 			if m.current < len(m.goals) {
 				goal := m.goals[m.current]
-				if err := openBrowser(m.config, goal.Slug); err != nil {
+				if err := openBrowser(m.config, &goal); err != nil {
 					m.err = fmt.Sprintf("Failed to open browser: %v", err)
 				} else {
 					m.err = "" // Clear any previous error
@@ -192,10 +192,19 @@ func (m reviewModel) View() string {
 	return view
 }
 
-// openBrowser opens the goal page in the default browser
-func openBrowser(config *Config, goalSlug string) error {
+// openBrowser opens the goal page in the default browser.
+func openBrowser(config *Config, goal *Goal) error {
+	if goal == nil {
+		return fmt.Errorf("goal is required")
+	}
+
+	username := config.Username
+	if goal.Username != "" {
+		username = goal.Username
+	}
+
 	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goalSlug))
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(username), url.PathEscape(goal.Slug))
 
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -210,6 +219,14 @@ func openBrowser(config *Config, goalSlug string) error {
 	}
 
 	return cmd.Start()
+}
+
+func openBrowserBySlug(ctx context.Context, config *Config, client Client, goalSlug string) error {
+	goal, err := client.FetchGoal(ctx, goalSlug)
+	if err != nil {
+		return err
+	}
+	return openBrowser(config, goal)
 }
 
 // formatRate formats the rate with the appropriate time unit and goal units
@@ -282,8 +299,12 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	}
 
 	// Generate and display goal URL
+	username := config.Username
+	if goal.Username != "" {
+		username = goal.Username
+	}
 	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
+	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(username), url.PathEscape(goal.Slug))
 	details += fmt.Sprintf("URL:         %s\n", goalURL)
 
 	// Display fine print if it exists (at the end)
