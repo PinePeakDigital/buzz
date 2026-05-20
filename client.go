@@ -492,10 +492,10 @@ func (c *MultiClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, er
 		if err == nil {
 			return goal, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return nil, err
 		}
+		lastErr = err
 	}
 	return nil, lastErr
 }
@@ -507,10 +507,10 @@ func (c *MultiClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug stri
 		if err == nil {
 			return goal, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return nil, err
 		}
+		lastErr = err
 	}
 	return nil, lastErr
 }
@@ -522,10 +522,10 @@ func (c *MultiClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, inc
 		if err == nil {
 			return raw, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return nil, err
 		}
+		lastErr = err
 	}
 	return nil, lastErr
 }
@@ -537,10 +537,10 @@ func (c *MultiClient) GetLastDatapointValue(ctx context.Context, goalSlug string
 		if err == nil {
 			return value, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return 0, err
 		}
+		lastErr = err
 	}
 	return 0, lastErr
 }
@@ -552,10 +552,10 @@ func (c *MultiClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, 
 		if err == nil {
 			return nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return err
 		}
+		lastErr = err
 	}
 	return lastErr
 }
@@ -567,10 +567,10 @@ func (c *MultiClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug,
 		if err == nil {
 			return nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return err
 		}
+		lastErr = err
 	}
 	return lastErr
 }
@@ -596,10 +596,10 @@ func (c *MultiClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, er
 		if err == nil {
 			return goal, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return nil, err
 		}
+		lastErr = err
 	}
 	return nil, lastErr
 }
@@ -611,10 +611,10 @@ func (c *MultiClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, d
 		if err == nil {
 			return goal, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return nil, err
 		}
+		lastErr = err
 	}
 	return nil, lastErr
 }
@@ -626,10 +626,10 @@ func (c *MultiClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, e
 		if err == nil {
 			return queued, nil
 		}
-		lastErr = err
-		if isGoalNotFoundError(err) {
-			continue
+		if !isGoalNotFoundError(err) {
+			return false, err
 		}
+		lastErr = err
 	}
 	return false, lastErr
 }
