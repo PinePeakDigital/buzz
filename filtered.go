@@ -163,7 +163,12 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		Columns: []Column{
 			{Cell: func(g Goal) string { return g.Slug }},
 			{Cell: func(g Goal) string { return bareminFor(g) }},
-			{Cell: func(g Goal) string { return FormatDueDate(losedateFor(g)) }},
+			{Cell: func(g Goal) string {
+				if IsEndValueReached(g) {
+					return "COMPLETE"
+				}
+				return FormatDueDate(losedateFor(g))
+			}},
 			{Cell: func(g Goal) string { return FormatAbsoluteDeadline(losedateFor(g)) }},
 		},
 	}

@@ -54,6 +54,11 @@ func displayNextGoal() error {
 		return err
 	}
 
+	// Skip goals that have already reached their end value — they have no
+	// remaining work, so surfacing them as "next" would mislead the user into
+	// acting on a completed goal.
+	goals = filterOutEndValueReached(goals)
+
 	// If no goals, return error
 	if len(goals) == 0 {
 		return fmt.Errorf("no goals found")
@@ -63,7 +68,7 @@ func displayNextGoal() error {
 	nextGoal := goals[0]
 
 	// Format the output: "goalslug baremin timeframe"
-	timeframe := FormatDueDate(nextGoal.Losedate)
+	timeframe := FormatGoalDueDate(nextGoal)
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
