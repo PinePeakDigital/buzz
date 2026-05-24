@@ -123,6 +123,21 @@ func FormatDueDate(losedate int64) string {
 	return FormatDueDateAt(losedate, time.Now())
 }
 
+// FormatGoalDueDate is like FormatDueDate but takes a Goal so it can render
+// "COMPLETE" for goals that have reached their end value, instead of the
+// misleading "OVERDUE" indicator a past losedate would otherwise produce.
+func FormatGoalDueDate(g Goal) string {
+	return FormatGoalDueDateAt(g, time.Now())
+}
+
+// FormatGoalDueDateAt is the deterministic-time variant of FormatGoalDueDate.
+func FormatGoalDueDateAt(g Goal, now time.Time) string {
+	if IsEndValueReached(g) {
+		return "COMPLETE"
+	}
+	return FormatDueDateAt(g.Losedate, now)
+}
+
 // FormatDueDateAt formats the losedate timestamp relative to a given time
 func FormatDueDateAt(losedate int64, now time.Time) string {
 	t := time.Unix(losedate, 0)

@@ -61,6 +61,21 @@ type Charge struct {
 	Username string  `json:"username"`
 }
 
+// filterOutEndValueReached returns a new slice containing only goals whose
+// end value has not yet been reached. Used by views that surface "next/most
+// urgent" goals so completed goals (which can show a negative baremin and a
+// past losedate) don't crowd out goals that still need attention.
+func filterOutEndValueReached(goals []Goal) []Goal {
+	out := make([]Goal, 0, len(goals))
+	for _, g := range goals {
+		if IsEndValueReached(g) {
+			continue
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
 // SortGoals sorts goals by: 1. Due ascending, 2. Stakes descending, 3. Name ascending
 func SortGoals(goals []Goal) {
 	sort.Slice(goals, func(i, j int) bool {

@@ -943,6 +943,76 @@ func TestIsEndValueReached(t *testing.T) {
 	}
 }
 
+// TestFilterOutEndValueReached verifies that goals whose end value has been
+// reached are dropped, while goals still requiring work are kept in order.
+func TestFilterOutEndValueReached(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+
+	goals := []Goal{
+		{Slug: "active", Dir: 1, Curval: f(50), Goalval: f(100)},
+		{Slug: "done", Dir: 1, Curval: f(100), Goalval: f(100)},
+		{Slug: "weight-done", Dir: -1, Curval: f(150), Goalval: f(150)},
+		{Slug: "weight-active", Dir: -1, Curval: f(180), Goalval: f(150)},
+	}
+
+	got := filterOutEndValueReached(goals)
+	if len(got) != 2 {
+		t.Fatalf("filterOutEndValueReached returned %d goals, want 2", len(got))
+	}
+	if got[0].Slug != "active" || got[1].Slug != "weight-active" {
+		t.Errorf("filterOutEndValueReached returned unexpected order: %q, %q", got[0].Slug, got[1].Slug)
+	}
+}
+
+// TestFormatGoalDueDateAt verifies that goals which have reached their end
+// value render as "COMPLETE" regardless of how far past their losedate is,
+// while still-active goals fall through to the normal losedate-based render.
+func TestFormatGoalDueDateAt(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-3 * 24 * time.Hour).Unix()
+	future := now.Add(5 * time.Hour).Unix()
+
+	tests := []struct {
+		name     string
+		goal     Goal
+		expected string
+	}{
+		{
+			name:     "end value reached with past losedate renders COMPLETE not OVERDUE",
+			goal:     Goal{Losedate: past, Dir: 1, Curval: f(100), Goalval: f(100)},
+			expected: "COMPLETE",
+		},
+		{
+			name:     "end value reached with future losedate still renders COMPLETE",
+			goal:     Goal{Losedate: future, Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: "COMPLETE",
+		},
+		{
+			name:     "active goal with past losedate still renders OVERDUE",
+			goal:     Goal{Losedate: past, Dir: 1, Curval: f(50), Goalval: f(100)},
+			expected: "OVERDUE",
+		},
+		{
+			name:     "active goal with future losedate renders timeframe",
+			goal:     Goal{Losedate: future, Dir: 1, Curval: f(50), Goalval: f(100)},
+			expected: "5h",
+		},
+		{
+			name:     "do-less goal at cap is not COMPLETE (cap, not endpoint)",
+			goal:     Goal{GoalType: "drinker", Losedate: past, Dir: 1, Curval: f(120), Goalval: f(100)},
+			expected: "OVERDUE",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatGoalDueDateAt(tt.goal, now); got != tt.expected {
+				t.Errorf("FormatGoalDueDateAt = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
 // TestFetchGoalWithMockServer tests FetchGoal function with a mock HTTP server
 func TestFetchGoalWithMockServer(t *testing.T) {
 	// Test case 1: successful fetch
