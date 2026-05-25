@@ -385,16 +385,23 @@ func renderGoalChart(goal Goal, width int) string {
 	now := time.Now()
 
 	if goal.Tmin != "" && goal.Tmax != "" {
+		// Parse in the user's local zone so a datapoint logged on the Tmin
+		// or Tmax calendar day (relative to the user's clock) isn't excluded
+		// just because UTC happens to be hours ahead/behind.
 		var err error
-		startTime, err = time.Parse("2006-01-02", goal.Tmin)
+		startTime, err = time.ParseInLocation("2006-01-02", goal.Tmin, time.Local)
 		if err != nil {
 			// Fallback to last 30 days
 			startTime = now.AddDate(0, 0, -30)
 		}
-		endTime, err = time.Parse("2006-01-02", goal.Tmax)
+		endTime, err = time.ParseInLocation("2006-01-02", goal.Tmax, time.Local)
 		if err != nil {
 			// Fallback to today
 			endTime = now
+		} else {
+			// Tmax is a date, not an instant — include the whole day so a
+			// datapoint logged any time on Tmax falls inside the timeframe.
+			endTime = endTime.Add(24*time.Hour - time.Second)
 		}
 	} else {
 		// Default to last 30 days
@@ -683,17 +690,29 @@ func getRoadValueAtTime(goal Goal, t time.Time) float64 {
 		}
 		curT := *cur[0]
 
+		// Per Beeminder spec, non-anchor rows must have exactly one of
+		// v/r set. Both nil or both set means the row is ambiguous — bail
+		// out at the prior anchor rather than silently picking one
+		// interpretation (matches the validation slope.go does).
+		if (cur[1] == nil) == (cur[2] == nil) {
+			return prevV
+		}
+
 		// Materialise this row's value.
 		var curV float64
 		switch {
 		case cur[1] != nil:
 			curV = *cur[1]
 		case cur[2] != nil:
+			// ratePerDay passes unknown runits through unchanged, so a
+			// per-week rate would otherwise be treated as per-day. Bail
+			// rather than draw a dimensionally-wrong road.
+			if !isKnownRunits(goal.Runits) {
+				return prevV
+			}
 			rate := *cur[2]
 			rps := ratePerDay(rate, goal.Runits) / 86400.0
 			curV = prevV + rps*(curT-prevT)
-		default:
-			return prevV
 		}
 
 		if target <= curT {
@@ -724,6 +743,9 @@ func segmentSlopePerSecond(goal Goal, i int, prevT, prevV float64) (float64, boo
 		return 0, false
 	}
 	if cur[2] != nil {
+		if !isKnownRunits(goal.Runits) {
+			return 0, false
+		}
 		return ratePerDay(*cur[2], goal.Runits) / 86400.0, true
 	}
 	if cur[1] == nil {

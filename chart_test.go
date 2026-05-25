@@ -209,6 +209,109 @@ func TestGetRoadValuesForTimeframe(t *testing.T) {
 	}
 }
 
+func TestGetRoadValueAtTimeShortRoad(t *testing.T) {
+	// Fewer than 2 rows is unusable — the function must short-circuit to 0
+	// rather than deref Roadall[0].
+	if v := getRoadValueAtTime(Goal{}, time.Now()); v != 0 {
+		t.Errorf("empty roadall: expected 0, got %f", v)
+	}
+	single := Goal{Roadall: [][]*float64{roadallRow(0, fptr(5.0), nil)}}
+	if v := getRoadValueAtTime(single, time.Now()); v != 0 {
+		t.Errorf("single-row roadall: expected 0, got %f", v)
+	}
+}
+
+func TestGetRoadValueAtTimePastEndOfRoad(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	goal := Goal{
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), fptr(10.0), nil),
+		},
+	}
+	// Querying 20 days in should return the last materialised value (10).
+	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, 20))
+	if got < 9.9 || got > 10.1 {
+		t.Errorf("past end of road: expected ~10, got %f", got)
+	}
+}
+
+func TestGetRoadValueAtTimeBeforeAnchor(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Anchor at v=0; rate-only segment 10 days later at 1/day.
+	goal := Goal{
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), nil, fptr(1.0)),
+		},
+	}
+	// Five days before the anchor → extrapolate at -1/day → ~-5.
+	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, -5))
+	if got < -5.1 || got > -4.9 {
+		t.Errorf("before anchor extrapolation: expected ~-5, got %f", got)
+	}
+}
+
+func TestGetRoadValueAtTimeUnknownRunits(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Rate-only segment with unrecognised runits → the function must bail
+	// rather than treat the rate as gunits/day.
+	goal := Goal{
+		Runits: "lightyears",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), nil, fptr(1.0)),
+		},
+	}
+	// Should return prevV (0) at any point past the anchor, not the
+	// dimensionally-wrong extrapolation.
+	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, 5))
+	if got != 0 {
+		t.Errorf("unknown runits: expected 0 (bail), got %f", got)
+	}
+}
+
+func TestGetRoadValueAtTimeAmbiguousRow(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Non-anchor row with both v and r set is ambiguous per Beeminder
+	// spec; the walker must bail to the prior anchor (0) rather than
+	// silently pick one interpretation.
+	goal := Goal{
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), fptr(10.0), fptr(1.0)),
+		},
+	}
+	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, 5))
+	if got != 0 {
+		t.Errorf("ambiguous row: expected prior anchor value 0, got %f", got)
+	}
+}
+
+func TestGetRoadValuesForTimeframeSinglePoint(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	endTime := baseTime.AddDate(0, 0, 10)
+	goal := Goal{
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(endTime.Unix()), fptr(10.0), nil),
+		},
+	}
+	// numPoints==1 used to divide by (numPoints-1) and produce NaN; the
+	// guard returns a single sample at startTime instead.
+	values := getRoadValuesForTimeframe(goal, baseTime.AddDate(0, 0, 5), endTime, 1)
+	if len(values) != 1 {
+		t.Fatalf("expected 1 value, got %d", len(values))
+	}
+	if values[0] < 4.9 || values[0] > 5.1 {
+		t.Errorf("numPoints=1 sample: expected ~5, got %f", values[0])
+	}
+}
+
 func TestGetRoadValuesForTimeframeEmpty(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	endTime := baseTime.AddDate(0, 0, 10)

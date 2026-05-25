@@ -69,6 +69,57 @@ func TestReviewModelInit(t *testing.T) {
 	}
 }
 
+func TestInitialReviewModelLoadingFlag(t *testing.T) {
+	config := &Config{Username: "u", AuthToken: "t"}
+
+	// With goals: the initial fetch is in flight, so the spinner should
+	// show on the first frame.
+	withGoals := initialReviewModel([]Goal{{Slug: "g"}}, config)
+	if !withGoals.loading {
+		t.Error("expected loading=true when there are goals to fetch")
+	}
+
+	// Without goals: nothing to fetch, no spinner.
+	empty := initialReviewModel(nil, config)
+	if empty.loading {
+		t.Error("expected loading=false when there are no goals")
+	}
+}
+
+func TestReviewModelGoalDetailsFetchedSuccess(t *testing.T) {
+	goals := []Goal{{Slug: "g"}}
+	m := initialReviewModel(goals, &Config{Username: "u", AuthToken: "t"})
+
+	fetched := &Goal{Slug: "g", Title: "Hydrated"}
+	updated, _ := m.Update(goalDetailsFetchedMsg{slug: "g", goal: fetched})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading=false after fetch resolves")
+	}
+	if got, ok := m.detailedGoals["g"]; !ok || got.Title != "Hydrated" {
+		t.Errorf("expected detailedGoals[g] to be the fetched goal, got %+v (present=%v)", got, ok)
+	}
+	if m.err != "" {
+		t.Errorf("expected err cleared on success, got %q", m.err)
+	}
+}
+
+func TestReviewModelGoalDetailsFetchedError(t *testing.T) {
+	goals := []Goal{{Slug: "g"}}
+	m := initialReviewModel(goals, &Config{Username: "u", AuthToken: "t"})
+
+	updated, _ := m.Update(goalDetailsFetchedMsg{slug: "g", err: fmt.Errorf("boom")})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading=false even on fetch error")
+	}
+	if !strings.Contains(m.err, "Failed to load goal details") {
+		t.Errorf("expected err to mention 'Failed to load goal details', got %q", m.err)
+	}
+}
+
 func TestReviewModelNavigationForward(t *testing.T) {
 	goals := []Goal{
 		{Slug: "goal1", Title: "First Goal"},
