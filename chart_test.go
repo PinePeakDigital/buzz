@@ -262,6 +262,25 @@ func TestGetRoadValueAtTimePastEndOfRoad(t *testing.T) {
 	}
 }
 
+func TestGetRoadValueAtTimeBeforeAnchorAmbiguousRow(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Row 1 has both v and r set (malformed per spec). The before-anchor
+	// branch calls segmentSlopePerSecond, which must bail on the
+	// ambiguous row rather than extrapolate from one interpretation —
+	// matching the in-road check getRoadValueAtTime does.
+	goal := Goal{
+		Runits: "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), fptr(10.0), fptr(1.0)),
+		},
+	}
+	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, -5))
+	if got != 0 {
+		t.Errorf("before-anchor ambiguous row: expected 0 (anchor value), got %f", got)
+	}
+}
+
 func TestGetRoadValueAtTimeBeforeAnchorUnknownRunits(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	// Same shape as the backward-extrapolation test, but with runits
