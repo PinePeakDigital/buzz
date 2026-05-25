@@ -614,7 +614,8 @@ func renderGoalChart(goal Goal, width int) string {
 	return chart.String()
 }
 
-// getRoadValuesForTimeframe calculates road values for each datapoint timestamp
+// getRoadValuesForTimeframe calculates road values for evenly distributed
+// points across the timeframe — one per chart column.
 func getRoadValuesForTimeframe(goal Goal, startTime, endTime time.Time, numPoints int) []float64 {
 	values := make([]float64, numPoints)
 
