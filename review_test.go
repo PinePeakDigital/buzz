@@ -89,6 +89,9 @@ func TestInitialReviewModelLoadingFlag(t *testing.T) {
 func TestReviewModelGoalDetailsFetchedSuccess(t *testing.T) {
 	goals := []Goal{{Slug: "g"}}
 	m := initialReviewModel(goals, &Config{Username: "u", AuthToken: "t"})
+	// Seed a stale error so the success-clears-err assertion below is
+	// meaningful — initialReviewModel never sets err itself.
+	m.err = "prior failure"
 
 	fetched := &Goal{Slug: "g", Title: "Hydrated"}
 	updated, _ := m.Update(goalDetailsFetchedMsg{slug: "g", goal: fetched})

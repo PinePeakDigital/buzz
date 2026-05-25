@@ -742,14 +742,17 @@ func segmentSlopePerSecond(goal Goal, i int, prevT, prevV float64) (float64, boo
 	if len(cur) < 3 || cur[0] == nil {
 		return 0, false
 	}
+	// Ambiguous rows (both v/r nil or both set) are malformed per the
+	// Beeminder spec — bail rather than picking an interpretation. Mirrors
+	// the check getRoadValueAtTime does on the in-road path.
+	if (cur[1] == nil) == (cur[2] == nil) {
+		return 0, false
+	}
 	if cur[2] != nil {
 		if !isKnownRunits(goal.Runits) {
 			return 0, false
 		}
 		return ratePerDay(*cur[2], goal.Runits) / 86400.0, true
-	}
-	if cur[1] == nil {
-		return 0, false
 	}
 	dt := *cur[0] - prevT
 	if dt == 0 {

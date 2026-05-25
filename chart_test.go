@@ -135,6 +135,31 @@ func TestRenderGoalChartDoLess(t *testing.T) {
 	}
 }
 
+func TestRenderGoalChartIncludesEndOfTmaxDay(t *testing.T) {
+	// Regression test for the Tmin/Tmax timezone shift: Tmax is a date,
+	// not an instant, so a datapoint logged late on the user's local
+	// Tmax day must still fall inside the chart timeframe. Before the
+	// fix, time.Parse anchored endTime to 00:00 UTC and any local-time
+	// datapoint on the Tmax day was excluded.
+	tmax := time.Date(2024, 1, 15, 0, 0, 0, 0, time.Local)
+	dpTime := time.Date(2024, 1, 15, 23, 30, 0, 0, time.Local)
+
+	goal := Goal{
+		Slug: "boundary",
+		Yaw:  1,
+		Tmin: tmax.AddDate(0, 0, -7).Format("2006-01-02"),
+		Tmax: tmax.Format("2006-01-02"),
+		Datapoints: []Datapoint{
+			{Timestamp: dpTime.Unix(), Value: 1.0},
+		},
+	}
+
+	chart := renderGoalChart(goal, 80)
+	if chart == "" {
+		t.Error("expected datapoint at 23:30 local on Tmax to be included; chart is empty")
+	}
+}
+
 func TestRenderGoalChartWithFallbackTimeframe(t *testing.T) {
 	now := time.Now()
 	thirtyDaysAgo := now.AddDate(0, 0, -30)
@@ -234,6 +259,25 @@ func TestGetRoadValueAtTimePastEndOfRoad(t *testing.T) {
 	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, 20))
 	if got < 9.9 || got > 10.1 {
 		t.Errorf("past end of road: expected ~10, got %f", got)
+	}
+}
+
+func TestGetRoadValueAtTimeBeforeAnchorUnknownRunits(t *testing.T) {
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Same shape as the backward-extrapolation test, but with runits
+	// segmentSlopePerSecond can't translate. The before-anchor branch
+	// must bail (returning the anchor value) rather than apply a
+	// dimensionally-wrong slope.
+	goal := Goal{
+		Runits: "lightyears",
+		Roadall: [][]*float64{
+			roadallRow(float64(baseTime.Unix()), fptr(0.0), nil),
+			roadallRow(float64(baseTime.AddDate(0, 0, 10).Unix()), nil, fptr(1.0)),
+		},
+	}
+	got := getRoadValueAtTime(goal, baseTime.AddDate(0, 0, -5))
+	if got != 0 {
+		t.Errorf("before-anchor unknown runits: expected 0 (anchor value), got %f", got)
 	}
 }
 
