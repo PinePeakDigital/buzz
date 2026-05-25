@@ -67,13 +67,17 @@ type reviewModel struct {
 	loading       bool   // whether we're currently loading goal details
 }
 
-// initialReviewModel creates a new review model
+// initialReviewModel creates a new review model. `loading` starts true when
+// there are goals to fetch so the loading indicator shows on the very first
+// frame; `Init` then dispatches the fetch and `goalDetailsFetchedMsg` clears
+// the flag.
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
 	return reviewModel{
 		goals:         goals,
 		detailedGoals: make(map[string]*Goal),
 		config:        config,
 		current:       0,
+		loading:       len(goals) > 0,
 	}
 }
 
