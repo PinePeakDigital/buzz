@@ -87,7 +87,8 @@ type goalDetailsFetchedMsg struct {
 // fetchGoalDetailsCmd fetches full details for a goal
 func fetchGoalDetailsCmd(config *Config, slug string) tea.Cmd {
 	return func() tea.Msg {
-		goal, err := FetchGoalWithDatapoints(config, slug)
+		client := NewHTTPClient(config)
+		goal, err := client.FetchGoalWithDatapoints(context.Background(), slug)
 		return goalDetailsFetchedMsg{
 			slug: slug,
 			goal: goal,
