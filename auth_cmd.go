@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -47,14 +48,29 @@ func handleAuthLoginCommand() {
 	fmt.Println(`Format: {"username":"your_username","auth_token":"your_token"}`)
 	fmt.Print("> ")
 
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	// ReadString returns io.EOF along with any data read before the stream
-	// ended (e.g. piped input with no trailing newline). Only treat it as a
-	// failure when nothing was read at all.
-	if err != nil && input == "" {
-		fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
-		os.Exit(1)
+	// When stdin is piped (not a terminal), read the whole stream so
+	// pretty-printed/multiline JSON survives intact. For an interactive
+	// terminal, read a single line so the prompt returns as soon as the user
+	// pastes their one-line credentials and presses Enter (reading to EOF
+	// would instead block until Ctrl+D).
+	var input string
+	if fi, statErr := os.Stdin.Stat(); statErr == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
+			os.Exit(1)
+		}
+		input = string(b)
+	} else {
+		// ReadString returns io.EOF along with any data read before the stream
+		// ended (e.g. piped input with no trailing newline). Only treat it as a
+		// failure when nothing was read at all.
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && line == "" {
+			fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
+			os.Exit(1)
+		}
+		input = line
 	}
 
 	if _, err := parseAndSaveCredentials(input); err != nil {
