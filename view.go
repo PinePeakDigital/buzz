@@ -64,7 +64,7 @@ func handleViewCommand() {
 
 	// Load config
 	if !ConfigExists() {
-		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz' first to authenticate.")
+		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz auth login' to authenticate.")
 		os.Exit(1)
 	}
 

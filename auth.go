@@ -3,10 +3,43 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// parseAndSaveCredentials parses a JSON Beeminder credentials blob, validates
+// that the required fields are present, and persists it to the config file. It
+// is shared by the interactive TUI auth screen and the `buzz auth login`
+// command so both accept identical input and report identical errors.
+func parseAndSaveCredentials(input string) (*Config, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil, fmt.Errorf("please enter your credentials")
+	}
+
+	var config Config
+	if err := json.Unmarshal([]byte(input), &config); err != nil {
+		return nil, fmt.Errorf("invalid JSON format: %w", err)
+	}
+
+	// Validate that required fields are present. Trim first so whitespace-only
+	// values (e.g. "username":"   ") are rejected rather than persisted, and
+	// store the trimmed values so stray surrounding whitespace never reaches
+	// the API.
+	config.Username = strings.TrimSpace(config.Username)
+	config.AuthToken = strings.TrimSpace(config.AuthToken)
+	if config.Username == "" || config.AuthToken == "" {
+		return nil, fmt.Errorf("username and auth_token are required")
+	}
+
+	if err := SaveConfig(&config); err != nil {
+		return nil, fmt.Errorf("failed to save config: %w", err)
+	}
+
+	return &config, nil
+}
 
 type authModel struct {
 	textInput textinput.Model
@@ -48,30 +81,9 @@ func (m authModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			// Try to parse and save the credentials
-			input := m.textInput.Value()
-			if input == "" {
-				m.err = fmt.Errorf("please enter your credentials")
-				m.textInput.SetValue("")
-				return m, nil
-			}
-
-			var config Config
-			if err := json.Unmarshal([]byte(input), &config); err != nil {
-				m.err = fmt.Errorf("invalid JSON format: %v", err)
-				m.textInput.SetValue("")
-				return m, nil
-			}
-
-			// Validate that required fields are present
-			if config.Username == "" || config.AuthToken == "" {
-				m.err = fmt.Errorf("username and auth_token are required")
-				m.textInput.SetValue("")
-				return m, nil
-			}
-
-			// Save the config
-			if err := SaveConfig(&config); err != nil {
-				m.err = fmt.Errorf("failed to save config: %v", err)
+			config, err := parseAndSaveCredentials(m.textInput.Value())
+			if err != nil {
+				m.err = err
 				m.textInput.SetValue("")
 				return m, nil
 			}
@@ -79,7 +91,7 @@ func (m authModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Signal success
 			m.success = true
 			return m, func() tea.Msg {
-				return authSuccessMsg{config: &config}
+				return authSuccessMsg{config: config}
 			}
 		}
 	}

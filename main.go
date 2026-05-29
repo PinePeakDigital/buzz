@@ -52,6 +52,7 @@ func printHelp() {
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
 	fmt.Println("  buzz uncle [-y|--yes] <goalslug>  Instantly derail a goal that is in the red, paying the pledge")
 	fmt.Println("                                    -y, --yes: Skip the confirmation prompt")
+	fmt.Println("  buzz auth login                   Authenticate by pasting your Beeminder API credentials")
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
@@ -141,6 +142,9 @@ func main() {
 		case "uncle":
 			handleUncleCommand()
 			return
+		case "auth":
+			handleAuthCommand()
+			return
 		case "help", "-h", "--help":
 			printHelp()
 			return
@@ -149,7 +153,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, uncle, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, uncle, auth, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
@@ -175,7 +179,7 @@ func main() {
 // commands use it.
 func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 	if !ConfigExists() {
-		return nil, nil, nil, fmt.Errorf("no configuration found. Please run 'buzz' first to authenticate")
+		return nil, nil, nil, fmt.Errorf("no configuration found. Please run 'buzz auth login' to authenticate")
 	}
 
 	config, err := LoadConfig()

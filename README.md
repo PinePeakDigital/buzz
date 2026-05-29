@@ -65,14 +65,16 @@ go install github.com/pinepeakdigital/buzz@latest
 
 ## Authentication
 
-On first run, you'll be prompted to authenticate with Beeminder:
+The first time you launch the interactive TUI (`buzz` with no arguments), you'll be prompted to authenticate with Beeminder. You can also authenticate explicitly at any time with `buzz auth login`, which is what the other subcommands (`buzz today`, `buzz next`, etc.) will point you to if no credentials are found.
+
+Either way, the steps are the same:
 
 1. Visit https://www.beeminder.com/api/v1/auth_token.json to get your credentials
 2. Copy the JSON output (format: `{"username":"your_username","auth_token":"your_token"}`)
-3. Paste it into the application when prompted
+3. Paste it in when prompted
 4. Press Enter to save
 
-Your credentials will be stored securely in `~/.buzzrc` with read/write permissions for your user only.
+Credentials are read interactively (not as command-line arguments), so your auth token stays out of your shell history. They're stored in `~/.buzzrc` with read/write permissions for your user only.
 
 ## Configuration
 
@@ -379,6 +381,14 @@ This launches an interactive interface that displays one goal at a time, allowin
   - **Quit:** `q` or `Esc`
 - See your progress through the list with a goal counter (e.g., "Goal 1 of 10")
 - Goals are color-coded based on urgency (same as the main TUI)
+
+**buzz auth login** - Authenticate with Beeminder:
+
+```bash
+buzz auth login
+```
+
+Prompts you to paste your Beeminder API credentials (read interactively from stdin, so your token stays out of shell history) and saves them to `~/.buzzrc`. The interactive TUI auto-prompts for these on first run, so you typically only need this command to re-authenticate or when a subcommand reports that no configuration was found. See [Authentication](#authentication) for the credential format. Piped input (`buzz auth login < creds.json`) is also supported for scripting.
 
 Running `buzz` without arguments launches the interactive TUI.
 
