@@ -29,8 +29,8 @@ func handleReviewCommand() {
 
 	client := NewHTTPClient(config)
 
-	// Fetch goals
-	goals, err := client.FetchGoals(context.Background())
+	// Fetch goals with their recent datapoints
+	goals, err := client.FetchGoalsWithDatapoints(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
@@ -236,6 +236,56 @@ func formatRate(rate float64, runits, gunits string) string {
 	return fmt.Sprintf("%g/%s", rate, unitName)
 }
 
+// formatRecentDatapoints formats up to 5 of the most recent datapoints for
+// display, most recent first, in aligned date / value / comment columns.
+// The Beeminder API returns datapoints oldest-first, so the most recent ones
+// are at the end of the slice.
+func formatRecentDatapoints(datapoints []Datapoint) string {
+	if len(datapoints) == 0 {
+		return ""
+	}
+
+	count := 5
+	if len(datapoints) < count {
+		count = len(datapoints)
+	}
+
+	type row struct {
+		date    string
+		value   string
+		comment string
+	}
+
+	rows := make([]row, 0, count)
+	maxValueLen := 0
+	for i := len(datapoints) - 1; i >= len(datapoints)-count; i-- {
+		dp := datapoints[i]
+		var dateStr string
+		if len(dp.Daystamp) == 8 {
+			// Daystamp avoids timezone drift: "20241217" -> "2024-12-17".
+			dateStr = dp.Daystamp[:4] + "-" + dp.Daystamp[4:6] + "-" + dp.Daystamp[6:8]
+		} else {
+			dateStr = time.Unix(dp.Timestamp, 0).UTC().Format("2006-01-02")
+		}
+		valueStr := fmt.Sprintf("%.6g", dp.Value)
+		if len(valueStr) > maxValueLen {
+			maxValueLen = len(valueStr)
+		}
+		rows = append(rows, row{date: dateStr, value: valueStr, comment: dp.Comment})
+	}
+
+	output := "\nRecent datapoints:\n"
+	for _, r := range rows {
+		if r.comment != "" {
+			output += fmt.Sprintf("  %s   %-*s   %s\n", r.date, maxValueLen, r.value, r.comment)
+		} else {
+			output += fmt.Sprintf("  %s   %s\n", r.date, r.value)
+		}
+	}
+
+	return output
+}
+
 // formatGoalDetails formats the goal details in a consistent way for both view and review commands
 func formatGoalDetails(goal *Goal, config *Config) string {
 	var details string
@@ -289,6 +339,11 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	// Display fine print if it exists (at the end)
 	if goal.Fineprint != "" {
 		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
+	}
+
+	// Display recent datapoints if available
+	if len(goal.Datapoints) > 0 {
+		details += formatRecentDatapoints(goal.Datapoints)
 	}
 
 	return details

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -2309,5 +2310,152 @@ func TestHTTPClientCancellation(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("FetchGoals err = %v, want it to wrap context.Canceled", err)
+	}
+}
+
+// fetchGoalsWithDatapointsServer returns a mock server that serves a goals list
+// and per-goal detail responses with datapoints. Slugs in failSlugs return 500
+// from their detail endpoint to exercise partial-failure handling.
+func fetchGoalsWithDatapointsServer(t *testing.T, slugs []string, failSlugs map[string]bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Goals list endpoint
+		if strings.HasSuffix(r.URL.Path, "/goals.json") {
+			goals := make([]Goal, len(slugs))
+			for i, s := range slugs {
+				goals[i] = Goal{Slug: s, Title: s}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goals)
+			return
+		}
+
+		// Per-goal detail endpoint: /api/v1/users/testuser/goals/<slug>.json
+		for _, s := range slugs {
+			if strings.Contains(r.URL.Path, "/goals/"+s+".json") {
+				if failSlugs[s] {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				goal := Goal{
+					Slug: s,
+					Datapoints: []Datapoint{
+						{ID: s + "-1", Daystamp: "20210101", Value: 1, Comment: s + " dp"},
+					},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(goal)
+				return
+			}
+		}
+
+		t.Errorf("Unexpected URL path: %s", r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+}
+
+func TestFetchGoalsWithDatapoints(t *testing.T) {
+	slugs := []string{"alpha", "beta", "gamma"}
+	server := fetchGoalsWithDatapointsServer(t, slugs, nil)
+	defer server.Close()
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: server.URL}
+
+	goals, err := NewHTTPClient(config).FetchGoalsWithDatapoints(context.Background())
+	if err != nil {
+		t.Fatalf("FetchGoalsWithDatapoints failed: %v", err)
+	}
+	if len(goals) != len(slugs) {
+		t.Fatalf("expected %d goals, got %d", len(slugs), len(goals))
+	}
+	for _, g := range goals {
+		if len(g.Datapoints) != 1 {
+			t.Errorf("goal %q: expected 1 datapoint, got %d", g.Slug, len(g.Datapoints))
+			continue
+		}
+		if g.Datapoints[0].Comment != g.Slug+" dp" {
+			t.Errorf("goal %q: datapoint not populated correctly: %+v", g.Slug, g.Datapoints[0])
+		}
+	}
+}
+
+func TestFetchGoalsWithDatapointsPartialFailure(t *testing.T) {
+	slugs := []string{"alpha", "beta", "gamma"}
+	// beta's detail endpoint fails; the others must still succeed.
+	server := fetchGoalsWithDatapointsServer(t, slugs, map[string]bool{"beta": true})
+	defer server.Close()
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: server.URL}
+
+	goals, err := NewHTTPClient(config).FetchGoalsWithDatapoints(context.Background())
+	if err != nil {
+		t.Fatalf("expected partial failure to be non-fatal, got error: %v", err)
+	}
+	if len(goals) != len(slugs) {
+		t.Fatalf("expected %d goals, got %d", len(slugs), len(goals))
+	}
+
+	byslug := make(map[string]Goal, len(goals))
+	for _, g := range goals {
+		byslug[g.Slug] = g
+	}
+	if len(byslug["beta"].Datapoints) != 0 {
+		t.Errorf("expected failed goal 'beta' to have no datapoints, got %d", len(byslug["beta"].Datapoints))
+	}
+	for _, s := range []string{"alpha", "gamma"} {
+		if len(byslug[s].Datapoints) != 1 {
+			t.Errorf("expected goal %q to still have its datapoint despite beta failing, got %d", s, len(byslug[s].Datapoints))
+		}
+	}
+}
+
+func TestFetchGoalsWithDatapointsFetchGoalsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: server.URL}
+
+	_, err := NewHTTPClient(config).FetchGoalsWithDatapoints(context.Background())
+	if err == nil {
+		t.Fatal("expected error when the goals list fetch fails, got nil")
+	}
+}
+
+// Ensure the worker-pool fan-out fetches every goal's datapoints even when the
+// goal count exceeds the worker pool size.
+func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
+	slugs := []string{"g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9", "g10", "g11"}
+	var detailCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/goals.json") {
+			goals := make([]Goal, len(slugs))
+			for i, s := range slugs {
+				goals[i] = Goal{Slug: s}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goals)
+			return
+		}
+		detailCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Goal{Datapoints: []Datapoint{{ID: "1", Value: 1}}})
+	}))
+	defer server.Close()
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: server.URL}
+
+	goals, err := NewHTTPClient(config).FetchGoalsWithDatapoints(context.Background())
+	if err != nil {
+		t.Fatalf("FetchGoalsWithDatapoints failed: %v", err)
+	}
+	if got := int(detailCalls.Load()); got != len(slugs) {
+		t.Errorf("expected one detail fetch per goal (%d), got %d", len(slugs), got)
+	}
+	for _, g := range goals {
+		if len(g.Datapoints) != 1 {
+			t.Errorf("goal %q missing datapoints", g.Slug)
+		}
 	}
 }
