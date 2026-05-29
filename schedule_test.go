@@ -9,23 +9,25 @@ import (
 
 // TestExtractTimeSlots tests the extraction and grouping of time slots from goals
 func TestExtractTimeSlots(t *testing.T) {
-	// Create test goals with different deadline times
+	// Create test goals with different deadline times. extractTimeSlots converts
+	// losedate to local time, so the fixtures are built in time.Local too; this
+	// keeps the asserted hour/minute correct regardless of the machine's timezone.
 	goals := []Goal{
 		{
 			Slug:     "goal1",
-			Losedate: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC).Unix(),
+			Losedate: time.Date(2024, 1, 15, 10, 30, 0, 0, time.Local).Unix(),
 		},
 		{
 			Slug:     "goal2",
-			Losedate: time.Date(2024, 1, 16, 10, 30, 0, 0, time.UTC).Unix(), // Same time as goal1
+			Losedate: time.Date(2024, 1, 16, 10, 30, 0, 0, time.Local).Unix(), // Same time as goal1
 		},
 		{
 			Slug:     "goal3",
-			Losedate: time.Date(2024, 1, 17, 15, 45, 0, 0, time.UTC).Unix(),
+			Losedate: time.Date(2024, 1, 17, 15, 45, 0, 0, time.Local).Unix(),
 		},
 		{
 			Slug:     "goal4",
-			Losedate: time.Date(2024, 1, 18, 6, 0, 0, 0, time.UTC).Unix(),
+			Losedate: time.Date(2024, 1, 18, 6, 0, 0, 0, time.Local).Unix(),
 		},
 	}
 
@@ -90,18 +92,20 @@ func TestExtractTimeSlotsEmpty(t *testing.T) {
 
 // TestExtractTimeSlotsAcrossDates tests that goals on different dates with same time are grouped together
 func TestExtractTimeSlotsAcrossDates(t *testing.T) {
+	// Fixtures built in time.Local so the asserted slot time is timezone-independent
+	// (extractTimeSlots groups by the deadline's local hour/minute).
 	goals := []Goal{
 		{
 			Slug:     "goal1",
-			Losedate: time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC).Unix(),
+			Losedate: time.Date(2024, 1, 15, 14, 30, 0, 0, time.Local).Unix(),
 		},
 		{
 			Slug:     "goal2",
-			Losedate: time.Date(2024, 2, 20, 14, 30, 0, 0, time.UTC).Unix(), // Different date, same time
+			Losedate: time.Date(2024, 2, 20, 14, 30, 0, 0, time.Local).Unix(), // Different date, same time
 		},
 		{
 			Slug:     "goal3",
-			Losedate: time.Date(2024, 3, 10, 14, 30, 0, 0, time.UTC).Unix(), // Different date, same time
+			Losedate: time.Date(2024, 3, 10, 14, 30, 0, 0, time.Local).Unix(), // Different date, same time
 		},
 	}
 

@@ -395,8 +395,10 @@ func validateDatapointInput(inputDate, inputValue string) string {
 		return "Value cannot be empty"
 	}
 
-	// Parse and validate date
-	date, err := time.Parse("2006-01-02", inputDate)
+	// Parse and validate date. Interpret the calendar date in local time so the
+	// comparison below against the local time.Now() is timezone-consistent
+	// (parsing without a location would assume UTC and shift the boundary).
+	date, err := time.ParseInLocation("2006-01-02", inputDate, time.Local)
 	if err != nil {
 		return "Invalid date format (use YYYY-MM-DD)"
 	}
@@ -513,8 +515,10 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Parse date to get timestamp
-		date, _ := time.Parse("2006-01-02", m.appModel.inputDate)
+		// Parse date to get timestamp. Interpret the entered calendar date in
+		// local time (matching validateDatapointInput) so the datapoint lands on
+		// the day the user intended rather than being shifted by the UTC offset.
+		date, _ := time.ParseInLocation("2006-01-02", m.appModel.inputDate, time.Local)
 		timestamp := fmt.Sprintf("%d", date.Unix())
 
 		// Set submitting state and submit datapoint asynchronously
