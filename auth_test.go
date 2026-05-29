@@ -77,4 +77,30 @@ func TestParseAndSaveCredentials(t *testing.T) {
 			t.Error("config should not be written when required fields are missing")
 		}
 	})
+
+	t.Run("rejects whitespace-only required fields", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+
+		if _, err := parseAndSaveCredentials(`{"username":"   ","auth_token":"secret"}`); err == nil {
+			t.Error("expected error for whitespace-only username")
+		}
+		if _, err := parseAndSaveCredentials(`{"username":"alice","auth_token":"\t"}`); err == nil {
+			t.Error("expected error for whitespace-only auth_token")
+		}
+		if ConfigExists() {
+			t.Error("config should not be written for whitespace-only fields")
+		}
+	})
+
+	t.Run("trims surrounding whitespace from saved fields", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+
+		config, err := parseAndSaveCredentials(`{"username":"  alice  ","auth_token":" secret "}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if config.Username != "alice" || config.AuthToken != "secret" {
+			t.Errorf("got %+v, want trimmed username=alice auth_token=secret", config)
+		}
+	})
 }

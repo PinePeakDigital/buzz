@@ -21,16 +21,21 @@ func parseAndSaveCredentials(input string) (*Config, error) {
 
 	var config Config
 	if err := json.Unmarshal([]byte(input), &config); err != nil {
-		return nil, fmt.Errorf("invalid JSON format: %v", err)
+		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
 
-	// Validate that required fields are present
+	// Validate that required fields are present. Trim first so whitespace-only
+	// values (e.g. "username":"   ") are rejected rather than persisted, and
+	// store the trimmed values so stray surrounding whitespace never reaches
+	// the API.
+	config.Username = strings.TrimSpace(config.Username)
+	config.AuthToken = strings.TrimSpace(config.AuthToken)
 	if config.Username == "" || config.AuthToken == "" {
 		return nil, fmt.Errorf("username and auth_token are required")
 	}
 
 	if err := SaveConfig(&config); err != nil {
-		return nil, fmt.Errorf("failed to save config: %v", err)
+		return nil, fmt.Errorf("failed to save config: %w", err)
 	}
 
 	return &config, nil
