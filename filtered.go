@@ -115,7 +115,7 @@ func sortGoalsByDisplayedLosedate(goals []Goal, losedateFor func(Goal) int64) {
 func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool, bareminFor func(Goal) string, losedateFor func(Goal) int64) {
 	// Load config
 	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz' first to authenticate.")
+		fmt.Println("Error: No configuration found. Please run 'buzz auth login' to authenticate.")
 		os.Exit(1)
 	}
 
