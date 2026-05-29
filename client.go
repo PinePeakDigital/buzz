@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -289,6 +290,46 @@ func (c *HTTPClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug strin
 	}
 
 	return &goal, nil
+}
+
+// FetchGoalsWithDatapoints fetches the user's goals and populates the recent
+// datapoints for each one. Datapoints are fetched concurrently with a bounded
+// worker pool to keep the N+1 round trips fast for users with many goals.
+// A per-goal fetch failure is non-fatal: that goal is returned without
+// datapoints rather than aborting the whole operation.
+func (c *HTTPClient) FetchGoalsWithDatapoints(ctx context.Context) ([]Goal, error) {
+	goals, err := c.FetchGoals(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const maxWorkers = 5
+	goalsChan := make(chan int, maxWorkers)
+	var wg sync.WaitGroup
+
+	for w := 0; w < maxWorkers && w < len(goals); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range goalsChan {
+				goalWithDatapoints, err := c.FetchGoalWithDatapoints(ctx, goals[i].Slug)
+				if err != nil {
+					// Leave this goal without datapoints rather than
+					// failing the entire review.
+					continue
+				}
+				goals[i].Datapoints = goalWithDatapoints.Datapoints
+			}
+		}()
+	}
+
+	for i := range goals {
+		goalsChan <- i
+	}
+	close(goalsChan)
+	wg.Wait()
+
+	return goals, nil
 }
 
 // FetchGoalRawJSON fetches a goal and returns the raw JSON response.

@@ -108,8 +108,8 @@ func handleViewCommand() {
 		fmt.Fprintln(os.Stderr, "Warning: --datapoints flag has no effect without --json")
 	}
 
-	// Fetch the goal for human-readable output
-	goal, err := client.FetchGoal(context.Background(), goalSlug)
+	// Fetch the goal with datapoints for human-readable output
+	goal, err := client.FetchGoalWithDatapoints(context.Background(), goalSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
