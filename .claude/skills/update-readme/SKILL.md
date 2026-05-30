@@ -34,8 +34,10 @@ cat README.md
 Identify what the app actually exposes today:
 
 ```bash
-# CLI subcommands and flags
-grep -nE 'flag\.(String|Bool|Int)|cobra\.Command|case "' main.go *.go
+# CLI subcommands and flags. Flags are defined via flag.NewFlagSet(...) and then
+# <flagSet>.Bool/String/Int(...) (e.g. nextFlags.Bool("watch", ...)), so match the
+# FlagSet constructor and its method calls — a `flag.String(...)` search misses them.
+grep -nE 'flag\.NewFlagSet|\.(Bool|String|Int|Int64|Uint|Float64|Duration)\("|case "' main.go *.go
 
 # Keybindings (Bubble Tea handlers)
 grep -nE 'tea\.KeyMsg|key\.Matches|"q"|"j"|"k"|ctrl\+' *.go

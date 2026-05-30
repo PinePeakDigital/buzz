@@ -38,8 +38,11 @@ echo "Previous tag: $PREV_TAG"
 # Commits since previous tag
 git log --no-merges --pretty=format:'- %s (%h)' "$PREV_TAG"..HEAD
 
-# Merged PRs since previous tag
+# Merged PRs since previous tag. Scope by the tag's commit date so this doesn't
+# pull in PRs merged before PREV_TAG (which would skew the notes and version bump).
+SINCE=$(git log -1 --format=%cI "$PREV_TAG")
 gh pr list --state merged --base main --limit 50 \
+  --search "merged:>=$SINCE" \
   --json number,title,mergedAt,labels,author \
   --jq '.[] | "#\(.number) \(.title) — @\(.author.login)"'
 ```

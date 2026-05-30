@@ -57,18 +57,20 @@ For each claim, check the source of truth:
 
 | Claim type | Where to verify |
 |------------|----------------|
-| CLI flags | `main.go`, `flag.*` calls |
+| CLI flags | `main.go`, `flag.NewFlagSet(...)` + `<set>.Bool/String/Int(...)` calls |
 | Keybindings | `model.go`, `handlers.go` |
 | Config keys | `config.go`, struct tags |
 | API behavior | `beeminder.go` |
-| Test commands | actually run them in a scratch shell |
+| Test commands | validate syntax/intent first; run only safe, read-only commands, and ask before executing anything with side effects |
 | Internal links | `test -f <path>` |
 | External links | `curl -sI <url> | head -1` (only spot-check obvious ones) |
 
 ```bash
-# Quick example: find every flag mentioned in README and check it exists
+# Quick example: find every flag mentioned in README and check it exists.
+# Flags are registered on a FlagSet (e.g. nextFlags.Bool("watch", ...)), so match
+# the method calls rather than a package-level flag.String("...").
 grep -oE -- '--[a-z][a-z0-9-]+' README.md | sort -u > /tmp/readme-flags
-grep -oE 'flag\.(String|Bool|Int)\("[a-z0-9-]+"' *.go \
+grep -oE '\.(Bool|String|Int|Int64|Uint|Float64|Duration)\("[a-z0-9-]+"' *.go \
   | grep -oE '"[a-z0-9-]+"' | tr -d '"' | sort -u > /tmp/code-flags
 diff /tmp/readme-flags /tmp/code-flags
 ```
