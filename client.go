@@ -174,7 +174,11 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	return nil
