@@ -8,6 +8,10 @@ services:
     staticPublishPath: dist
     # Auto-deploy on every push to the default branch.
     autoDeploy: true
+    # Custom domain. You must still add a DNS CNAME for `buzz` pointing at the
+    # *.onrender.com hostname Render shows for this service; TLS is automatic.
+    domains:
+      - buzz.nathanarthur.com
     # Each PR gets its own preview URL.
     previews:
       generation: automatic
