@@ -1,0 +1,24 @@
+services:
+  - type: web
+    runtime: static
+    name: buzz-docs
+    # The Starlight docs site lives in the website/ subfolder.
+    rootDir: website
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    # Auto-deploy on every push to the default branch.
+    autoDeploy: true
+    # Each PR gets its own preview URL.
+    previews:
+      generation: automatic
+    headers:
+      # Astro emits content-hashed asset filenames, so they can be cached forever.
+      - path: /_astro/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY

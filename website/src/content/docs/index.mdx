@@ -1,0 +1,39 @@
+---
+title: buzz
+description: A terminal user interface and CLI for Beeminder, built with Bubble Tea.
+template: splash
+hero:
+  tagline: A terminal user interface and CLI for Beeminder. View your goals in a colorful grid, navigate with the keyboard, and add datapoints without leaving your terminal.
+  actions:
+    - text: Get started
+      link: /getting-started/introduction/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/PinePeakDigital/buzz
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="Interactive TUI" icon="laptop">
+		Browse your goals in a colorful, keyboard-driven grid. Goals are
+		color-coded by deadline urgency so you can see what needs attention at a
+		glance.
+	</Card>
+	<Card title="Scriptable CLI" icon="seti:powershell">
+		Every action also works as a one-shot command — `buzz today`, `buzz add`,
+		`buzz ratchet` — so you can wire buzz into scripts, cron jobs, and status
+		bars.
+	</Card>
+	<Card title="Stays out of your way" icon="approve-check">
+		Credentials are read interactively and never touch your shell history.
+		Logging is off by default. The `--no-color` flag keeps output clean for
+		pipes and accessibility tools.
+	</Card>
+	<Card title="Built with Bubble Tea" icon="heart">
+		Powered by [Bubble Tea](https://github.com/charmbracelet/bubbletea) and
+		Lipgloss for a fast, fluid terminal experience.
+	</Card>
+</CardGrid>
