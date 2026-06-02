@@ -1,0 +1,30 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default><slot /></Default>
+
+<footer class="buzz-attribution">
+	<p>
+		buzz is built by <a href="https://nathanarthur.com">Nathan Arthur</a> and
+		<a href="https://pinepeakdigital.com">Pine Peak Digital</a>.
+	</p>
+</footer>
+
+<style>
+	.buzz-attribution {
+		margin-top: 1.5rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid var(--sl-color-gray-5);
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-gray-3);
+	}
+
+	.buzz-attribution p {
+		margin: 0;
+	}
+
+	.buzz-attribution a {
+		color: var(--sl-color-text-accent);
+	}
+</style>
