@@ -325,6 +325,24 @@ Changes the daily deadline for a Beeminder goal. The command shows the current a
 - `<time>`: The new deadline time in 12-hour (`3:00 PM`) or 24-hour (`15:00`) format
 - `--yes`, `-y`: Skip the confirmation prompt (useful for scripting)
 
+**buzz ratchet** - Remove safety buffer from a goal:
+
+```bash
+buzz ratchet [-y|--yes] <goalslug> <days>
+
+# Examples:
+buzz ratchet mygoal 3        # Leave 3 days of buffer
+buzz ratchet --yes mygoal 0  # Ratchet to zero buffer, skip confirmation
+```
+
+Removes safety buffer from a goal so that at most `<days>` of buffer remain between today and the bright red line. If the goal already has `<days>` or fewer days of buffer, Beeminder leaves it unchanged (see the note below). The command shows the current and target buffer and asks for confirmation before making the change.
+
+- `<goalslug>`: The slug of the goal to ratchet
+- `<days>`: The number of days of safety buffer to leave on the goal (must be a non-negative whole number)
+- `--yes`, `-y`: Skip the confirmation prompt (useful for scripting)
+
+Ratcheting only ever tightens a goal — Beeminder ignores requests that would add buffer, so this cannot be used to give yourself more breathing room.
+
 **buzz schedule** - Display goal deadline distribution throughout a 24-hour day:
 
 ```bash
