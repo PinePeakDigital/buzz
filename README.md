@@ -335,7 +335,7 @@ buzz ratchet mygoal 3        # Leave 3 days of buffer
 buzz ratchet --yes mygoal 0  # Ratchet to zero buffer, skip confirmation
 ```
 
-Removes safety buffer from a goal so that only `<days>` of buffer remain between today and the bright red line. The command shows the current and target buffer and asks for confirmation before making the change.
+Removes safety buffer from a goal so that at most `<days>` of buffer remain between today and the bright red line. If the goal already has `<days>` or fewer days of buffer, Beeminder leaves it unchanged (see the note below). The command shows the current and target buffer and asks for confirmation before making the change.
 
 - `<goalslug>`: The slug of the goal to ratchet
 - `<days>`: The number of days of safety buffer to leave on the goal (must be a non-negative whole number)
