@@ -29,14 +29,14 @@ When logging is enabled, buzz appends timestamped entries for each HTTP request
 and response to the specified file:
 
 ```text
-[2025-12-09 12:34:56] REQUEST: GET https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=...
-[2025-12-09 12:34:57] RESPONSE: 200 https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=...
+[2025-12-09 12:34:56] REQUEST: GET https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=***
+[2025-12-09 12:34:57] RESPONSE: 200 https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=***
 ```
 
 To disable logging, remove the `log_file` field from `~/.buzzrc` or set it to an
 empty string.
 
-<Aside type="caution">
-The log file records full request URLs, which include your `auth_token` as a
-query parameter. Keep the log file private and don't commit it or share it.
+<Aside type="note">
+buzz redacts your `auth_token` to `auth_token=***` before writing URLs to the log
+file, so your token isn't recorded on disk.
 </Aside>
