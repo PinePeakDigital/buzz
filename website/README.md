@@ -7,10 +7,10 @@ published at <https://buzz.nathanarthur.com>. Built with
 ## Local development
 
 ```bash
-npm install
-npm run dev      # Dev server at http://localhost:4321
-npm run build    # Build the production site into dist/
-npm run preview  # Preview the production build locally
+pnpm install
+pnpm dev      # Dev server at http://localhost:4321
+pnpm build    # Build the production site into dist/
+pnpm preview  # Preview the production build locally
 ```
 
 ## Content

@@ -123,9 +123,9 @@ directory of the repository and is built with
 
 ```bash
 cd website
-npm install
-npm run dev      # Start the dev server at http://localhost:4321
-npm run build    # Build the production site into website/dist
+pnpm install
+pnpm dev      # Start the dev server at http://localhost:4321
+pnpm build    # Build the production site into website/dist
 ```
 
 The site auto-deploys to <https://buzz.nathanarthur.com> on every push to `main`.
