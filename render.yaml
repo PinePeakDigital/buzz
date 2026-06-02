@@ -4,7 +4,9 @@ services:
     name: buzz-docs
     # The Starlight docs site lives in the website/ subfolder.
     rootDir: website
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    # Render auto-detects pnpm from pnpm-lock.yaml and provides it on PATH, so
+    # there's no need for `corepack enable` (which fails on the read-only /usr/bin).
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     staticPublishPath: dist
     # Auto-deploy on every push to the default branch.
     autoDeploy: true
