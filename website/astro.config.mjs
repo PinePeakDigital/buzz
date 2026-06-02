@@ -10,6 +10,9 @@ export default defineConfig({
 			title: 'buzz',
 			description:
 				'A terminal user interface and CLI for Beeminder, built with Bubble Tea.',
+			components: {
+				Footer: './src/components/Footer.astro',
+			},
 			social: [
 				{
 					icon: 'github',
