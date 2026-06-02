@@ -2278,6 +2278,107 @@ func TestCallUncleWithMockServer(t *testing.T) {
 	})
 }
 
+// TestRatchetGoalWithMockServer tests RatchetGoal against a mock HTTP server.
+func TestRatchetGoalWithMockServer(t *testing.T) {
+	t.Run("successful ratchet", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Expected POST request, got %s", r.Method)
+			}
+
+			expectedPath := "/api/v1/users/testuser/goals/testgoal/ratchet.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+
+			r.ParseForm()
+			if r.FormValue("auth_token") != "testtoken" {
+				t.Errorf("Expected auth_token 'testtoken', got %s", r.FormValue("auth_token"))
+			}
+			if r.FormValue("ratchet") != "3" {
+				t.Errorf("Expected ratchet 3, got %s", r.FormValue("ratchet"))
+			}
+
+			goal := Goal{Slug: "testgoal", Safebuf: 3}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := NewHTTPClient(config).RatchetGoal(context.Background(), "testgoal", 3)
+		if err != nil {
+			t.Fatalf("RatchetGoal failed: %v", err)
+		}
+		if goal == nil || goal.Slug != "testgoal" {
+			t.Fatalf("Unexpected goal: %+v", goal)
+		}
+		if goal.Safebuf != 3 {
+			t.Errorf("Expected safebuf 3, got %d", goal.Safebuf)
+		}
+	})
+
+	t.Run("goal slug URL encoding", func(t *testing.T) {
+		rawSlug := "my goal"
+		escapedSlug := "my%20goal"
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			expectedPath := "/api/v1/users/testuser/goals/" + escapedSlug + "/ratchet.json"
+			if r.URL.EscapedPath() != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.EscapedPath())
+			}
+
+			goal := Goal{Slug: rawSlug}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goal)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := NewHTTPClient(config).RatchetGoal(context.Background(), rawSlug, 1)
+		if err != nil {
+			t.Fatalf("RatchetGoal failed: %v", err)
+		}
+		if goal == nil || goal.Slug != rawSlug {
+			t.Fatalf("Unexpected goal: %+v", goal)
+		}
+	})
+
+	t.Run("API error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal error"))
+		}))
+		defer mockServer.Close()
+
+		config := &Config{
+			Username:  "testuser",
+			AuthToken: "testtoken",
+			BaseURL:   mockServer.URL,
+		}
+
+		goal, err := NewHTTPClient(config).RatchetGoal(context.Background(), "testgoal", 0)
+		if err == nil {
+			t.Error("Expected error for non-200 status, got nil")
+		}
+		if goal != nil {
+			t.Errorf("Expected nil goal on error, got: %+v", goal)
+		}
+		if !strings.Contains(err.Error(), "API returned status 500") {
+			t.Errorf("Expected error message about status 500, got: %v", err)
+		}
+	})
+}
+
 // TestHTTPClientCancellation verifies that a cancelled context propagates
 // into the in-flight HTTP request. The mock server signals `started` as soon
 // as it begins handling, then blocks until `released`; the test cancels the

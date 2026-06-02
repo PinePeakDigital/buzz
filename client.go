@@ -34,6 +34,7 @@ type Client interface {
 	CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error)
 	CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncle(ctx context.Context, goalSlug string) (*Goal, error)
+	RatchetGoal(ctx context.Context, goalSlug string, ratchet int) (*Goal, error)
 	UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error)
 	RefreshGoal(ctx context.Context, goalSlug string) (bool, error)
 }
@@ -227,6 +228,39 @@ func (c *HTTPClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, err
 	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(""), "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, fmt.Errorf("failed to call uncle: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var goal Goal
+	if err := json.Unmarshal(body, &goal); err != nil {
+		return nil, fmt.Errorf("failed to decode goal: %w", err)
+	}
+	return &goal, nil
+}
+
+// RatchetGoal removes safety buffer from a goal, leaving exactly `ratchet` days
+// of buffer between today and the bright red line. Beeminder ignores requests
+// that would *add* buffer, so this can only ever tighten a goal.
+func (c *HTTPClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet int) (*Goal, error) {
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/ratchet.json",
+		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
+
+	data := url.Values{}
+	data.Set("auth_token", c.config.AuthToken)
+	data.Set("ratchet", fmt.Sprintf("%d", ratchet))
+
+	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
+	if err != nil {
+		return nil, fmt.Errorf("failed to ratchet goal: %w", err)
 	}
 	defer resp.Body.Close()
 

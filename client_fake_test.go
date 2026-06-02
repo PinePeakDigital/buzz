@@ -33,6 +33,7 @@ type FakeClient struct {
 	CreateChargeFunc                func(amount float64, note string, dryrun bool) (*Charge, error)
 	CreateGoalFunc                  func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncleFunc                   func(goalSlug string) (*Goal, error)
+	RatchetGoalFunc                 func(goalSlug string, ratchet int) (*Goal, error)
 	UpdateGoalDeadlineFunc          func(goalSlug string, deadline int) (*Goal, error)
 	RefreshGoalFunc                 func(goalSlug string) (bool, error)
 }
@@ -110,6 +111,13 @@ func (c *FakeClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, err
 		return nil, errFakeNotConfigured
 	}
 	return c.CallUncleFunc(goalSlug)
+}
+
+func (c *FakeClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet int) (*Goal, error) {
+	if c.RatchetGoalFunc == nil {
+		return nil, errFakeNotConfigured
+	}
+	return c.RatchetGoalFunc(goalSlug, ratchet)
 }
 
 func (c *FakeClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {
