@@ -10,9 +10,10 @@ import (
 	"strings"
 )
 
-// handleRatchetCommand removes safety buffer from a goal, leaving it with a
-// specified number of days of buffer. The Beeminder ratchet endpoint only ever
-// tightens a goal: requests that would add buffer are ignored by the server.
+// handleRatchetCommand removes safety buffer from a goal, leaving it with at
+// most the specified number of days of buffer. The Beeminder ratchet endpoint
+// only ever tightens a goal: requests that would add buffer are ignored by the
+// server, so a goal already at or below the target is left unchanged.
 func handleRatchetCommand() {
 	ratchetFlags := flag.NewFlagSet("ratchet", flag.ContinueOnError)
 	ratchetFlags.Usage = func() {
