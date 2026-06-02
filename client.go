@@ -247,9 +247,10 @@ func (c *HTTPClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, err
 	return &goal, nil
 }
 
-// RatchetGoal removes safety buffer from a goal, leaving exactly `ratchet` days
+// RatchetGoal removes safety buffer from a goal, leaving at most `ratchet` days
 // of buffer between today and the bright red line. Beeminder ignores requests
-// that would *add* buffer, so this can only ever tighten a goal.
+// that would *add* buffer, so a goal already at or below `ratchet` days is left
+// unchanged — this can only ever tighten a goal, never loosen it.
 func (c *HTTPClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet int) (*Goal, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/ratchet.json",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
