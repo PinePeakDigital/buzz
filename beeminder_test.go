@@ -2291,7 +2291,9 @@ func TestRatchetGoalWithMockServer(t *testing.T) {
 				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
 			}
 
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
 			if r.FormValue("auth_token") != "testtoken" {
 				t.Errorf("Expected auth_token 'testtoken', got %s", r.FormValue("auth_token"))
 			}
