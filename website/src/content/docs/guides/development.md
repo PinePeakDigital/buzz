@@ -8,7 +8,7 @@ the project's contribution conventions.
 
 ## Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 
 ## Building from source
 
