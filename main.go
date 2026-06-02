@@ -63,7 +63,7 @@ func printHelp() {
 	fmt.Println("  -h, --help                        Show this help message")
 	fmt.Println("  -v, --version                     Show version information")
 	fmt.Println("")
-	fmt.Println("For more information, visit: https://github.com/pinepeakdigital/buzz")
+	fmt.Println("For more information, visit: https://buzz.nathanarthur.com")
 }
 
 func printVersion() {
