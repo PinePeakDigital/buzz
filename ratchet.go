@@ -78,7 +78,11 @@ func handleRatchetCommand() {
 			fmt.Fprintf(os.Stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
 			os.Exit(1)
 		}
-		fmt.Printf("Ratchet %s from %d to at most %d days of safety buffer? This removes buffer and cannot add it back. [y/N] ", goalSlug, currentGoal.Safebuf, days)
+		if currentGoal.Safebuf <= days {
+			fmt.Printf("%s already has %d days of safety buffer, which is at or below %d days. No buffer will be removed. Continue anyway? [y/N] ", goalSlug, currentGoal.Safebuf, days)
+		} else {
+			fmt.Printf("Ratchet %s from %d to at most %d days of safety buffer? This removes buffer and cannot add it back. [y/N] ", goalSlug, currentGoal.Safebuf, days)
+		}
 		var response string
 		if _, err := fmt.Scanln(&response); err != nil {
 			// EOF or read error in non-interactive contexts — treat as "no"
