@@ -2370,7 +2370,7 @@ func TestRatchetGoalWithMockServer(t *testing.T) {
 
 		goal, err := NewHTTPClient(config).RatchetGoal(context.Background(), "testgoal", 0)
 		if err == nil {
-			t.Error("Expected error for non-200 status, got nil")
+			t.Fatal("Expected error for non-200 status, got nil")
 		}
 		if goal != nil {
 			t.Errorf("Expected nil goal on error, got: %+v", goal)
