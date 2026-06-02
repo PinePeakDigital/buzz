@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 
 ## Building from Source
 

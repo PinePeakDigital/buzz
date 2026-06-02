@@ -1,0 +1,174 @@
+---
+title: Managing goals
+description: Commands that add data, change deadlines, and modify your goals.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+These commands change something on Beeminder — they add datapoints, trigger
+refreshes, create charges, or adjust goal settings.
+
+## `buzz add`
+
+Add a datapoint to a goal without opening the TUI:
+
+```bash
+buzz add [--daystamp=<date>] [--requestid=<id>] <goalslug> <value> [comment]
+
+# Examples:
+buzz add opsec 1                    # Adds value 1 with default comment "Added via buzz"
+buzz add workout 2.5 'morning run'  # Adds value 2.5 with custom comment
+buzz add study 00:05 'quick review' # Adds 5 minutes (converted to 0.083333 hours)
+buzz add focus 1:30                 # Adds 1.5 hours (1 hour 30 minutes)
+buzz add --requestid=abc123 reading 3 'finished chapter 5'  # Adds with a request ID for idempotency
+buzz add --daystamp=20240115 exercise 1  # Adds datapoint for a specific date
+```
+
+### Value formats
+
+The `<value>` parameter supports both decimal numbers and time formats:
+
+- **Decimal numbers:** `1`, `2.5`, `-1.5`
+- **Time format (HH:MM):** `00:05` (5 minutes), `1:30` (1.5 hours), `2:45` (2.75 hours)
+- **Time format (HH:MM:SS):** `1:30:45` (1.5125 hours)
+
+Time formats are automatically converted to decimal hours before submitting to
+Beeminder.
+
+The `comment` parameter is optional and defaults to "Added via buzz".
+
+### `--daystamp`
+
+Specifies the date for the datapoint:
+
+- **Format:** `YYYYMMDD` (e.g. `20240115` for January 15, 2024)
+- **Default:** if not provided, uses the current timestamp
+- **Use case:** backfill data for past dates, or pre-enter data for today
+
+### `--requestid`
+
+Provides idempotency:
+
+- **Prevents duplicates:** safely retry submissions without creating duplicate datapoints
+- **Updates existing:** if a datapoint with the same request ID exists but differs, it gets updated
+- **Scoped per goal:** the same request ID can be reused across different goals
+
+<Aside type="tip">
+When you run `buzz add` while the TUI is running in another terminal, the TUI
+automatically refreshes within 1 second to show the new datapoint.
+</Aside>
+
+## `buzz refresh`
+
+Refresh autodata for a goal:
+
+```bash
+buzz refresh <goalslug>
+
+# Example:
+buzz refresh fitbit    # Forces Beeminder to fetch latest data from Fitbit
+```
+
+This is analogous to pressing the refresh button on a goal's page in the
+Beeminder web interface. It forces Beeminder to refetch autodata for goals with
+automatic data sources (like Fitbit, GitHub, etc.) and refreshes the graph image.
+Useful when you want to update a goal's data immediately instead of waiting for
+Beeminder's automatic sync.
+
+<Aside type="note">
+This is an asynchronous operation. The command returns immediately after the goal
+is queued for refresh; it may take a few moments for Beeminder to fetch the new
+data.
+</Aside>
+
+## `buzz charge`
+
+Create a charge for the authenticated user:
+
+```bash
+buzz charge <amount> <note> [--dryrun]
+
+# Examples:
+buzz charge 10 "Intentional charge for motivation"
+buzz charge 5.50 "Weekly commitment fee" --dryrun  # Test without actually charging
+```
+
+Creates a charge on your Beeminder account — useful for self-imposed penalties or
+commitment fees. The minimum charge amount is `$1.00`.
+
+- **`<amount>`** — the amount to charge (must be ≥ 1.00)
+- **`<note>`** — a description of what the charge is for (required)
+- **`--dryrun`** — test the charge without actually creating it (optional)
+
+<Aside type="caution">
+This creates a **real charge** on your payment method unless you use the
+`--dryrun` flag.
+</Aside>
+
+## `buzz deadline`
+
+Change a goal's deadline:
+
+```bash
+buzz deadline [--yes] <goalslug> <time>
+
+# Examples:
+buzz deadline mygoal 3:00 PM
+buzz deadline mygoal 15:00
+buzz deadline --yes mygoal 11:30 AM  # Skip confirmation prompt
+```
+
+Changes the daily deadline for a goal. The command shows the current and new
+deadline and asks for confirmation before making the change.
+
+- **`<goalslug>`** — the slug of the goal to update
+- **`<time>`** — the new deadline in 12-hour (`3:00 PM`) or 24-hour (`15:00`) format
+- **`--yes`, `-y`** — skip the confirmation prompt (useful for scripting)
+
+## `buzz ratchet`
+
+Remove safety buffer from a goal:
+
+```bash
+buzz ratchet [-y|--yes] <goalslug> <days>
+
+# Examples:
+buzz ratchet mygoal 3        # Leave at most 3 days of buffer
+buzz ratchet --yes mygoal 0  # Ratchet to zero buffer, skip confirmation
+```
+
+Removes safety buffer so that **at most** `<days>` of buffer remain between today
+and the bright red line. If the goal already has `<days>` or fewer days of buffer,
+Beeminder leaves it unchanged. The command shows the current and target buffer and
+asks for confirmation before making the change.
+
+- **`<goalslug>`** — the slug of the goal to ratchet
+- **`<days>`** — the number of days of buffer to leave (must be a non-negative whole number)
+- **`--yes`, `-y`** — skip the confirmation prompt (useful for scripting)
+
+<Aside type="note">
+Ratcheting only ever *tightens* a goal — Beeminder ignores requests that would add
+buffer, so this cannot be used to give yourself more breathing room.
+</Aside>
+
+## `buzz auth login`
+
+Authenticate with Beeminder:
+
+```bash
+buzz auth login
+```
+
+Prompts you to paste your Beeminder API credentials (read interactively from
+stdin, so your token stays out of shell history) and saves them to `~/.buzzrc`.
+The interactive TUI auto-prompts for these on first run, so you typically only
+need this command to re-authenticate or when a subcommand reports that no
+configuration was found.
+
+Piped input is also supported for scripting:
+
+```bash
+buzz auth login < creds.json
+```
+
+See [Authentication](/getting-started/authentication/) for the credential format.

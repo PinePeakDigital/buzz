@@ -1,0 +1,81 @@
+---
+title: Installation
+description: Install buzz via bin, Homebrew, direct download, or go install.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Choose whichever method fits your setup. Installing with
+[`bin`](https://github.com/marcosnils/bin) is recommended.
+
+<Tabs>
+<TabItem label="bin (recommended)">
+
+Install using [bin](https://github.com/marcosnils/bin):
+
+```bash
+bin install https://github.com/pinepeakdigital/buzz
+```
+
+This downloads the latest release and makes it available in your `PATH`.
+
+To update:
+
+```bash
+bin update buzz
+```
+
+</TabItem>
+<TabItem label="Homebrew">
+
+Install using [Homebrew](https://brew.sh):
+
+```bash
+brew tap narthur/tap
+brew install narthur/tap/buzz
+```
+
+To upgrade:
+
+```bash
+brew upgrade narthur/tap/buzz
+```
+
+</TabItem>
+<TabItem label="Direct download">
+
+Download pre-built binaries directly from the
+[releases page](https://github.com/pinepeakdigital/buzz/releases). Choose the
+binary for your operating system and architecture.
+
+To update, download the latest release and replace your existing binary.
+
+</TabItem>
+<TabItem label="From source">
+
+If you have Go installed, you can install and update with:
+
+```bash
+go install github.com/pinepeakdigital/buzz@latest
+```
+
+</TabItem>
+</Tabs>
+
+## macOS: unidentified developer warning
+
+If you download the binary directly from GitHub releases, macOS may show an
+"unidentified developer" warning. Remove the quarantine attribute to resolve it:
+
+```bash
+xattr -d com.apple.quarantine /path/to/buzz
+```
+
+Replace `/path/to/buzz` with the actual path to the downloaded binary.
+
+This workaround is only needed for **direct downloads**. If you install via `bin`
+(recommended) or build from source, you won't encounter it.
+
+## Next step
+
+Once buzz is installed, [authenticate with Beeminder](/getting-started/authentication/).

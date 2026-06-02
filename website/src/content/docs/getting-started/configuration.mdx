@@ -1,0 +1,42 @@
+---
+title: Configuration
+description: Optional buzz settings, including request logging.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+buzz stores its configuration in `~/.buzzrc`, a JSON file created during
+[authentication](/getting-started/authentication/). Most users never need to edit
+it by hand, but a few optional settings live here.
+
+## Logging (optional)
+
+buzz can log HTTP requests and responses to help with debugging and monitoring
+API calls. Logging is **disabled by default** to respect your preferences and
+avoid cluttering your filesystem.
+
+To enable it, add a `log_file` field to `~/.buzzrc`:
+
+```json
+{
+  "username": "your_username",
+  "auth_token": "your_token",
+  "log_file": "/path/to/buzz.log"
+}
+```
+
+When logging is enabled, buzz appends timestamped entries for each HTTP request
+and response to the specified file:
+
+```text
+[2025-12-09 12:34:56] REQUEST: GET https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=***
+[2025-12-09 12:34:57] RESPONSE: 200 https://www.beeminder.com/api/v1/users/alice/goals.json?auth_token=***
+```
+
+To disable logging, remove the `log_file` field from `~/.buzzrc` or set it to an
+empty string.
+
+<Aside type="note">
+buzz redacts your `auth_token` to `auth_token=***` before writing URLs to the log
+file, so your token isn't recorded on disk.
+</Aside>
