@@ -328,7 +328,7 @@ Changes the daily deadline for a Beeminder goal. The command shows the current a
 **buzz ratchet** - Remove safety buffer from a goal:
 
 ```bash
-buzz ratchet [--yes] <goalslug> <days>
+buzz ratchet [-y|--yes] <goalslug> <days>
 
 # Examples:
 buzz ratchet mygoal 3        # Leave 3 days of buffer
