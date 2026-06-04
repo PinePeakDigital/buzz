@@ -3,6 +3,7 @@ package main
 import (
 	"sort"
 	"strings"
+	"time"
 )
 
 // Goal represents a Beeminder goal with relevant fields
@@ -70,6 +71,21 @@ func filterOutEndValueReached(goals []Goal) []Goal {
 	out := make([]Goal, 0, len(goals))
 	for _, g := range goals {
 		if IsEndValueReached(g) {
+			continue
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
+// filterOutOverdue returns a new slice containing only goals whose losedate is
+// not in the past relative to now. Used by "next" so an already-overdue goal —
+// which would render as OVERDUE rather than a countdown — doesn't get surfaced
+// as the next thing due; the soonest goal that still has time left is shown.
+func filterOutOverdue(goals []Goal, now time.Time) []Goal {
+	out := make([]Goal, 0, len(goals))
+	for _, g := range goals {
+		if time.Unix(g.Losedate, 0).Before(now) {
 			continue
 		}
 		out = append(out, g)

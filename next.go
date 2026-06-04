@@ -59,6 +59,11 @@ func displayNextGoal() error {
 	// acting on a completed goal.
 	goals = filterOutEndValueReached(goals)
 
+	// Skip overdue goals: "next" should point at the soonest goal that still
+	// has time left, not one that's already past its deadline (which would
+	// render as OVERDUE rather than a countdown).
+	goals = filterOutOverdue(goals, time.Now())
+
 	// If no goals, return error
 	if len(goals) == 0 {
 		return fmt.Errorf("no goals found")
