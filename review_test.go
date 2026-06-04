@@ -339,6 +339,66 @@ func TestReviewModelViewWithRateAndGunits(t *testing.T) {
 	}
 }
 
+func TestReviewModelViewWithCurrentAndEndRate(t *testing.T) {
+	// When the current rate differs from the end rate, both are shown so the
+	// user sees today's rate and where the goal is heading (issue #259).
+	endRate := 0.21317778888888886
+	curRate := 0.0
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &endRate,
+			Rcur:     &curRate,
+			Runits:   "d",
+			Gunits:   "hours",
+		},
+	}
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	view := initialReviewModel(goals, config).View()
+
+	expectedRate := "Rate:        0 hours / day (current), 0.2132 (end)"
+	if !strings.Contains(view, expectedRate) {
+		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedRate, view)
+	}
+}
+
+func TestReviewModelViewWithEqualCurrentAndEndRate(t *testing.T) {
+	// On a flat road the current and end rates match, so only a single rate is
+	// shown rather than redundantly repeating it (issue #259).
+	rate := 2.0
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &rate,
+			Rcur:     &rate,
+			Runits:   "d",
+		},
+	}
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	view := initialReviewModel(goals, config).View()
+
+	if !strings.Contains(view, "Rate:        2/day") {
+		t.Errorf("Expected single rate 'Rate:        2/day', but got:\n%s", view)
+	}
+	if strings.Contains(view, "(current)") {
+		t.Errorf("Expected no current/end split when rates are equal, but got:\n%s", view)
+	}
+}
+
 func TestReviewModelViewWithoutRate(t *testing.T) {
 	goals := []Goal{
 		{

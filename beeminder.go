@@ -19,7 +19,8 @@ type Goal struct {
 	Baremin     string                `json:"baremin"`
 	Autodata    string                `json:"autodata"`
 	Autoratchet *float64              `json:"autoratchet"` // Pointer to handle null values from API
-	Rate        *float64              `json:"rate"`        // Pointer to handle null values from API
+	Rate        *float64              `json:"rate"`        // End rate of the goal's bright line (final segment). Pointer to handle null values from API
+	Rcur        *float64              `json:"rcur"`        // Current rate of the bright line at today's date. Pointer to handle null values from API
 	Runits      string                `json:"runits"`
 	Gunits      string                `json:"gunits"`     // Goal units, like "hours" or "pushups" or "pages"
 	Deadline    int                   `json:"deadline"`   // Seconds by which deadline differs from midnight
