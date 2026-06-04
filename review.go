@@ -337,9 +337,9 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	// today versus where the goal is heading.
 	if goal.Rate != nil && goal.Runits != "" {
 		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
-		if goal.Rcur != nil && *goal.Rcur != *goal.Rate {
+		if cur := goal.CurrentRate(); cur != nil && *cur != *goal.Rate {
 			rateStr = fmt.Sprintf("%s (current), %s (end)",
-				formatRate(*goal.Rcur, goal.Runits, goal.Gunits),
+				formatRate(*cur, goal.Runits, goal.Gunits),
 				formatRateValue(*goal.Rate))
 		}
 		details += fmt.Sprintf("Rate:        %s\n", rateStr)

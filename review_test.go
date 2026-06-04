@@ -354,7 +354,7 @@ func TestReviewModelViewWithCurrentAndEndRate(t *testing.T) {
 			Limsum:   "+1 in 2 days",
 			Baremin:  "+2 in 1 day",
 			Rate:     &endRate,
-			Rcur:     &curRate,
+			Currate:  &curRate,
 			Runits:   "d",
 			Gunits:   "hours",
 		},
@@ -383,7 +383,7 @@ func TestReviewModelViewWithEqualCurrentAndEndRate(t *testing.T) {
 			Limsum:   "+1 in 2 days",
 			Baremin:  "+2 in 1 day",
 			Rate:     &rate,
-			Rcur:     &rate,
+			Currate:  &rate,
 			Runits:   "d",
 		},
 	}
@@ -396,6 +396,33 @@ func TestReviewModelViewWithEqualCurrentAndEndRate(t *testing.T) {
 	}
 	if strings.Contains(view, "(current)") {
 		t.Errorf("Expected no current/end split when rates are equal, but got:\n%s", view)
+	}
+}
+
+func TestReviewModelViewCurrentRateFromLegacyRcur(t *testing.T) {
+	// Some API payloads carry the current rate as `rcur` rather than `currate`;
+	// CurrentRate() falls back to it so the current/end split still renders.
+	endRate := 1.0
+	curRate := 0.5
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &endRate,
+			Rcur:     &curRate,
+			Runits:   "d",
+		},
+	}
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	view := initialReviewModel(goals, config).View()
+
+	if !strings.Contains(view, "Rate:        0.5/day (current), 1 (end)") {
+		t.Errorf("Expected current/end split from rcur fallback, but got:\n%s", view)
 	}
 }
 

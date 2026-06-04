@@ -21,7 +21,8 @@ type Goal struct {
 	Autodata    string                `json:"autodata"`
 	Autoratchet *float64              `json:"autoratchet"` // Pointer to handle null values from API
 	Rate        *float64              `json:"rate"`        // End rate of the goal's bright line (final segment). Pointer to handle null values from API
-	Rcur        *float64              `json:"rcur"`        // Current rate of the bright line at today's date. Pointer to handle null values from API
+	Currate     *float64              `json:"currate"`     // Current rate: slope of the road segment in effect today. Pointer to handle null values from API
+	Rcur        *float64              `json:"rcur"`        // Legacy alias for the current rate seen in some API payloads; CurrentRate prefers Currate
 	Runits      string                `json:"runits"`
 	Gunits      string                `json:"gunits"`     // Goal units, like "hours" or "pushups" or "pages"
 	Deadline    int                   `json:"deadline"`   // Seconds by which deadline differs from midnight
@@ -91,6 +92,17 @@ func filterOutOverdue(goals []Goal, now time.Time) []Goal {
 		out = append(out, g)
 	}
 	return out
+}
+
+// CurrentRate returns the goal's current rate — the slope of the bright-line
+// segment in effect today. Beeminder's goal endpoint exposes this as `currate`;
+// some payloads have instead carried it as `rcur`, so we honour either, with
+// `currate` taking precedence. Returns nil when neither field is present.
+func (g Goal) CurrentRate() *float64 {
+	if g.Currate != nil {
+		return g.Currate
+	}
+	return g.Rcur
 }
 
 // SortGoals sorts goals by: 1. Due ascending, 2. Stakes descending, 3. Name ascending
