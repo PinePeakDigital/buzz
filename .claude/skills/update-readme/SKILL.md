@@ -37,10 +37,10 @@ Identify what the app actually exposes today:
 # CLI subcommands and flags. Flags are defined via flag.NewFlagSet(...) and then
 # <flagSet>.Bool/String/Int(...) (e.g. nextFlags.Bool("watch", ...)), so match the
 # FlagSet constructor and its method calls — a `flag.String(...)` search misses them.
-grep -nE 'flag\.NewFlagSet|\.(Bool|String|Int|Int64|Uint|Float64|Duration)\("|case "' main.go *.go
+grep -nE 'flag\.NewFlagSet|\.(Bool|String|Int|Int64|Uint|Float64|Duration)\("|case "' *.go
 
 # Keybindings (Bubble Tea handlers)
-grep -nE 'tea\.KeyMsg|key\.Matches|"q"|"j"|"k"|ctrl\+' *.go
+grep -nE 'tea\.KeyMsg|key\.Matches|case tea\.Key|Key(Msg|Type|Runes)|binding' *.go
 
 # Config keys
 grep -nE 'viper|os\.Getenv|json:"' config.go
