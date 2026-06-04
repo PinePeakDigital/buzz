@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -230,10 +232,25 @@ func formatRate(rate float64, runits, gunits string) string {
 		unitName = runits
 	}
 
+	value := formatRateValue(rate)
 	if gunits != "" {
-		return fmt.Sprintf("%g %s / %s", rate, gunits, unitName)
+		return fmt.Sprintf("%s %s / %s", value, gunits, unitName)
 	}
-	return fmt.Sprintf("%g/%s", rate, unitName)
+	return fmt.Sprintf("%s/%s", value, unitName)
+}
+
+// rateDisplayDecimals caps how many decimal places a rate is shown with. The
+// Beeminder API returns rates at full float precision (e.g.
+// 0.21317778888888886), which is noise to a human reading `buzz view`.
+const rateDisplayDecimals = 4
+
+// formatRateValue renders a rate as a clean decimal string: rounded to
+// rateDisplayDecimals places, with trailing zeros trimmed and no scientific
+// notation (so large whole-number rates like 100000 stay readable).
+func formatRateValue(rate float64) string {
+	scale := math.Pow(10, rateDisplayDecimals)
+	rounded := math.Round(rate*scale) / scale
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
 // formatRecentDatapoints formats up to 5 of the most recent datapoints for

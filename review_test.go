@@ -259,6 +259,11 @@ func TestFormatRate(t *testing.T) {
 		{12345.0, "w", "", "12345/week"},
 		{100000.0, "y", "", "100000/year"},
 		{9800.0, "d", "steps", "9800 steps / day"},
+		// Full-precision API rates are rounded to a readable number of decimals
+		// rather than dumping the raw float (issue #260).
+		{0.21317778888888886, "d", "hours", "0.2132 hours / day"},
+		{0.1900775022222092, "d", "", "0.1901/day"},
+		{0.0, "d", "", "0/day"},
 	}
 
 	for _, tt := range tests {
