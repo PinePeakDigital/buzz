@@ -248,8 +248,13 @@ const rateDisplayDecimals = 4
 // rateDisplayDecimals places, with trailing zeros trimmed and no scientific
 // notation (so large whole-number rates like 100000 stay readable).
 func formatRateValue(rate float64) string {
-	scale := math.Pow(10, rateDisplayDecimals)
+	scale := math.Pow10(rateDisplayDecimals)
 	rounded := math.Round(rate*scale) / scale
+	if rounded == 0 {
+		// Normalize -0 (a small negative rate that rounds to zero) to "0" so
+		// do-less / downward-sloping goals don't render a confusing "-0".
+		return "0"
+	}
 	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
@@ -337,7 +342,7 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	// today versus where the goal is heading.
 	if goal.Rate != nil && goal.Runits != "" {
 		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
-		if cur := goal.CurrentRate(); cur != nil && *cur != *goal.Rate {
+		if cur := goal.CurrentRate(); cur != nil && formatRateValue(*cur) != formatRateValue(*goal.Rate) {
 			rateStr = fmt.Sprintf("%s (current), %s (end)",
 				formatRate(*cur, goal.Runits, goal.Gunits),
 				formatRateValue(*goal.Rate))

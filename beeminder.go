@@ -86,7 +86,9 @@ func filterOutEndValueReached(goals []Goal) []Goal {
 func filterOutOverdue(goals []Goal, now time.Time) []Goal {
 	out := make([]Goal, 0, len(goals))
 	for _, g := range goals {
-		if time.Unix(g.Losedate, 0).Before(now) {
+		// Losedate is already a Unix timestamp (seconds); compare integers
+		// directly rather than constructing a time.Time per goal.
+		if g.Losedate < now.Unix() {
 			continue
 		}
 		out = append(out, g)
