@@ -264,6 +264,9 @@ func TestFormatRate(t *testing.T) {
 		{0.21317778888888886, "d", "hours", "0.2132 hours / day"},
 		{0.1900775022222092, "d", "", "0.1901/day"},
 		{0.0, "d", "", "0/day"},
+		// A small negative rate that rounds to zero must render as "0", not
+		// "-0", for do-less / downward-sloping goals (issue #260).
+		{-0.00001, "d", "", "0/day"},
 	}
 
 	for _, tt := range tests {

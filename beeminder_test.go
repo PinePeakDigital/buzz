@@ -977,15 +977,18 @@ func TestFilterOutOverdue(t *testing.T) {
 		{Slug: "overdue", Losedate: past},
 		{Slug: "soon", Losedate: future},
 		{Slug: "also-overdue", Losedate: now.Add(-5 * time.Minute).Unix()},
+		// A goal whose losedate is exactly now is not yet past, so it must be
+		// kept (the filter uses a strict "<" boundary).
+		{Slug: "due-now", Losedate: now.Unix()},
 		{Slug: "later", Losedate: now.Add(48 * time.Hour).Unix()},
 	}
 
 	got := filterOutOverdue(goals, now)
-	if len(got) != 2 {
-		t.Fatalf("filterOutOverdue returned %d goals, want 2", len(got))
+	if len(got) != 3 {
+		t.Fatalf("filterOutOverdue returned %d goals, want 3", len(got))
 	}
-	if got[0].Slug != "soon" || got[1].Slug != "later" {
-		t.Errorf("filterOutOverdue returned unexpected goals: %q, %q", got[0].Slug, got[1].Slug)
+	if got[0].Slug != "soon" || got[1].Slug != "due-now" || got[2].Slug != "later" {
+		t.Errorf("filterOutOverdue returned unexpected goals: %q, %q, %q", got[0].Slug, got[1].Slug, got[2].Slug)
 	}
 }
 
