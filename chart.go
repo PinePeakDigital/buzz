@@ -162,6 +162,11 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 	return processed
 }
 
+// processCumulative builds the in-window plot series for a cumulative (kyoom)
+// goal: it sums every datapoint in chronological order so each in-window point
+// carries the running total, prepends a synthetic anchor at the window start
+// holding the total reached just before it, and returns nil when no datapoints
+// fall inside the window (so a pure carry-over never draws a dataless line).
 func processCumulative(goal Goal, startTime, endTime time.Time) []timedValue {
 	sorted := make([]Datapoint, len(goal.Datapoints))
 	copy(sorted, goal.Datapoints)
