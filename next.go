@@ -59,6 +59,16 @@ func displayNextGoal() error {
 	// acting on a completed goal.
 	goals = filterOutEndValueReached(goals)
 
+	// Snapshot the time once so the overdue filter and the rendered countdown
+	// share a single reference instant. Otherwise a goal could pass the filter
+	// here and then render as OVERDUE moments later when formatted.
+	now := time.Now()
+
+	// Skip overdue goals: "next" should point at the soonest goal that still
+	// has time left, not one that's already past its deadline (which would
+	// render as OVERDUE rather than a countdown).
+	goals = filterOutOverdue(goals, now)
+
 	// If no goals, return error
 	if len(goals) == 0 {
 		return fmt.Errorf("no goals found")
@@ -68,7 +78,7 @@ func displayNextGoal() error {
 	nextGoal := goals[0]
 
 	// Format the output: "goalslug baremin timeframe"
-	timeframe := FormatGoalDueDate(nextGoal)
+	timeframe := FormatGoalDueDateAt(nextGoal, now)
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)

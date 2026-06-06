@@ -965,6 +965,33 @@ func TestFilterOutEndValueReached(t *testing.T) {
 	}
 }
 
+// TestFilterOutOverdue verifies that goals whose losedate is already in the
+// past are dropped, so "next" surfaces the soonest goal that still has time
+// left rather than an OVERDUE goal (issue #257).
+func TestFilterOutOverdue(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-1 * time.Hour).Unix()
+	future := now.Add(1 * time.Hour).Unix()
+
+	goals := []Goal{
+		{Slug: "overdue", Losedate: past},
+		{Slug: "soon", Losedate: future},
+		{Slug: "also-overdue", Losedate: now.Add(-5 * time.Minute).Unix()},
+		// A goal whose losedate is exactly now is not yet past, so it must be
+		// kept (the filter uses a strict "<" boundary).
+		{Slug: "due-now", Losedate: now.Unix()},
+		{Slug: "later", Losedate: now.Add(48 * time.Hour).Unix()},
+	}
+
+	got := filterOutOverdue(goals, now)
+	if len(got) != 3 {
+		t.Fatalf("filterOutOverdue returned %d goals, want 3", len(got))
+	}
+	if got[0].Slug != "soon" || got[1].Slug != "due-now" || got[2].Slug != "later" {
+		t.Errorf("filterOutOverdue returned unexpected goals: %q, %q, %q", got[0].Slug, got[1].Slug, got[2].Slug)
+	}
+}
+
 // TestFormatGoalDueDateAt verifies that goals which have reached their end
 // value render as "COMPLETE" regardless of how far past their losedate is,
 // while still-active goals fall through to the normal losedate-based render.

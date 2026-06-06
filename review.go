@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -230,10 +232,30 @@ func formatRate(rate float64, runits, gunits string) string {
 		unitName = runits
 	}
 
+	value := formatRateValue(rate)
 	if gunits != "" {
-		return fmt.Sprintf("%g %s / %s", rate, gunits, unitName)
+		return fmt.Sprintf("%s %s / %s", value, gunits, unitName)
 	}
-	return fmt.Sprintf("%g/%s", rate, unitName)
+	return fmt.Sprintf("%s/%s", value, unitName)
+}
+
+// rateDisplayDecimals caps how many decimal places a rate is shown with. The
+// Beeminder API returns rates at full float precision (e.g.
+// 0.21317778888888886), which is noise to a human reading `buzz view`.
+const rateDisplayDecimals = 4
+
+// formatRateValue renders a rate as a clean decimal string: rounded to
+// rateDisplayDecimals places, with trailing zeros trimmed and no scientific
+// notation (so large whole-number rates like 100000 stay readable).
+func formatRateValue(rate float64) string {
+	scale := math.Pow10(rateDisplayDecimals)
+	rounded := math.Round(rate*scale) / scale
+	if rounded == 0 {
+		// Normalize -0 (a small negative rate that rounds to zero) to "0" so
+		// do-less / downward-sloping goals don't render a confusing "-0".
+		return "0"
+	}
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
 // formatRecentDatapoints formats up to 5 of the most recent datapoints for
@@ -315,9 +337,16 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	}
 	details += fmt.Sprintf("Pledge:      %s\n", pledgeDisplay)
 
-	// Display current rate (n / unit)
+	// Display rate (n / unit). When the current rate differs from the end
+	// rate (a non-flat road), show both so the user sees what they're held to
+	// today versus where the goal is heading.
 	if goal.Rate != nil && goal.Runits != "" {
 		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
+		if cur := goal.CurrentRate(); cur != nil && formatRateValue(*cur) != formatRateValue(*goal.Rate) {
+			rateStr = fmt.Sprintf("%s (current), %s (end)",
+				formatRate(*cur, goal.Runits, goal.Gunits),
+				formatRateValue(*goal.Rate))
+		}
 		details += fmt.Sprintf("Rate:        %s\n", rateStr)
 	}
 

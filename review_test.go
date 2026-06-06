@@ -259,6 +259,14 @@ func TestFormatRate(t *testing.T) {
 		{12345.0, "w", "", "12345/week"},
 		{100000.0, "y", "", "100000/year"},
 		{9800.0, "d", "steps", "9800 steps / day"},
+		// Full-precision API rates are rounded to a readable number of decimals
+		// rather than dumping the raw float (issue #260).
+		{0.21317778888888886, "d", "hours", "0.2132 hours / day"},
+		{0.1900775022222092, "d", "", "0.1901/day"},
+		{0.0, "d", "", "0/day"},
+		// A small negative rate that rounds to zero must render as "0", not
+		// "-0", for do-less / downward-sloping goals (issue #260).
+		{-0.00001, "d", "", "0/day"},
 	}
 
 	for _, tt := range tests {
@@ -331,6 +339,93 @@ func TestReviewModelViewWithRateAndGunits(t *testing.T) {
 	expectedRate := "Rate:        5 pushups / day"
 	if !strings.Contains(view, expectedRate) {
 		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedRate, view)
+	}
+}
+
+func TestReviewModelViewWithCurrentAndEndRate(t *testing.T) {
+	// When the current rate differs from the end rate, both are shown so the
+	// user sees today's rate and where the goal is heading (issue #259).
+	endRate := 0.21317778888888886
+	curRate := 0.0
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &endRate,
+			Currate:  &curRate,
+			Runits:   "d",
+			Gunits:   "hours",
+		},
+	}
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	view := initialReviewModel(goals, config).View()
+
+	expectedRate := "Rate:        0 hours / day (current), 0.2132 (end)"
+	if !strings.Contains(view, expectedRate) {
+		t.Errorf("Expected view to contain '%s', but got:\n%s", expectedRate, view)
+	}
+}
+
+func TestReviewModelViewWithEqualCurrentAndEndRate(t *testing.T) {
+	// On a flat road the current and end rates match, so only a single rate is
+	// shown rather than redundantly repeating it (issue #259).
+	rate := 2.0
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Title:    "Test Goal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &rate,
+			Currate:  &rate,
+			Runits:   "d",
+		},
+	}
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	view := initialReviewModel(goals, config).View()
+
+	if !strings.Contains(view, "Rate:        2/day") {
+		t.Errorf("Expected single rate 'Rate:        2/day', but got:\n%s", view)
+	}
+	if strings.Contains(view, "(current)") {
+		t.Errorf("Expected no current/end split when rates are equal, but got:\n%s", view)
+	}
+}
+
+func TestReviewModelViewCurrentRateFromLegacyRcur(t *testing.T) {
+	// Some API payloads carry the current rate as `rcur` rather than `currate`;
+	// CurrentRate() falls back to it so the current/end split still renders.
+	endRate := 1.0
+	curRate := 0.5
+	goals := []Goal{
+		{
+			Slug:     "testgoal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+			Baremin:  "+2 in 1 day",
+			Rate:     &endRate,
+			Rcur:     &curRate,
+			Runits:   "d",
+		},
+	}
+
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+	view := initialReviewModel(goals, config).View()
+
+	if !strings.Contains(view, "Rate:        0.5/day (current), 1 (end)") {
+		t.Errorf("Expected current/end split from rcur fallback, but got:\n%s", view)
 	}
 }
 
