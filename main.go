@@ -172,7 +172,7 @@ func main() {
 	// http.Client.Timeout fires.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	p := tea.NewProgram(initialModel(ctx), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %s", redactError(err))
 		os.Exit(1)
