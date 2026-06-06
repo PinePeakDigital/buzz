@@ -1174,3 +1174,42 @@ func TestReviewNavigationTriggersFetchOnlyWhenUncached(t *testing.T) {
 		t.Errorf("expected no loading/command for cached g1 (loading=%v, cmd=%v)", m.loading, cmd != nil)
 	}
 }
+
+func TestReviewNavigateAwayAndBackDoesNotRefetch(t *testing.T) {
+	// goals[0] (g1) is marked in-flight by the constructor (Init dispatches it).
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	if _, ok := m.inFlight["g1"]; !ok {
+		t.Fatal("expected g1 marked in-flight after construction")
+	}
+
+	// Navigate to g2 (uncached, not in flight) → dispatch a fetch for it.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(reviewModel)
+	if cmd == nil {
+		t.Fatal("expected a fetch command for uncached g2")
+	}
+	if _, ok := m.inFlight["g2"]; !ok {
+		t.Error("expected g2 marked in-flight after navigating to it")
+	}
+
+	// Navigate back to g1 before its first fetch resolves. It's still in flight,
+	// so no second request should be dispatched — just keep the spinner.
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(reviewModel)
+	if cmd != nil {
+		t.Error("expected NO second fetch for g1 while its first fetch is in flight")
+	}
+	if !m.loading {
+		t.Error("expected loading=true while g1 is still being fetched")
+	}
+
+	// When g1's single fetch finally resolves, it clears in-flight and loading.
+	updated, _ = m.Update(goalDetailsMsg{slug: "g1", goal: &Goal{Slug: "g1"}})
+	m = updated.(reviewModel)
+	if _, ok := m.inFlight["g1"]; ok {
+		t.Error("expected g1 cleared from in-flight after its fetch resolved")
+	}
+	if m.loading {
+		t.Error("expected loading=false after g1 (current) resolved")
+	}
+}
