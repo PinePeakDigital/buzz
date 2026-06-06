@@ -35,10 +35,12 @@ func TestCompareVersions(t *testing.T) {
 			expected:       false,
 		},
 		{
+			// An unstamped dev build must not claim an update (issue #233): it
+			// can't know its real version or point at the right upgrade path.
 			name:           "dev version with newer release",
 			currentVersion: "dev",
 			newVersion:     "v0.30.0",
-			expected:       true,
+			expected:       false,
 		},
 		{
 			name:           "dev version same",
