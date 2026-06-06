@@ -446,3 +446,40 @@ func TestRenderGoalChartCumulativeAllBeforeWindow(t *testing.T) {
 		t.Errorf("expected empty chart when no datapoints fall in the window, got:\n%s", chart)
 	}
 }
+
+func TestProcessCumulativeValues(t *testing.T) {
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 2)
+
+	check := func(name string, got []timedValue, want []float64) {
+		if len(got) != len(want) {
+			t.Fatalf("%s: got %d values, want %d", name, len(got), len(want))
+		}
+		for i, w := range want {
+			if got[i].value != w {
+				t.Errorf("%s: value[%d] = %v, want %v", name, i, got[i].value, w)
+			}
+		}
+	}
+
+	// Two datapoints inside the window, nothing before it: the anchor carries 0,
+	// then the running total reaches 5, then 8.
+	check("in-window", processCumulative(Goal{
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: start.Unix(), Value: 5},
+			{Timestamp: start.AddDate(0, 0, 1).Unix(), Value: 3},
+		},
+	}, start, end), []float64{0, 5, 8})
+
+	// A datapoint before the window feeds the carry-over anchor (10) but isn't
+	// itself plotted; in-window points continue the running total: 15, then 18.
+	check("carry-over", processCumulative(Goal{
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: start.AddDate(0, 0, -1).Unix(), Value: 10},
+			{Timestamp: start.Unix(), Value: 5},
+			{Timestamp: start.AddDate(0, 0, 1).Unix(), Value: 3},
+		},
+	}, start, end), []float64{10, 15, 18})
+}
