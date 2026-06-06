@@ -186,11 +186,18 @@ func (m reviewModel) View() string {
 		return "No goals to review.\n\nPress q to quit."
 	}
 
-	// Prefer the lazily-fetched full goal (datapoints + road) once it's loaded;
-	// until then render the summary fields from the bulk goal list.
+	// Start from the bulk summary goal, then merge in only the fields the
+	// per-goal detail fetch adds (datapoints + the chart's road/window inputs).
+	// Merging rather than replacing keeps the summary fields (title, limsum,
+	// deadline, …) intact even if a detail response is ever sparse.
 	goal := m.goals[m.current]
 	if d, ok := m.details[goal.Slug]; ok {
-		goal = *d
+		goal.Datapoints = d.Datapoints
+		goal.Roadall = d.Roadall
+		goal.Tmin = d.Tmin
+		goal.Tmax = d.Tmax
+		goal.Kyoom = d.Kyoom
+		goal.Yaw = d.Yaw
 	}
 
 	// Create the goal details view
