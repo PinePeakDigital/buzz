@@ -1013,3 +1013,44 @@ func TestFormatRecentDatapointsFallsBackToTimestamp(t *testing.T) {
 		t.Errorf("Expected timestamp fallback date '2021-01-01', got:\n%s", result)
 	}
 }
+
+// TestGoalDetailsFieldOrder locks in the field ordering from issue #229:
+// Rate, Autoratchet, Limsum, Deadline, Due time, Pledge, Title, URL — with the
+// fields the issue didn't enumerate following after.
+func TestGoalDetailsFieldOrder(t *testing.T) {
+	rate := 0.5
+	autoratchet := 7.0
+	goal := &Goal{
+		Slug:        "clean",
+		Title:       "#autodialMax=0.5",
+		Limsum:      "+0.07 in 6 days",
+		Pledge:      5.0,
+		Rate:        &rate,
+		Runits:      "d",
+		Gunits:      "hours",
+		Autoratchet: &autoratchet,
+		Autodata:    "ifttt",
+		Fineprint:   "be honest",
+		Losedate:    4102444800, // fixed future timestamp; only the label's position matters here
+	}
+	config := &Config{Username: "narthur"}
+
+	out := formatGoalDetails(goal, config)
+
+	// Each label must appear, and in this exact relative order.
+	want := []string{
+		"Rate:", "Autoratchet:", "Limsum:", "Deadline:", "Due time:",
+		"Pledge:", "Title:", "URL:", "Autodata:", "Fine print:",
+	}
+	prev := -1
+	for _, label := range want {
+		idx := strings.Index(out, label)
+		if idx == -1 {
+			t.Fatalf("output missing %q\n%s", label, out)
+		}
+		if idx < prev {
+			t.Errorf("%q appears out of order (want sequence %v)\n%s", label, want, out)
+		}
+		prev = idx
+	}
+}
