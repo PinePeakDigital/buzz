@@ -31,8 +31,11 @@ func handleReviewCommand() {
 
 	client := NewHTTPClient(config)
 
-	// Fetch goals with their recent datapoints
-	goals, err := client.FetchGoalsWithDatapoints(context.Background())
+	// Fetch just the goal list (one request) so the TUI opens immediately. Each
+	// goal's datapoints and road are loaded lazily on demand as the user views
+	// it (see fetchGoalDetailsCmd), instead of fetching every goal up front —
+	// which took ~50s for accounts with many goals.
+	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
@@ -57,6 +60,8 @@ func handleReviewCommand() {
 // reviewModel holds the state for the review command
 type reviewModel struct {
 	goals   []Goal
+	details map[string]*Goal // lazily-fetched full goals (datapoints, road, …) keyed by slug
+	loading bool             // a detail fetch for the current goal is in flight
 	config  *Config
 	current int    // current goal index
 	width   int    // terminal width
@@ -68,13 +73,49 @@ type reviewModel struct {
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
 	return reviewModel{
 		goals:   goals,
+		details: make(map[string]*Goal),
 		config:  config,
 		current: 0,
+		// Init dispatches the first goal's details fetch, so show the loading
+		// indicator from the very first frame.
+		loading: len(goals) > 0,
 	}
 }
 
+// goalDetailsMsg carries the result of a lazy per-goal details fetch.
+type goalDetailsMsg struct {
+	slug string
+	goal *Goal
+	err  error
+}
+
+// fetchGoalDetailsCmd fetches one goal's full details (datapoints + road) in the
+// background so the TUI opens immediately and navigation stays responsive.
+func fetchGoalDetailsCmd(config *Config, slug string) tea.Cmd {
+	return func() tea.Msg {
+		goal, err := NewHTTPClient(config).FetchGoalWithDatapoints(context.Background(), slug)
+		return goalDetailsMsg{slug: slug, goal: goal, err: err}
+	}
+}
+
+// ensureDetails returns a command to fetch the current goal's details if they
+// aren't cached yet, updating the loading flag accordingly.
+func (m *reviewModel) ensureDetails() tea.Cmd {
+	if len(m.goals) == 0 {
+		m.loading = false
+		return nil
+	}
+	slug := m.goals[m.current].Slug
+	if _, ok := m.details[slug]; ok {
+		m.loading = false
+		return nil
+	}
+	m.loading = true
+	return fetchGoalDetailsCmd(m.config, slug)
+}
+
 func (m reviewModel) Init() tea.Cmd {
-	return nil
+	return m.ensureDetails()
 }
 
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -82,6 +123,24 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		return m, nil
+
+	case goalDetailsMsg:
+		// Cache the result regardless of which goal is now current (the user
+		// may have navigated on). Only touch loading/err for the current goal.
+		isCurrent := len(m.goals) > 0 && msg.slug == m.goals[m.current].Slug
+		if msg.err != nil {
+			if isCurrent {
+				m.loading = false
+				m.err = fmt.Sprintf("Failed to load goal details: %s", redactError(msg.err))
+			}
+			return m, nil
+		}
+		m.details[msg.slug] = msg.goal
+		if isCurrent {
+			m.loading = false
+			m.err = ""
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -95,7 +154,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.current++
 			}
 			m.err = ""
-			return m, nil
+			return m, m.ensureDetails()
 
 		case "left", "h", "p", "k":
 			// Previous goal
@@ -103,7 +162,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.current--
 			}
 			m.err = ""
-			return m, nil
+			return m, m.ensureDetails()
 
 		case "o", "enter":
 			// Open current goal in browser
@@ -127,7 +186,12 @@ func (m reviewModel) View() string {
 		return "No goals to review.\n\nPress q to quit."
 	}
 
+	// Prefer the lazily-fetched full goal (datapoints + road) once it's loaded;
+	// until then render the summary fields from the bulk goal list.
 	goal := m.goals[m.current]
+	if d, ok := m.details[goal.Slug]; ok {
+		goal = *d
+	}
 
 	// Create the goal details view
 	var view string
@@ -179,6 +243,14 @@ func (m reviewModel) View() string {
 	// no datapoints or none inside the charted window.
 	if chart := renderGoalChart(goal, m.width); chart != "" {
 		view += chart
+	}
+
+	// Loading indicator while this goal's datapoints/chart are being fetched.
+	if m.loading {
+		loadingStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Padding(0, 2)
+		view += loadingStyle.Render("Loading datapoints…") + "\n"
 	}
 
 	// Error message section (if any)

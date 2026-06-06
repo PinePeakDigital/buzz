@@ -60,11 +60,23 @@ func TestReviewModelInit(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
+	// With goals present, Init dispatches the lazy fetch of the first goal's
+	// details, so it returns a command (not nil).
 	m := initialReviewModel(goals, config)
-	cmd := m.Init()
+	if cmd := m.Init(); cmd == nil {
+		t.Error("Expected Init() to return a details-fetch command when goals exist")
+	}
+	if !m.loading {
+		t.Error("Expected loading=true on init when goals exist")
+	}
 
-	if cmd != nil {
-		t.Error("Expected Init() to return nil")
+	// With no goals, there's nothing to fetch.
+	empty := initialReviewModel(nil, config)
+	if cmd := empty.Init(); cmd != nil {
+		t.Error("Expected Init() to return nil when there are no goals")
+	}
+	if empty.loading {
+		t.Error("Expected loading=false on init when there are no goals")
 	}
 }
 
@@ -1084,5 +1096,81 @@ func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
 			t.Errorf("%q appears out of order\n%s", label, out)
 		}
 		prev = idx
+	}
+}
+
+func TestReviewGoalDetailsMsgCachesAndClearsLoading(t *testing.T) {
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	m.err = "stale error"
+
+	fetched := &Goal{Slug: "g1", Title: "Hydrated"}
+	updated, _ := m.Update(goalDetailsMsg{slug: "g1", goal: fetched})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading=false after the current goal's details arrive")
+	}
+	if got, ok := m.details["g1"]; !ok || got.Title != "Hydrated" {
+		t.Errorf("expected details[g1] cached as the fetched goal, got %+v (present=%v)", got, ok)
+	}
+	if m.err != "" {
+		t.Errorf("expected err cleared on success, got %q", m.err)
+	}
+}
+
+func TestReviewGoalDetailsMsgError(t *testing.T) {
+	m := initialReviewModel([]Goal{{Slug: "g1"}}, &Config{Username: "u"})
+
+	updated, _ := m.Update(goalDetailsMsg{slug: "g1", err: fmt.Errorf("boom")})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading=false even on fetch error")
+	}
+	if !strings.Contains(m.err, "Failed to load goal details") {
+		t.Errorf("expected err to mention the failure, got %q", m.err)
+	}
+}
+
+func TestReviewGoalDetailsMsgForNonCurrentGoalDoesNotClearLoading(t *testing.T) {
+	// A late result for a goal the user already navigated away from should be
+	// cached but must not clear the loading state of the current goal.
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	m.current = 1 // viewing g2, still loading it
+	m.loading = true
+
+	updated, _ := m.Update(goalDetailsMsg{slug: "g1", goal: &Goal{Slug: "g1"}})
+	m = updated.(reviewModel)
+
+	if _, ok := m.details["g1"]; !ok {
+		t.Error("expected g1 details to be cached even though it's not current")
+	}
+	if !m.loading {
+		t.Error("expected loading to stay true: g2 (current) is still loading")
+	}
+}
+
+func TestReviewNavigationTriggersFetchOnlyWhenUncached(t *testing.T) {
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	m.details["g1"] = &Goal{Slug: "g1"} // g1 cached, g2 not
+
+	// Navigate to g2 (uncached) → loading + a fetch command.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(reviewModel)
+	if m.current != 1 {
+		t.Fatalf("expected to move to g2 (index 1), got %d", m.current)
+	}
+	if !m.loading || cmd == nil {
+		t.Errorf("expected loading=true and a fetch command for uncached g2 (loading=%v, cmd=%v)", m.loading, cmd != nil)
+	}
+
+	// Navigate back to g1 (cached) → no loading, no command.
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(reviewModel)
+	if m.current != 0 {
+		t.Fatalf("expected to move back to g1 (index 0), got %d", m.current)
+	}
+	if m.loading || cmd != nil {
+		t.Errorf("expected no loading/command for cached g1 (loading=%v, cmd=%v)", m.loading, cmd != nil)
 	}
 }
