@@ -483,3 +483,59 @@ func TestProcessCumulativeValues(t *testing.T) {
 		},
 	}, start, end), []float64{10, 15, 18})
 }
+
+func TestProcessDatapointsNonCumulative(t *testing.T) {
+	start := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 5)
+
+	// Non-cumulative goal: only in-window points, sorted ascending, raw values.
+	goal := Goal{
+		Datapoints: []Datapoint{
+			{Timestamp: start.AddDate(0, 0, 3).Unix(), Value: 30},  // in window, later
+			{Timestamp: start.AddDate(0, 0, -2).Unix(), Value: 99}, // before window → excluded
+			{Timestamp: start.AddDate(0, 0, 1).Unix(), Value: 10},  // in window, earlier
+			{Timestamp: end.AddDate(0, 0, 2).Unix(), Value: 88},    // after window → excluded
+		},
+	}
+
+	got := processDatapoints(goal, start, end)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 in-window datapoints, got %d", len(got))
+	}
+	if got[0].timestamp >= got[1].timestamp {
+		t.Error("expected datapoints sorted ascending by timestamp")
+	}
+	if got[0].value != 10 || got[1].value != 30 {
+		t.Errorf("expected raw (un-summed) values [10 30], got [%v %v]", got[0].value, got[1].value)
+	}
+}
+
+func TestDatapointSeriesInterpolation(t *testing.T) {
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 10)
+
+	// Endpoints at the first/last columns; interior columns linearly interpolated.
+	got := datapointSeries([]timedValue{
+		{timestamp: start.Unix(), value: 0},
+		{timestamp: end.Unix(), value: 100},
+	}, start, end, 11)
+	if len(got) != 11 {
+		t.Fatalf("expected 11 columns, got %d", len(got))
+	}
+	if got[0] != 0 || got[10] != 100 {
+		t.Errorf("endpoints: got[0]=%v got[10]=%v, want 0 and 100", got[0], got[10])
+	}
+	if got[5] < 49.9 || got[5] > 50.1 {
+		t.Errorf("midpoint interpolation: got[5]=%v, want ~50", got[5])
+	}
+
+	// A single datapoint fills the whole row with its value (no gaps, no NaN).
+	single := datapointSeries([]timedValue{
+		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 7},
+	}, start, end, 11)
+	for i, v := range single {
+		if v != 7 {
+			t.Errorf("single datapoint flat-fill: col %d = %v, want 7", i, v)
+		}
+	}
+}
