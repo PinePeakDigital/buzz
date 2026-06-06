@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -60,11 +61,23 @@ func TestReviewModelInit(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
+	// With goals present, Init dispatches the lazy fetch of the first goal's
+	// details, so it returns a command (not nil).
 	m := initialReviewModel(goals, config)
-	cmd := m.Init()
+	if cmd := m.Init(); cmd == nil {
+		t.Error("Expected Init() to return a details-fetch command when goals exist")
+	}
+	if !m.loading {
+		t.Error("Expected loading=true on init when goals exist")
+	}
 
-	if cmd != nil {
-		t.Error("Expected Init() to return nil")
+	// With no goals, there's nothing to fetch.
+	empty := initialReviewModel(nil, config)
+	if cmd := empty.Init(); cmd != nil {
+		t.Error("Expected Init() to return nil when there are no goals")
+	}
+	if empty.loading {
+		t.Error("Expected loading=false on init when there are no goals")
 	}
 }
 
@@ -1084,5 +1097,170 @@ func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
 			t.Errorf("%q appears out of order\n%s", label, out)
 		}
 		prev = idx
+	}
+}
+
+func TestReviewGoalDetailsMsgCachesAndClearsLoading(t *testing.T) {
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	m.err = "stale error"
+
+	fetched := &Goal{Slug: "g1", Title: "Hydrated"}
+	updated, _ := m.Update(goalDetailsMsg{slug: "g1", goal: fetched})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading=false after the current goal's details arrive")
+	}
+	if got, ok := m.details["g1"]; !ok || got.Title != "Hydrated" {
+		t.Errorf("expected details[g1] cached as the fetched goal, got %+v (present=%v)", got, ok)
+	}
+	if m.err != "" {
+		t.Errorf("expected err cleared on success, got %q", m.err)
+	}
+}
+
+func TestReviewGoalDetailsMsgError(t *testing.T) {
+	m := initialReviewModel([]Goal{{Slug: "g1"}}, &Config{Username: "u"})
+
+	updated, _ := m.Update(goalDetailsMsg{slug: "g1", err: fmt.Errorf("boom")})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading=false even on fetch error")
+	}
+	if !strings.Contains(m.err, "Failed to load goal details") {
+		t.Errorf("expected err to mention the failure, got %q", m.err)
+	}
+}
+
+func TestReviewGoalDetailsMsgForNonCurrentGoalDoesNotClearLoading(t *testing.T) {
+	// A late result for a goal the user already navigated away from should be
+	// cached but must not clear the loading state of the current goal.
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	m.current = 1 // viewing g2, still loading it
+	m.loading = true
+
+	updated, _ := m.Update(goalDetailsMsg{slug: "g1", goal: &Goal{Slug: "g1"}})
+	m = updated.(reviewModel)
+
+	if _, ok := m.details["g1"]; !ok {
+		t.Error("expected g1 details to be cached even though it's not current")
+	}
+	if !m.loading {
+		t.Error("expected loading to stay true: g2 (current) is still loading")
+	}
+}
+
+func TestReviewNavigationTriggersFetchOnlyWhenUncached(t *testing.T) {
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	m.details["g1"] = &Goal{Slug: "g1"} // g1 cached, g2 not
+
+	// Navigate to g2 (uncached) → loading + a fetch command.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(reviewModel)
+	if m.current != 1 {
+		t.Fatalf("expected to move to g2 (index 1), got %d", m.current)
+	}
+	if !m.loading || cmd == nil {
+		t.Errorf("expected loading=true and a fetch command for uncached g2 (loading=%v, cmd=%v)", m.loading, cmd != nil)
+	}
+
+	// Navigate back to g1 (cached) → no loading, no command.
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(reviewModel)
+	if m.current != 0 {
+		t.Fatalf("expected to move back to g1 (index 0), got %d", m.current)
+	}
+	if m.loading || cmd != nil {
+		t.Errorf("expected no loading/command for cached g1 (loading=%v, cmd=%v)", m.loading, cmd != nil)
+	}
+}
+
+func TestReviewNavigateAwayAndBackDoesNotRefetch(t *testing.T) {
+	// goals[0] (g1) is marked in-flight by the constructor (Init dispatches it).
+	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
+	if _, ok := m.inFlight["g1"]; !ok {
+		t.Fatal("expected g1 marked in-flight after construction")
+	}
+
+	// Navigate to g2 (uncached, not in flight) → dispatch a fetch for it.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(reviewModel)
+	if cmd == nil {
+		t.Fatal("expected a fetch command for uncached g2")
+	}
+	if _, ok := m.inFlight["g2"]; !ok {
+		t.Error("expected g2 marked in-flight after navigating to it")
+	}
+
+	// Navigate back to g1 before its first fetch resolves. It's still in flight,
+	// so no second request should be dispatched — just keep the spinner.
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(reviewModel)
+	if cmd != nil {
+		t.Error("expected NO second fetch for g1 while its first fetch is in flight")
+	}
+	if !m.loading {
+		t.Error("expected loading=true while g1 is still being fetched")
+	}
+
+	// When g1's single fetch finally resolves, it clears in-flight and loading.
+	updated, _ = m.Update(goalDetailsMsg{slug: "g1", goal: &Goal{Slug: "g1"}})
+	m = updated.(reviewModel)
+	if _, ok := m.inFlight["g1"]; ok {
+		t.Error("expected g1 cleared from in-flight after its fetch resolved")
+	}
+	if m.loading {
+		t.Error("expected loading=false after g1 (current) resolved")
+	}
+}
+
+func TestReviewViewMergesDetailFieldsOntoSummaryGoal(t *testing.T) {
+	// Bulk summary goal: has summary fields but no datapoints/road. The cached
+	// detail goal deliberately has an EMPTY Title to prove View keeps the
+	// summary's Title (merge, not replace) while pulling in datapoints + road.
+	rate := 0.5
+	goals := []Goal{{
+		Slug:     "g",
+		Title:    "Bulk Title",
+		Limsum:   "+1 in 2 days",
+		Pledge:   5.0,
+		Rate:     &rate,
+		Runits:   "d",
+		Losedate: 4102444800,
+	}}
+
+	now := time.Now()
+	detail := &Goal{
+		Slug:  "g",
+		Yaw:   1,
+		Title: "", // empty on purpose: must NOT overwrite the summary title
+		Datapoints: []Datapoint{
+			{Timestamp: now.AddDate(0, 0, -2).Unix(), Value: 1},
+			{Timestamp: now.AddDate(0, 0, -1).Unix(), Value: 2},
+		},
+		Roadall: [][]*float64{
+			roadallRow(float64(now.AddDate(0, 0, -30).Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.Unix()), fptr(5.0), nil),
+		},
+	}
+
+	m := initialReviewModel(goals, &Config{Username: "u"})
+	m.details["g"] = detail
+	m.loading = false
+	m.width = 100
+
+	out := m.View()
+
+	// Summary field survives the merge (came from the bulk goal, not the detail).
+	if !strings.Contains(out, "Bulk Title") {
+		t.Errorf("expected summary Title preserved after merge\n%s", out)
+	}
+	// Detail-only data is merged in and rendered.
+	if !strings.Contains(out, "Recent datapoints") {
+		t.Errorf("expected merged datapoints to render\n%s", out)
+	}
+	if !strings.Contains(out, "Goal Progress Chart") {
+		t.Errorf("expected chart (from merged road + datapoints) to render\n%s", out)
 	}
 }

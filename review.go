@@ -31,8 +31,11 @@ func handleReviewCommand() {
 
 	client := NewHTTPClient(config)
 
-	// Fetch goals with their recent datapoints
-	goals, err := client.FetchGoalsWithDatapoints(context.Background())
+	// Fetch just the goal list (one request) so the TUI opens immediately. Each
+	// goal's datapoints and road are loaded lazily on demand as the user views
+	// it (see fetchGoalDetailsCmd), instead of fetching every goal up front —
+	// which took ~50s for accounts with many goals.
+	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to fetch goals: %s\n", redactError(err))
 		os.Exit(1)
@@ -46,8 +49,15 @@ func handleReviewCommand() {
 	// Sort goals alphabetically by slug as specified
 	SortGoalsBySlug(goals)
 
+	// Long-lived context cancelled when the TUI exits, so in-flight lazy detail
+	// fetches don't outlive the program (per the client.go context contract).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Launch the interactive review TUI
-	p := tea.NewProgram(initialReviewModel(goals, config), tea.WithAltScreen())
+	model := initialReviewModel(goals, config)
+	model.ctx = ctx
+	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
@@ -56,25 +66,82 @@ func handleReviewCommand() {
 
 // reviewModel holds the state for the review command
 type reviewModel struct {
-	goals   []Goal
-	config  *Config
-	current int    // current goal index
-	width   int    // terminal width
-	height  int    // terminal height
-	err     string // error message to display
+	goals    []Goal
+	details  map[string]*Goal    // lazily-fetched full goals (datapoints, road, …) keyed by slug
+	inFlight map[string]struct{} // slugs with a detail fetch currently in flight (dedup)
+	loading  bool                // a detail fetch for the current goal is in flight
+	ctx      context.Context     // cancelled when the TUI exits; cancels in-flight fetches
+	config   *Config
+	current  int    // current goal index
+	width    int    // terminal width
+	height   int    // terminal height
+	err      string // error message to display
 }
 
-// initialReviewModel creates a new review model
+// initialReviewModel creates a new review model. The first goal's details fetch
+// is dispatched by Init; because Init can't persist model state (it returns only
+// a Cmd), the constructor pre-marks that goal as in-flight and loading here.
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
-	return reviewModel{
-		goals:   goals,
-		config:  config,
-		current: 0,
+	m := reviewModel{
+		goals:    goals,
+		details:  make(map[string]*Goal),
+		inFlight: make(map[string]struct{}),
+		ctx:      context.Background(), // overridden with a cancellable ctx by handleReviewCommand
+		config:   config,
+		current:  0,
+		loading:  len(goals) > 0,
+	}
+	if len(goals) > 0 {
+		m.inFlight[goals[0].Slug] = struct{}{}
+	}
+	return m
+}
+
+// goalDetailsMsg carries the result of a lazy per-goal details fetch.
+type goalDetailsMsg struct {
+	slug string
+	goal *Goal
+	err  error
+}
+
+// fetchGoalDetailsCmd fetches one goal's full details (datapoints + road) in the
+// background so the TUI opens immediately and navigation stays responsive. The
+// context lets the fetch be cancelled when the user quits.
+func fetchGoalDetailsCmd(ctx context.Context, config *Config, slug string) tea.Cmd {
+	return func() tea.Msg {
+		goal, err := NewHTTPClient(config).FetchGoalWithDatapoints(ctx, slug)
+		return goalDetailsMsg{slug: slug, goal: goal, err: err}
 	}
 }
 
+// ensureDetails returns a command to fetch the current goal's details if they
+// aren't already cached or in flight, updating the loading flag accordingly.
+// Deduping on inFlight stops rapid navigation (away and back before a fetch
+// resolves) from firing a second request for the same goal.
+func (m *reviewModel) ensureDetails() tea.Cmd {
+	if len(m.goals) == 0 {
+		m.loading = false
+		return nil
+	}
+	slug := m.goals[m.current].Slug
+	if _, ok := m.details[slug]; ok {
+		m.loading = false
+		return nil
+	}
+	m.loading = true
+	if _, ok := m.inFlight[slug]; ok {
+		return nil // already fetching this goal; just keep showing the spinner
+	}
+	m.inFlight[slug] = struct{}{}
+	return fetchGoalDetailsCmd(m.ctx, m.config, slug)
+}
+
 func (m reviewModel) Init() tea.Cmd {
-	return nil
+	// The constructor already marked goals[0] in-flight; just dispatch its fetch.
+	if len(m.goals) == 0 {
+		return nil
+	}
+	return fetchGoalDetailsCmd(m.ctx, m.config, m.goals[0].Slug)
 }
 
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -82,6 +149,26 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		return m, nil
+
+	case goalDetailsMsg:
+		// This fetch is no longer in flight.
+		delete(m.inFlight, msg.slug)
+		// Cache the result regardless of which goal is now current (the user
+		// may have navigated on). Only touch loading/err for the current goal.
+		isCurrent := len(m.goals) > 0 && msg.slug == m.goals[m.current].Slug
+		if msg.err != nil {
+			if isCurrent {
+				m.loading = false
+				m.err = fmt.Sprintf("Failed to load goal details: %s", redactError(msg.err))
+			}
+			return m, nil
+		}
+		m.details[msg.slug] = msg.goal
+		if isCurrent {
+			m.loading = false
+			m.err = ""
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -95,7 +182,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.current++
 			}
 			m.err = ""
-			return m, nil
+			return m, m.ensureDetails()
 
 		case "left", "h", "p", "k":
 			// Previous goal
@@ -103,7 +190,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.current--
 			}
 			m.err = ""
-			return m, nil
+			return m, m.ensureDetails()
 
 		case "o", "enter":
 			// Open current goal in browser
@@ -127,7 +214,19 @@ func (m reviewModel) View() string {
 		return "No goals to review.\n\nPress q to quit."
 	}
 
+	// Start from the bulk summary goal, then merge in only the fields the
+	// per-goal detail fetch adds (datapoints + the chart's road/window inputs).
+	// Merging rather than replacing keeps the summary fields (title, limsum,
+	// deadline, …) intact even if a detail response is ever sparse.
 	goal := m.goals[m.current]
+	if d, ok := m.details[goal.Slug]; ok {
+		goal.Datapoints = d.Datapoints
+		goal.Roadall = d.Roadall
+		goal.Tmin = d.Tmin
+		goal.Tmax = d.Tmax
+		goal.Kyoom = d.Kyoom
+		goal.Yaw = d.Yaw
+	}
 
 	// Create the goal details view
 	var view string
@@ -179,6 +278,14 @@ func (m reviewModel) View() string {
 	// no datapoints or none inside the charted window.
 	if chart := renderGoalChart(goal, m.width); chart != "" {
 		view += chart
+	}
+
+	// Loading indicator while this goal's datapoints/chart are being fetched.
+	if m.loading {
+		loadingStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Padding(0, 2)
+		view += loadingStyle.Render("Loading datapoints…") + "\n"
 	}
 
 	// Error message section (if any)
