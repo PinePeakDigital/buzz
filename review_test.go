@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -1211,5 +1212,55 @@ func TestReviewNavigateAwayAndBackDoesNotRefetch(t *testing.T) {
 	}
 	if m.loading {
 		t.Error("expected loading=false after g1 (current) resolved")
+	}
+}
+
+func TestReviewViewMergesDetailFieldsOntoSummaryGoal(t *testing.T) {
+	// Bulk summary goal: has summary fields but no datapoints/road. The cached
+	// detail goal deliberately has an EMPTY Title to prove View keeps the
+	// summary's Title (merge, not replace) while pulling in datapoints + road.
+	rate := 0.5
+	goals := []Goal{{
+		Slug:     "g",
+		Title:    "Bulk Title",
+		Limsum:   "+1 in 2 days",
+		Pledge:   5.0,
+		Rate:     &rate,
+		Runits:   "d",
+		Losedate: 4102444800,
+	}}
+
+	now := time.Now()
+	detail := &Goal{
+		Slug:  "g",
+		Yaw:   1,
+		Title: "", // empty on purpose: must NOT overwrite the summary title
+		Datapoints: []Datapoint{
+			{Timestamp: now.AddDate(0, 0, -2).Unix(), Value: 1},
+			{Timestamp: now.AddDate(0, 0, -1).Unix(), Value: 2},
+		},
+		Roadall: [][]*float64{
+			roadallRow(float64(now.AddDate(0, 0, -30).Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.Unix()), fptr(5.0), nil),
+		},
+	}
+
+	m := initialReviewModel(goals, &Config{Username: "u"})
+	m.details["g"] = detail
+	m.loading = false
+	m.width = 100
+
+	out := m.View()
+
+	// Summary field survives the merge (came from the bulk goal, not the detail).
+	if !strings.Contains(out, "Bulk Title") {
+		t.Errorf("expected summary Title preserved after merge\n%s", out)
+	}
+	// Detail-only data is merged in and rendered.
+	if !strings.Contains(out, "Recent datapoints") {
+		t.Errorf("expected merged datapoints to render\n%s", out)
+	}
+	if !strings.Contains(out, "Goal Progress Chart") {
+		t.Errorf("expected chart (from merged road + datapoints) to render\n%s", out)
 	}
 }
