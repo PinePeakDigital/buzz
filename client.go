@@ -358,6 +358,14 @@ func (c *HTTPClient) FetchGoalsWithDatapoints(ctx context.Context) ([]Goal, erro
 					continue
 				}
 				goals[i].Datapoints = goalWithDatapoints.Datapoints
+				// Retain the per-goal fields the bulk list endpoint omits
+				// but the review chart needs (road, graph window, cumulative
+				// flag, good side).
+				goals[i].Roadall = goalWithDatapoints.Roadall
+				goals[i].Tmin = goalWithDatapoints.Tmin
+				goals[i].Tmax = goalWithDatapoints.Tmax
+				goals[i].Kyoom = goalWithDatapoints.Kyoom
+				goals[i].Yaw = goalWithDatapoints.Yaw
 			}
 		}()
 	}
