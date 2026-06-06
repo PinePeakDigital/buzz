@@ -175,6 +175,12 @@ func (m reviewModel) View() string {
 
 	view += detailStyle.Render(details) + "\n"
 
+	// Progress chart (datapoints vs. bright red line). Empty when the goal has
+	// no datapoints or none inside the charted window.
+	if chart := renderGoalChart(goal, m.width); chart != "" {
+		view += chart
+	}
+
 	// Error message section (if any)
 	if m.err != "" {
 		errorStyle := lipgloss.NewStyle().
