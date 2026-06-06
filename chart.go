@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -9,6 +11,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/guptarohit/asciigraph"
 )
+
+// ansiPattern strips SGR colour codes so we can measure asciigraph's output in
+// visible columns when aligning the x-axis beneath it.
+var ansiPattern = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // chart dimensions
 const (
@@ -70,15 +76,24 @@ func renderGoalChart(goal Goal, width int) string {
 	// Plot the road first and the datapoints second: asciigraph lets a later
 	// series overwrite an earlier one in shared cells, so this keeps the
 	// datapoints (blue) drawn on top of the road (red) wherever they coincide.
+	// The caption is rendered ourselves (below) so the date axis can sit
+	// directly under the plot, above it.
 	graphOutput := asciigraph.PlotMany([][]float64{roadValues, datapointValues},
 		asciigraph.Height(chartHeight),
 		asciigraph.Width(chartWidth),
 		asciigraph.SeriesColors(asciigraph.Red, asciigraph.Blue),
-		asciigraph.Caption("Blue: datapoints, Red: bright red line"),
 	)
 
 	chart.WriteString(graphOutput)
 	chart.WriteString("\n")
+
+	// Date axis aligned to the plot columns (asciigraph has no native x-axis).
+	if axis := renderXAxis(startTime, endTime, plotGutterWidth(graphOutput), chartWidth); axis != "" {
+		chart.WriteString(axis + "\n")
+	}
+
+	captionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Padding(0, 2)
+	chart.WriteString(captionStyle.Render("Blue: datapoints, Red: bright red line") + "\n")
 
 	return chart.String()
 }
@@ -236,6 +251,87 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 	}
 
 	return values
+}
+
+// plotGutterWidth returns the visible column index of asciigraph's y-axis
+// (the `┤`/`┼` rune), which is exactly one column left of the plot area. Those
+// axis runes appear only in the gutter, never in the plotted line, so the
+// first one on any row marks the boundary. Returns -1 if not found.
+func plotGutterWidth(graph string) int {
+	for _, line := range strings.Split(graph, "\n") {
+		plain := ansiPattern.ReplaceAllString(line, "")
+		for i, r := range []rune(plain) {
+			if r == '┤' || r == '┼' {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// renderXAxis builds a date axis (a tick row and a label row) aligned beneath a
+// chartWidth-wide plot whose first column sits at gutter+1. Ticks are spaced to
+// fit the width; the first label is left-aligned to its tick, the last
+// right-aligned, the rest centred, and any label that would collide with the
+// previous one is dropped. Returns "" when the gutter couldn't be located.
+func renderXAxis(start, end time.Time, gutter, chartWidth int) string {
+	if gutter < 0 || chartWidth < 2 {
+		return ""
+	}
+
+	plotStart := gutter + 1
+	total := plotStart + chartWidth
+
+	// One tick per ~18 columns, clamped so labels ("Jan 2") have room.
+	ticks := chartWidth/18 + 1
+	if ticks < 2 {
+		ticks = 2
+	}
+	if ticks > 6 {
+		ticks = 6
+	}
+
+	tickRow := make([]rune, total)
+	labelRow := make([]rune, total)
+	for i := range tickRow {
+		tickRow[i] = ' '
+		labelRow[i] = ' '
+	}
+
+	span := end.Sub(start)
+	lastLabelEnd := -1
+	for i := 0; i < ticks; i++ {
+		f := float64(i) / float64(ticks-1)
+		col := plotStart + int(math.Round(f*float64(chartWidth-1)))
+		if col >= total {
+			col = total - 1
+		}
+		tickRow[col] = '┬'
+
+		label := []rune(start.Add(time.Duration(float64(span) * f)).Format("Jan 2"))
+		var pos int
+		switch i {
+		case 0:
+			pos = col // left-align under the first tick
+		case ticks - 1:
+			pos = col - len(label) + 1 // right-align under the last tick
+		default:
+			pos = col - len(label)/2 // centre on the tick
+		}
+		if pos < 0 {
+			pos = 0
+		}
+		if pos+len(label) > total {
+			pos = total - len(label)
+		}
+		if pos <= lastLabelEnd {
+			continue // would collide with the previous label
+		}
+		copy(labelRow[pos:], label)
+		lastLabelEnd = pos + len(label) - 1
+	}
+
+	return strings.TrimRight(string(tickRow), " ") + "\n" + strings.TrimRight(string(labelRow), " ")
 }
 
 // getRoadValuesForTimeframe samples the bright red line at numPoints evenly

@@ -331,3 +331,73 @@ func TestGetRoadValuesForTimeframeEmpty(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderXAxisAlignment(t *testing.T) {
+	start := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 6, 6, 0, 0, 0, 0, time.UTC)
+	gutter, chartWidth := 7, 80
+
+	axis := renderXAxis(start, end, gutter, chartWidth)
+	if axis == "" {
+		t.Fatal("expected a non-empty axis")
+	}
+	lines := strings.Split(axis, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected tick row + label row, got %d lines", len(lines))
+	}
+	tickRow, labelRow := lines[0], lines[1]
+
+	// Measure tick positions in runes ('┬' is multi-byte, so byte offsets lie).
+	ticks := []rune(tickRow)
+	first, last := -1, -1
+	for i, r := range ticks {
+		if r == '┬' {
+			if first < 0 {
+				first = i
+			}
+			last = i
+		}
+	}
+	// First tick sits at the first plot column (gutter+1); last at the last.
+	if first != gutter+1 {
+		t.Errorf("first tick at col %d, want %d", first, gutter+1)
+	}
+	if last != gutter+chartWidth {
+		t.Errorf("last tick at col %d, want %d", last, gutter+chartWidth)
+	}
+	// Endpoints' dates appear, in order.
+	if !strings.Contains(labelRow, "May 7") {
+		t.Errorf("label row missing start date: %q", labelRow)
+	}
+	if !strings.Contains(labelRow, "Jun 6") {
+		t.Errorf("label row missing end date: %q", labelRow)
+	}
+	// Nothing spills into the y-axis gutter.
+	if strings.TrimSpace(labelRow[:gutter+1]) != "" {
+		t.Errorf("label row writes into the gutter: %q", labelRow[:gutter+1])
+	}
+}
+
+func TestRenderXAxisNoGutter(t *testing.T) {
+	if got := renderXAxis(time.Now(), time.Now().AddDate(0, 0, 1), -1, 80); got != "" {
+		t.Errorf("expected empty axis when gutter not found, got %q", got)
+	}
+}
+
+func TestRenderGoalChartHasDateAxis(t *testing.T) {
+	now := time.Now()
+	goal := Goal{
+		Slug: "axis", Yaw: 1,
+		Datapoints: []Datapoint{
+			{Timestamp: now.AddDate(0, 0, -20).Unix(), Value: 1},
+			{Timestamp: now.Unix(), Value: 5},
+		},
+	}
+	chart := renderGoalChart(goal, 100)
+	if chart == "" {
+		t.Fatal("expected a chart")
+	}
+	if !strings.Contains(chart, "┬") {
+		t.Error("expected an x-axis tick row in the rendered chart")
+	}
+}
