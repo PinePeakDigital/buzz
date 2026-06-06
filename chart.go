@@ -116,7 +116,10 @@ func chartTimeframe(goal Goal, now time.Time) (start, end time.Time) {
 	if err != nil {
 		return start, now
 	}
-	end = end.Add(24*time.Hour - time.Second)
+	// Extend to the last second of the Tmax calendar day. Build it as the start
+	// of the next day minus one second (not +24h) so DST transitions — where a
+	// local day is 23h or 25h — don't spill into the next day or clip late ones.
+	end = time.Date(end.Year(), end.Month(), end.Day()+1, 0, 0, 0, 0, end.Location()).Add(-time.Second)
 	return start, end
 }
 

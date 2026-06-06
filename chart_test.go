@@ -401,3 +401,28 @@ func TestRenderGoalChartHasDateAxis(t *testing.T) {
 		t.Error("expected an x-axis tick row in the rendered chart")
 	}
 }
+
+func TestChartTimeframeTmaxAcrossDSTFallBack(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("tz data unavailable")
+	}
+	orig := time.Local
+	time.Local = loc
+	defer func() { time.Local = orig }()
+
+	// 2023-11-05 is a 25h day in New York (DST ends 02:00). The old
+	// midnight+24h-1s math landed at 22:59:59 local, wrongly excluding a
+	// datapoint logged at 23:30 that same day.
+	g := Goal{Tmin: "2023-10-29", Tmax: "2023-11-05"}
+	_, end := chartTimeframe(g, time.Now())
+
+	dp := time.Date(2023, 11, 5, 23, 30, 0, 0, loc)
+	if dp.After(end) {
+		t.Errorf("23:30 on a 25h DST day excluded: end=%s dp=%s", end, dp)
+	}
+	// End must stay within the Tmax calendar day, not spill into the next.
+	if end.Day() != 5 {
+		t.Errorf("end spilled past the Tmax day: %s", end)
+	}
+}
