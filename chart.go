@@ -67,10 +67,13 @@ func renderGoalChart(goal Goal, width int) string {
 	timeframeInfo := fmt.Sprintf("Timeframe: %s to %s", startTime.Format("Jan 2"), endTime.Format("Jan 2, 2006"))
 	chart.WriteString(chartStyle.Render(timeframeInfo) + "\n\n")
 
-	graphOutput := asciigraph.PlotMany([][]float64{datapointValues, roadValues},
+	// Plot the road first and the datapoints second: asciigraph lets a later
+	// series overwrite an earlier one in shared cells, so this keeps the
+	// datapoints (blue) drawn on top of the road (red) wherever they coincide.
+	graphOutput := asciigraph.PlotMany([][]float64{roadValues, datapointValues},
 		asciigraph.Height(chartHeight),
 		asciigraph.Width(chartWidth),
-		asciigraph.SeriesColors(asciigraph.Blue, asciigraph.Red),
+		asciigraph.SeriesColors(asciigraph.Red, asciigraph.Blue),
 		asciigraph.Caption("Blue: datapoints, Red: bright red line"),
 	)
 
