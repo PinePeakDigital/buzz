@@ -93,24 +93,32 @@ func ParseDuration(durationStr string) (time.Duration, bool) {
 		return 0, false
 	}
 
-	// Convert to duration based on unit
-	var duration time.Duration
+	// Convert to nanoseconds based on unit, as float64 so we can detect
+	// overflow before the lossy float64→int64 conversion below.
+	var ns float64
 	switch unit {
 	case 'm', 'M':
-		duration = time.Duration(num * float64(time.Minute))
+		ns = num * float64(time.Minute)
 	case 'h', 'H':
-		duration = time.Duration(num * float64(time.Hour))
+		ns = num * float64(time.Hour)
 	case 'd', 'D':
-		duration = time.Duration(num * 24 * float64(time.Hour))
+		ns = num * 24 * float64(time.Hour)
 	case 'w', 'W':
-		duration = time.Duration(num * 7 * 24 * float64(time.Hour))
+		ns = num * 7 * 24 * float64(time.Hour)
 	default:
 		return 0, false
 	}
 
-	// Check for overflow: time.Duration is int64 nanoseconds
-	// Maximum duration is ~290 years (math.MaxInt64 nanoseconds)
-	// If the result is negative, it overflowed
+	// Check for overflow: time.Duration is int64 nanoseconds (max ~290 years).
+	// A float64 above math.MaxInt64 saturates to a positive math.MaxInt64 on
+	// conversion rather than wrapping negative, so we must reject it here.
+	if ns >= float64(math.MaxInt64) {
+		return 0, false
+	}
+
+	duration := time.Duration(ns)
+
+	// Backstop: if the result is still negative, it overflowed.
 	if duration < 0 {
 		return 0, false
 	}
