@@ -55,7 +55,7 @@ func TestRenderGoalChartWithDatapoints(t *testing.T) {
 	if !strings.Contains(chart, "Do More") {
 		t.Error("Expected chart to contain 'Do More'")
 	}
-	if !strings.Contains(chart, "datapoints") && !strings.Contains(chart, "bright red line") {
+	if !strings.Contains(chart, "datapoints") || !strings.Contains(chart, "bright red line") {
 		t.Error("Expected chart to contain caption")
 	}
 }
@@ -424,5 +424,25 @@ func TestChartTimeframeTmaxAcrossDSTFallBack(t *testing.T) {
 	// End must stay within the Tmax calendar day, not spill into the next.
 	if end.Day() != 5 {
 		t.Errorf("end spilled past the Tmax day: %s", end)
+	}
+}
+
+func TestRenderGoalChartCumulativeAllBeforeWindow(t *testing.T) {
+	// Cumulative goal whose only datapoints predate the 30-day window. There
+	// are no in-window datapoints, so no chart should render even though the
+	// running total is non-zero (a lone carry-over anchor must not draw a line).
+	old := time.Now().AddDate(0, 0, -60).Unix()
+	goal := Goal{
+		Slug:  "stale",
+		Yaw:   1,
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: old, Value: 5.0},
+			{Timestamp: old + 3600, Value: 7.0},
+		},
+		// No Tmin/Tmax → 30-day fallback window, which excludes both points.
+	}
+	if chart := renderGoalChart(goal, 100); chart != "" {
+		t.Errorf("expected empty chart when no datapoints fall in the window, got:\n%s", chart)
 	}
 }

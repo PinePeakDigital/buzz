@@ -84,12 +84,17 @@ func renderGoalChart(goal Goal, width int) string {
 		asciigraph.SeriesColors(asciigraph.Red, asciigraph.Blue),
 	)
 
-	chart.WriteString(graphOutput)
+	// Indent the plot and date axis by 2 to match the padding the header,
+	// caption, and review details use, so the chart isn't left-shifted from
+	// the rest of the review UI. The gutter is measured on the un-indented
+	// output, then plot and axis are shifted together.
+	gutter := plotGutterWidth(graphOutput)
+	chart.WriteString(indentLines(graphOutput, 2))
 	chart.WriteString("\n")
 
 	// Date axis aligned to the plot columns (asciigraph has no native x-axis).
-	if axis := renderXAxis(startTime, endTime, plotGutterWidth(graphOutput), chartWidth); axis != "" {
-		chart.WriteString(axis + "\n")
+	if axis := renderXAxis(startTime, endTime, gutter, chartWidth); axis != "" {
+		chart.WriteString(indentLines(axis, 2) + "\n")
 	}
 
 	captionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Padding(0, 2)
@@ -180,7 +185,11 @@ func processCumulative(goal Goal, startTime, endTime time.Time) []timedValue {
 		// Datapoints after endTime are ignored.
 	}
 
-	if len(processed) == 0 && startSum == 0 {
+	// No datapoints inside the window means nothing to chart — even if earlier
+	// datapoints pushed the running total above zero. (renderGoalChart's
+	// contract is to return empty when none fall inside the window; a lone
+	// carry-over anchor would otherwise draw a flat, dataless line.)
+	if len(processed) == 0 {
 		return nil
 	}
 
@@ -254,6 +263,19 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 	}
 
 	return values
+}
+
+// indentLines prefixes n spaces to each non-empty line. Used to align the plot
+// and date axis with the 2-space padding the surrounding review UI uses.
+func indentLines(s string, n int) string {
+	pad := strings.Repeat(" ", n)
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		if ln != "" {
+			lines[i] = pad + ln
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // plotGutterWidth returns the visible column index of asciigraph's y-axis
