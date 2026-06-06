@@ -1054,3 +1054,35 @@ func TestGoalDetailsFieldOrder(t *testing.T) {
 		prev = idx
 	}
 }
+
+// TestGoalDetailsFieldOrderMinimal verifies the #229 order still holds — and
+// the conditional fields are omitted — when Rate, Autoratchet, Title, Autodata,
+// and Fine print are all unset.
+func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
+	goal := &Goal{
+		Slug:     "spark",
+		Limsum:   "+1 in 3 days",
+		Pledge:   5.0,
+		Losedate: 4102444800, // fixed future timestamp; only label positions matter
+		// Rate nil, Autoratchet nil, Title/Autodata/Fineprint empty → all omitted.
+	}
+	out := formatGoalDetails(goal, &Config{Username: "narthur"})
+
+	for _, absent := range []string{"Rate:", "Autoratchet:", "Title:", "Autodata:", "Fine print:"} {
+		if strings.Contains(out, absent) {
+			t.Errorf("expected %q to be omitted when unset\n%s", absent, out)
+		}
+	}
+	// The always-present fields keep their #229 relative order.
+	prev := -1
+	for _, label := range []string{"Limsum:", "Deadline:", "Due time:", "Pledge:", "URL:"} {
+		idx := strings.Index(out, label)
+		if idx == -1 {
+			t.Fatalf("output missing %q\n%s", label, out)
+		}
+		if idx < prev {
+			t.Errorf("%q appears out of order\n%s", label, out)
+		}
+		prev = idx
+	}
+}
