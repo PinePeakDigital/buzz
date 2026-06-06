@@ -318,9 +318,27 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 func formatGoalDetails(goal *Goal, config *Config) string {
 	var details string
 
-	// Display title only if not empty
-	if goal.Title != "" {
-		details += fmt.Sprintf("Title:       %s\n", goal.Title)
+	// Field order follows issue #229: the goal's commitment (rate, autoratchet)
+	// first, then urgency (limsum, deadline, due time), then stakes (pledge),
+	// then reference info (title, url). Fields the issue didn't enumerate
+	// (autodata, fine print, recent datapoints) follow, preserving that order.
+
+	// Display rate (n / unit). When the current rate differs from the end
+	// rate (a non-flat road), show both so the user sees what they're held to
+	// today versus where the goal is heading.
+	if goal.Rate != nil && goal.Runits != "" {
+		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
+		if cur := goal.CurrentRate(); cur != nil && formatRateValue(*cur) != formatRateValue(*goal.Rate) {
+			rateStr = fmt.Sprintf("%s (current), %s (end)",
+				formatRate(*cur, goal.Runits, goal.Gunits),
+				formatRateValue(*goal.Rate))
+		}
+		details += fmt.Sprintf("Rate:        %s\n", rateStr)
+	}
+
+	// Display autoratchet only if set (not nil)
+	if goal.Autoratchet != nil {
+		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
 	}
 
 	// Display limsum with color coding based on urgency
@@ -343,27 +361,9 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	}
 	details += fmt.Sprintf("Pledge:      %s\n", pledgeDisplay)
 
-	// Display rate (n / unit). When the current rate differs from the end
-	// rate (a non-flat road), show both so the user sees what they're held to
-	// today versus where the goal is heading.
-	if goal.Rate != nil && goal.Runits != "" {
-		rateStr := formatRate(*goal.Rate, goal.Runits, goal.Gunits)
-		if cur := goal.CurrentRate(); cur != nil && formatRateValue(*cur) != formatRateValue(*goal.Rate) {
-			rateStr = fmt.Sprintf("%s (current), %s (end)",
-				formatRate(*cur, goal.Runits, goal.Gunits),
-				formatRateValue(*goal.Rate))
-		}
-		details += fmt.Sprintf("Rate:        %s\n", rateStr)
-	}
-
-	// Display autodata only if not empty
-	if goal.Autodata != "" {
-		details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
-	}
-
-	// Display autoratchet only if set (not nil)
-	if goal.Autoratchet != nil {
-		details += fmt.Sprintf("Autoratchet: %.0f\n", *goal.Autoratchet)
+	// Display title only if not empty
+	if goal.Title != "" {
+		details += fmt.Sprintf("Title:       %s\n", goal.Title)
 	}
 
 	// Generate and display goal URL
@@ -371,7 +371,12 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
 	details += fmt.Sprintf("URL:         %s\n", goalURL)
 
-	// Display fine print if it exists (at the end)
+	// Display autodata only if not empty
+	if goal.Autodata != "" {
+		details += fmt.Sprintf("Autodata:    %s\n", goal.Autodata)
+	}
+
+	// Display fine print if it exists
 	if goal.Fineprint != "" {
 		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
 	}

@@ -1013,3 +1013,76 @@ func TestFormatRecentDatapointsFallsBackToTimestamp(t *testing.T) {
 		t.Errorf("Expected timestamp fallback date '2021-01-01', got:\n%s", result)
 	}
 }
+
+// TestGoalDetailsFieldOrder locks in the field ordering from issue #229:
+// Rate, Autoratchet, Limsum, Deadline, Due time, Pledge, Title, URL — with the
+// fields the issue didn't enumerate following after.
+func TestGoalDetailsFieldOrder(t *testing.T) {
+	rate := 0.5
+	autoratchet := 7.0
+	goal := &Goal{
+		Slug:        "clean",
+		Title:       "#autodialMax=0.5",
+		Limsum:      "+0.07 in 6 days",
+		Pledge:      5.0,
+		Rate:        &rate,
+		Runits:      "d",
+		Gunits:      "hours",
+		Autoratchet: &autoratchet,
+		Autodata:    "ifttt",
+		Fineprint:   "be honest",
+		Losedate:    4102444800, // fixed future timestamp; only the label's position matters here
+	}
+	config := &Config{Username: "narthur"}
+
+	out := formatGoalDetails(goal, config)
+
+	// Each label must appear, and in this exact relative order.
+	want := []string{
+		"Rate:", "Autoratchet:", "Limsum:", "Deadline:", "Due time:",
+		"Pledge:", "Title:", "URL:", "Autodata:", "Fine print:",
+	}
+	prev := -1
+	for _, label := range want {
+		idx := strings.Index(out, label)
+		if idx == -1 {
+			t.Fatalf("output missing %q\n%s", label, out)
+		}
+		if idx < prev {
+			t.Errorf("%q appears out of order (want sequence %v)\n%s", label, want, out)
+		}
+		prev = idx
+	}
+}
+
+// TestGoalDetailsFieldOrderMinimal verifies the #229 order still holds — and
+// the conditional fields are omitted — when Rate, Autoratchet, Title, Autodata,
+// and Fine print are all unset.
+func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
+	goal := &Goal{
+		Slug:     "spark",
+		Limsum:   "+1 in 3 days",
+		Pledge:   5.0,
+		Losedate: 4102444800, // fixed future timestamp; only label positions matter
+		// Rate nil, Autoratchet nil, Title/Autodata/Fineprint empty → all omitted.
+	}
+	out := formatGoalDetails(goal, &Config{Username: "narthur"})
+
+	for _, absent := range []string{"Rate:", "Autoratchet:", "Title:", "Autodata:", "Fine print:"} {
+		if strings.Contains(out, absent) {
+			t.Errorf("expected %q to be omitted when unset\n%s", absent, out)
+		}
+	}
+	// The always-present fields keep their #229 relative order.
+	prev := -1
+	for _, label := range []string{"Limsum:", "Deadline:", "Due time:", "Pledge:", "URL:"} {
+		idx := strings.Index(out, label)
+		if idx == -1 {
+			t.Fatalf("output missing %q\n%s", label, out)
+		}
+		if idx < prev {
+			t.Errorf("%q appears out of order\n%s", label, out)
+		}
+		prev = idx
+	}
+}
