@@ -107,11 +107,9 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.appModel.datapoint.err = fmt.Sprintf("Failed to submit: %v", msg.err)
 		} else {
-			// Success - exit input mode and refresh goals (without showing loading state)
-			m.appModel.inputMode = false
-			m.appModel.datapoint.focus = 0
-			m.appModel.datapoint.err = ""
-			// Don't set loading = true here to avoid the full-app loading state
+			// Success - exit input mode (back to goal detail) and refresh goals
+			// (without showing the full-app loading state)
+			m.appModel.exitDatapointInput()
 			return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 		}
 		return m, nil
@@ -122,7 +120,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Error loading goal details - continue with basic goal info
 			return m, nil
 		}
-		if m.appModel.showModal && m.appModel.modalGoal != nil && msg.goal != nil {
+		if m.appModel.inGoalModal() && m.appModel.modalGoal != nil && msg.goal != nil {
 			// Update the modal goal with the detailed information
 			if m.appModel.modalGoal.Slug == msg.goal.Slug {
 				m.appModel.modalGoal = msg.goal
@@ -136,9 +134,8 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.appModel.createGoal.err = fmt.Sprintf("Failed to create goal: %v", msg.err)
 		} else {
-			// Success - close modal and refresh goals
-			m.appModel.showCreateModal = false
-			m.appModel.createGoal.err = ""
+			// Success - close the create form and refresh goals
+			m.appModel.closeCreateGoal()
 			return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 		}
 		return m, nil
@@ -159,8 +156,8 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case navigationTimeoutMsg:
 		// Auto-disable highlight after inactivity
-		// Only disable if not in modal or search mode
-		if !m.appModel.showModal && !m.appModel.searchMode {
+		// Only disable if not in a goal modal or search
+		if !m.appModel.inGoalModal() && !m.appModel.searchActive {
 			// Check if enough time has elapsed since last navigation
 			elapsed := time.Since(m.appModel.lastNavigationTime)
 			if elapsed >= navigationTimeout {
@@ -176,7 +173,7 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Is it a mouse click?
 	case tea.MouseMsg:
 		// Only handle clicks when not in a modal
-		if !m.appModel.showModal && !m.appModel.showCreateModal {
+		if m.appModel.mode == modeBrowse {
 			if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
 				return handleMouseClick(m, msg)
 			}
@@ -209,13 +206,13 @@ func (m model) viewApp() string {
 	displayGoals := m.appModel.getDisplayGoals()
 
 	// Render the grid and footer
-	grid := RenderGrid(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username, m.appModel.searchMode, m.appModel.searchQuery)
+	grid := RenderGrid(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username, m.appModel.searchActive, m.appModel.searchQuery)
 	footer := RenderFooter(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 
 	baseView := grid + footer
 
 	// Show create goal modal if active
-	if m.appModel.showCreateModal {
+	if m.appModel.mode == modeCreateGoal {
 		cg := &m.appModel.createGoal
 		modal := RenderCreateGoalModal(m.appModel.width, m.appModel.height, cg.slug(), cg.title(),
 			cg.goalType(), cg.gunits(), cg.goaldate(), cg.goalval(),
@@ -223,10 +220,10 @@ func (m model) viewApp() string {
 		return modal
 	}
 
-	// Show modal overlay if modal is active
-	if m.appModel.showModal && m.appModel.modalGoal != nil {
+	// Show modal overlay if a goal detail is active
+	if m.appModel.inGoalModal() && m.appModel.modalGoal != nil {
 		dp := &m.appModel.datapoint
-		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, dp.date(), dp.value(), dp.comment(), dp.focus, m.appModel.inputMode, dp.err, dp.submitting)
+		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, dp.date(), dp.value(), dp.comment(), dp.focus, m.appModel.mode == modeDatapointInput, dp.err, dp.submitting)
 		return modal
 	}
 

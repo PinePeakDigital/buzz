@@ -14,7 +14,7 @@ import (
 
 // handleSearchInput handles text input in search mode
 func handleSearchInput(m model, msg tea.KeyMsg) (model, bool) {
-	if m.appModel.searchMode && !m.appModel.showModal {
+	if m.appModel.searchActive && m.appModel.mode == modeBrowse {
 		// Allow printable Unicode characters in search
 		if len(msg.Runes) == 1 && unicode.IsPrint(msg.Runes[0]) {
 			m.appModel.searchQuery += string(msg.Runes)
@@ -85,7 +85,7 @@ func isNumericWithDecimal(char string, currentValue string) bool {
 
 // handleCreateModalInput handles text input in create goal modal
 func handleCreateModalInput(m model, msg tea.KeyMsg) (model, bool) {
-	if !m.appModel.showCreateModal || m.appModel.createGoal.creating {
+	if m.appModel.mode != modeCreateGoal || m.appModel.createGoal.creating {
 		return m, false
 	}
 	if len(msg.Runes) != 1 {
@@ -100,7 +100,7 @@ func handleDatapointInput(m model, msg tea.KeyMsg) (model, bool) {
 	// Handle text input in input mode
 	// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 	// can still be typed in comment fields
-	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
+	if m.appModel.mode == modeDatapointInput && !m.appModel.datapoint.submitting {
 		if len(msg.Runes) == 1 {
 			handled := m.appModel.datapoint.handleRune(msg.Runes[0])
 			return m, handled
@@ -133,31 +133,31 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "q":
 		return m, tea.Quit
 
-	// Escape key closes search mode, modal, or quits
+	// Escape key backs out one level (see handleEscapeKey's ladder) or quits
 	case "esc":
 		return handleEscapeKey(m)
 
-	// Enter input mode with 'a' (only when modal is open but not in input mode and not submitting)
+	// Enter datapoint-input mode with 'a' (only from goal-detail mode)
 	case "a":
 		return handleAddDatapoint(m)
 
-	// Tab navigation between input fields (only in input mode and not submitting)
+	// Tab navigation between form fields (datapoint-input or create-goal mode, not while busy)
 	case "tab":
 		return handleTabKey(m, false)
 
-	// Shift+Tab navigation in input mode (reverse)
+	// Shift+Tab navigation between form fields (reverse)
 	case "shift+tab":
 		return handleTabKey(m, true)
 
-	// Backspace handling in search mode or input mode
+	// Backspace handling in search, datapoint-input, or create-goal mode
 	case "backspace":
 		return handleBackspace(m)
 
-	// Submit form with Enter in input mode
+	// Enter submits the active form, or opens goal details from Browse mode
 	case "enter":
 		return handleEnterKey(m)
 
-	// Navigation keys - spatial movement through grid (only when modal is closed)
+	// Navigation keys - spatial movement through grid (only in Browse mode)
 	case "up", "k":
 		return handleNavigationUp(m)
 
@@ -170,27 +170,27 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "right", "l":
 		return handleNavigationRight(m)
 
-	// Scroll up with Page Up or 'u' (only when modal is closed)
+	// Scroll up with Page Up or 'u' (only in Browse mode)
 	case "pgup", "u":
 		return handleScrollUp(m)
 
-	// Scroll down with Page Down or 'd' (only when modal is closed)
+	// Scroll down with Page Down or 'd' (only in Browse mode)
 	case "pgdown", "d":
 		return handleScrollDown(m)
 
-	// Manual refresh with 'r' (only when modal is closed)
+	// Manual refresh with 'r' (only in Browse mode)
 	case "r":
 		return handleRefresh(m)
 
-	// Toggle auto-refresh with 't' (only when modal is closed)
+	// Toggle auto-refresh with 't' (only in Browse mode)
 	case "t":
 		return handleToggleRefresh(m)
 
-	// Enter search mode with '/' (only when modal is closed and not already in search mode)
+	// Enter the search filter layer with '/' (only in Browse mode with no active search)
 	case "/":
 		return handleEnterSearch(m)
 
-	// Open create goal modal with 'n' for new (only when no modal is open)
+	// Open create goal modal with 'n' for new (only in Browse mode with no active search)
 	case "n":
 		return handleCreateGoal(m)
 	}
@@ -198,31 +198,31 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleEscapeKey handles the Escape key press
+// handleEscapeKey handles the Escape key press as a "back out one level" ladder.
+// Foreground modes are unwound before the search layer, so Esc on a goal-detail
+// modal opened over a search closes the modal while keeping the search.
 func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.searchMode {
-		// Exit search mode
-		m.appModel.searchMode = false
-		m.appModel.searchQuery = ""
-		m.appModel.cursor = 0
-		m.appModel.scrollRow = 0
-		m.appModel.hasNavigated = false
-	} else if m.appModel.showCreateModal {
-		// Close create goal modal
-		m.appModel.showCreateModal = false
-		m.appModel.createGoal.err = ""
-	} else if m.appModel.showModal {
-		if m.appModel.inputMode {
-			// Exit input mode
-			m.appModel.inputMode = false
-			m.appModel.datapoint.focus = 0
-			m.appModel.datapoint.err = ""
-		} else {
-			// Close modal
-			m.appModel.showModal = false
-			m.appModel.modalGoal = nil
-		}
-	} else {
+	switch {
+	case m.appModel.mode == modeDatapointInput && m.appModel.datapoint.submitting:
+		// Keep the form locked during an in-flight submit so the user can't
+		// close it and fire a second non-idempotent write before it returns.
+		return m, nil
+	case m.appModel.mode == modeDatapointInput:
+		// Cancel datapoint entry, back to goal detail
+		m.appModel.exitDatapointInput()
+	case m.appModel.mode == modeCreateGoal && m.appModel.createGoal.creating:
+		// Keep the form locked during an in-flight create.
+		return m, nil
+	case m.appModel.mode == modeCreateGoal:
+		// Close create goal form
+		m.appModel.closeCreateGoal()
+	case m.appModel.mode == modeGoalDetail:
+		// Close goal detail modal (search, if any, stays active underneath)
+		m.appModel.closeModal()
+	case m.appModel.searchActive:
+		// Exit the search filter layer
+		m.appModel.exitSearch()
+	default:
 		return m, tea.Quit
 	}
 	return m, nil
@@ -230,24 +230,22 @@ func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 
 // handleAddDatapoint enters input mode for adding a datapoint
 func handleAddDatapoint(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.datapoint.submitting {
-		m.appModel.inputMode = true
-
+	if m.appModel.mode == modeGoalDetail {
 		// Try to get the last datapoint value, default to "1" if it fails
 		defaultValue := "1"
 		if lastValue, err := m.appModel.client.GetLastDatapointValue(m.appModel.ctx, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
 			defaultValue = fmt.Sprintf("%.1f", lastValue)
 		}
-		m.appModel.datapoint = newDatapointForm(defaultValue)
+		m.appModel.startDatapointInput(newDatapointForm(defaultValue))
 	}
 	return m, nil
 }
 
 // handleTabKey handles Tab and Shift+Tab navigation
 func handleTabKey(m model, reverse bool) (tea.Model, tea.Cmd) {
-	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
+	if m.appModel.mode == modeCreateGoal && !m.appModel.createGoal.creating {
 		m.appModel.createGoal.tab(reverse)
-	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
+	} else if m.appModel.mode == modeDatapointInput && !m.appModel.datapoint.submitting {
 		m.appModel.datapoint.tab(reverse)
 	}
 	return m, nil
@@ -255,9 +253,9 @@ func handleTabKey(m model, reverse bool) (tea.Model, tea.Cmd) {
 
 // handleBackspace handles Backspace key
 func handleBackspace(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
+	if m.appModel.mode == modeCreateGoal && !m.appModel.createGoal.creating {
 		m.appModel.createGoal.backspace()
-	} else if m.appModel.searchMode && !m.appModel.showModal {
+	} else if m.appModel.searchActive && m.appModel.mode == modeBrowse {
 		// Remove last character from search query. Trim a whole rune rather
 		// than a byte so backspacing a multibyte character (search accepts any
 		// printable Unicode) leaves valid UTF-8.
@@ -269,7 +267,7 @@ func handleBackspace(m model) (tea.Model, tea.Cmd) {
 			m.appModel.scrollRow = 0
 			m.appModel.hasNavigated = false
 		}
-	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
+	} else if m.appModel.mode == modeDatapointInput && !m.appModel.datapoint.submitting {
 		m.appModel.datapoint.backspace()
 	}
 	return m, nil
@@ -382,7 +380,7 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 
 // handleEnterKey handles Enter key press
 func handleEnterKey(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
+	if m.appModel.mode == modeCreateGoal && !m.appModel.createGoal.creating {
 		// Clear previous error
 		m.appModel.createGoal.err = ""
 
@@ -397,7 +395,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 		return m, createGoalCmd(m.appModel.ctx, m.appModel.client, m.appModel.createGoal.slug(), m.appModel.createGoal.title(),
 			m.appModel.createGoal.goalType(), m.appModel.createGoal.gunits(), m.appModel.createGoal.goaldate(),
 			m.appModel.createGoal.goalval(), m.appModel.createGoal.rate())
-	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
+	} else if m.appModel.mode == modeDatapointInput && !m.appModel.datapoint.submitting {
 		// Clear previous error
 		m.appModel.datapoint.err = ""
 
@@ -417,17 +415,17 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 		m.appModel.datapoint.submitting = true
 		return m, submitDatapointCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug,
 			timestamp, m.appModel.datapoint.value(), m.appModel.datapoint.comment())
-	} else if !m.appModel.showModal {
+	} else if m.appModel.mode == modeBrowse {
 		// Show goal details modal (existing functionality)
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 && m.appModel.cursor < len(displayGoals) {
-			m.appModel.showModal = true
-			m.appModel.modalGoal = &displayGoals[m.appModel.cursor]
+			selected := &displayGoals[m.appModel.cursor]
+			m.appModel.openGoalDetail(selected)
 
 			// Update cursor to point to the goal in the original goals list
 			// This is necessary for left/right navigation in modal
 			for i, goal := range m.appModel.goals {
-				if goal.Slug == displayGoals[m.appModel.cursor].Slug {
+				if goal.Slug == selected.Slug {
 					m.appModel.cursor = i
 					break
 				}
@@ -442,7 +440,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationUp handles up arrow/k key
 func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal {
+	if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -462,7 +460,7 @@ func handleNavigationUp(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationDown handles down arrow/j key
 func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal {
+	if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -482,15 +480,15 @@ func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationLeft handles left arrow/h key
 func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.datapoint.submitting && len(m.appModel.goals) > 0 {
+	if m.appModel.mode == modeGoalDetail && len(m.appModel.goals) > 0 {
 		// Navigate to previous goal in modal view
 		if m.appModel.cursor > 0 {
 			m.appModel.cursor--
-			m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+			m.appModel.openGoalDetail(&m.appModel.goals[m.appModel.cursor])
 			// Load detailed goal information including datapoints
 			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
 		}
-	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
+	} else if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -510,15 +508,15 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationRight handles right arrow/l key
 func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.datapoint.submitting && len(m.appModel.goals) > 0 {
+	if m.appModel.mode == modeGoalDetail && len(m.appModel.goals) > 0 {
 		// Navigate to next goal in modal view
 		if m.appModel.cursor < len(m.appModel.goals)-1 {
 			m.appModel.cursor++
-			m.appModel.modalGoal = &m.appModel.goals[m.appModel.cursor]
+			m.appModel.openGoalDetail(&m.appModel.goals[m.appModel.cursor])
 			// Load detailed goal information including datapoints
 			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
 		}
-	} else if !m.appModel.showModal && !m.appModel.showCreateModal {
+	} else if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
 		if len(displayGoals) > 0 {
 			m.appModel.hasNavigated = true
@@ -538,7 +536,7 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 
 // handleScrollUp handles page up/u key
 func handleScrollUp(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal && m.appModel.scrollRow > 0 {
+	if m.appModel.mode == modeBrowse && m.appModel.scrollRow > 0 {
 		m.appModel.scrollRow--
 	}
 	return m, nil
@@ -546,7 +544,7 @@ func handleScrollUp(m model) (tea.Model, tea.Cmd) {
 
 // handleScrollDown handles page down/d key
 func handleScrollDown(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal {
+	if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
 		cols := calculateColumns(m.appModel.width)
 		totalRows := (len(displayGoals) + cols - 1) / cols
@@ -560,7 +558,7 @@ func handleScrollDown(m model) (tea.Model, tea.Cmd) {
 
 // handleRefresh handles the 'r' key for manual refresh
 func handleRefresh(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal {
+	if m.appModel.mode == modeBrowse {
 		m.appModel.loading = true
 		return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 	}
@@ -569,7 +567,7 @@ func handleRefresh(m model) (tea.Model, tea.Cmd) {
 
 // handleToggleRefresh handles the 't' key for toggling auto-refresh
 func handleToggleRefresh(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal {
+	if m.appModel.mode == modeBrowse {
 		m.appModel.refreshActive = !m.appModel.refreshActive
 		if m.appModel.refreshActive {
 			// If we just enabled auto-refresh, start the timer
@@ -581,18 +579,16 @@ func handleToggleRefresh(m model) (tea.Model, tea.Cmd) {
 
 // handleEnterSearch handles the '/' key for entering search mode
 func handleEnterSearch(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
-		m.appModel.searchMode = true
-		m.appModel.searchQuery = ""
+	if m.appModel.mode == modeBrowse && !m.appModel.searchActive {
+		m.appModel.enterSearch()
 	}
 	return m, nil
 }
 
 // handleCreateGoal handles the 'n' key for creating a new goal
 func handleCreateGoal(m model) (tea.Model, tea.Cmd) {
-	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
-		m.appModel.showCreateModal = true
-		m.appModel.createGoal = newCreateGoalForm()
+	if m.appModel.mode == modeBrowse && !m.appModel.searchActive {
+		m.appModel.openCreateGoal()
 	}
 	return m, nil
 }
@@ -638,8 +634,7 @@ func handleMouseClick(m model, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.appModel.lastNavigationTime = time.Now()
 
 		// Open the modal immediately (same as pressing Enter)
-		m.appModel.showModal = true
-		m.appModel.modalGoal = &displayGoals[goalIndex]
+		m.appModel.openGoalDetail(&displayGoals[goalIndex])
 
 		// Update cursor to point to goal in original list (for left/right navigation)
 		for i, goal := range m.appModel.goals {
