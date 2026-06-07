@@ -60,6 +60,53 @@ func TestRunCreateCommandDefaultGoalType(t *testing.T) {
 	}
 }
 
+// TestRunCreateCommandGoalTypeByNumber verifies that selecting a goal type by
+// its menu number resolves to the canonical goal_type value (here, choice "2"
+// → "drinker"), and that the menu lists each type with its plain-language label.
+func TestRunCreateCommandGoalTypeByNumber(t *testing.T) {
+	var gotType string
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			gotType = goalType
+			return &Goal{Slug: slug}, nil
+		},
+	}
+
+	stdin := strings.NewReader("nojunk\nNo Junk Food\n2\nservings\n\n0\n-1\n")
+	var stdout, stderr bytes.Buffer
+	if code := runCreateCommand(stdin, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if gotType != "drinker" {
+		t.Errorf("expected goal type %q for menu choice 2, got %q", "drinker", gotType)
+	}
+	// The menu should explain types, not just name them.
+	if out := stdout.String(); !strings.Contains(out, "Do Less") || !strings.Contains(out, "drinker") {
+		t.Errorf("menu missing label/name for a goal type, got:\n%s", out)
+	}
+}
+
+// TestRunCreateCommandGoalTypeByLabel verifies that a human label typed directly
+// (case-insensitively) resolves to the canonical goal_type value.
+func TestRunCreateCommandGoalTypeByLabel(t *testing.T) {
+	var gotType string
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			gotType = goalType
+			return &Goal{Slug: slug}, nil
+		},
+	}
+
+	stdin := strings.NewReader("reading\nDaily Reading\ndo more\npages\n\n365\n1\n")
+	var stdout, stderr bytes.Buffer
+	if code := runCreateCommand(stdin, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if gotType != "hustler" {
+		t.Errorf("expected goal type %q for label %q, got %q", "hustler", "do more", gotType)
+	}
+}
+
 // TestRunCreateCommandGoalDateAndValue verifies the third accepted permutation
 // of the 2-of-3 rule: goal date + goal value provided, rate left blank.
 func TestRunCreateCommandGoalDateAndValue(t *testing.T) {

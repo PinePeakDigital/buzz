@@ -6,11 +6,34 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 )
 
 // defaultGoalType is used when the user leaves the goal type prompt blank.
 const defaultGoalType = "hustler"
+
+// goalTypeOption describes a Beeminder goal type: its canonical goal_type value
+// (name, what the API expects), a human-friendly label, and a one-line
+// explanation of how the goal behaves.
+type goalTypeOption struct {
+	name  string
+	label string
+	desc  string
+}
+
+// goalTypeOptions lists Beeminder's goal types in the order shown in the create
+// menu. The labels and descriptions exist so users don't have to memorize the
+// jargon names (e.g. "hustler" really means "Do More").
+var goalTypeOptions = []goalTypeOption{
+	{"hustler", "Do More", "accumulate at least a set amount; the line is a floor you stay above (e.g. exercise, writing)"},
+	{"drinker", "Do Less", "stay under a ceiling that ratchets down; the line is a cap you stay below (e.g. junk food, spending)"},
+	{"biker", "Odometer", "track a running total that only goes up and occasionally resets, like a car odometer"},
+	{"fatloser", "Weight loss", "drive a value down toward a target; the line slopes downward (e.g. lose weight)"},
+	{"gainer", "Gain Weight", "drive a value up at a steady rate (e.g. gain weight or muscle)"},
+	{"inboxer", "Inbox Fewer", "whittle a count down toward zero and keep it there (e.g. email inbox, open bugs)"},
+	{"custom", "Custom", "full manual control over the underlying goal parameters"},
+}
 
 // handleCreateCommand creates a new Beeminder goal by prompting interactively
 // for its fields. It mirrors the TUI's create-goal modal (the `n` key) but as a
@@ -50,10 +73,7 @@ func runCreateCommand(stdin io.Reader, client Client, stdout, stderr io.Writer) 
 
 	slug := promptField(r, stdout, "Goal slug: ")
 	title := promptField(r, stdout, "Goal title: ")
-	goalType := promptField(r, stdout, fmt.Sprintf("Goal type (default: %s): ", defaultGoalType))
-	if goalType == "" {
-		goalType = defaultGoalType
-	}
+	goalType := promptGoalType(r, stdout)
 	gunits := promptField(r, stdout, "Goal units: ")
 
 	fmt.Fprintln(stdout, "")
@@ -87,4 +107,41 @@ func promptField(r *bufio.Reader, w io.Writer, label string) string {
 	fmt.Fprint(w, label)
 	line, _ := r.ReadString('\n')
 	return strings.TrimSpace(line)
+}
+
+// promptGoalType prints the explained goal-type menu and resolves the user's
+// choice to a canonical goal_type value. Accepted input: a number from the list,
+// a type's name or label (e.g. "hustler" or "Do More", case-insensitive — keeps
+// piped/scripted input working), or blank to take the default. An unrecognized
+// non-empty entry is passed through unchanged so newly-added Beeminder types
+// still work; the API validates the final value.
+func promptGoalType(r *bufio.Reader, w io.Writer) string {
+	fmt.Fprintln(w, "Goal type:")
+	for i, gt := range goalTypeOptions {
+		marker := ""
+		if gt.name == defaultGoalType {
+			marker = " [default]"
+		}
+		fmt.Fprintf(w, "  %d. %s (%s)%s — %s\n", i+1, gt.label, gt.name, marker, gt.desc)
+	}
+
+	choice := promptField(r, w, fmt.Sprintf("Choose a number or name (default: %s): ", defaultGoalType))
+	if choice == "" {
+		return defaultGoalType
+	}
+
+	// Numeric selection from the menu.
+	if n, err := strconv.Atoi(choice); err == nil && n >= 1 && n <= len(goalTypeOptions) {
+		return goalTypeOptions[n-1].name
+	}
+
+	// Match a canonical name or human label, case-insensitively.
+	for _, gt := range goalTypeOptions {
+		if strings.EqualFold(choice, gt.name) || strings.EqualFold(choice, gt.label) {
+			return gt.name
+		}
+	}
+
+	// Pass through anything else; validation / the API decides if it's valid.
+	return choice
 }
