@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -256,9 +257,12 @@ func handleBackspace(m model) (tea.Model, tea.Cmd) {
 	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
 		m.appModel.createGoal.backspace()
 	} else if m.appModel.searchMode && !m.appModel.showModal {
-		// Remove last character from search query
+		// Remove last character from search query. Trim a whole rune rather
+		// than a byte so backspacing a multibyte character (search accepts any
+		// printable Unicode) leaves valid UTF-8.
 		if len(m.appModel.searchQuery) > 0 {
-			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
+			_, size := utf8.DecodeLastRuneInString(m.appModel.searchQuery)
+			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-size]
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0

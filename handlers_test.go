@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -651,6 +652,26 @@ func TestIssueEdgeCases(t *testing.T) {
 // helper was folded into form.handleRune via the filterDecimalOrNull field
 // filter. The underlying predicate is covered by TestIsNumericWithDecimal, and
 // the form path by form_test.go.
+
+// TestHandleBackspaceSearchTrimsWholeRune verifies search-mode backspace removes
+// an entire multibyte rune, leaving the query as valid UTF-8.
+func TestHandleBackspaceSearchTrimsWholeRune(t *testing.T) {
+	m := model{
+		appModel: appModel{
+			searchMode:  true,
+			searchQuery: "a中😀",
+		},
+	}
+
+	updated, _ := handleBackspace(m)
+	got := updated.(model).appModel.searchQuery
+	if got != "a中" {
+		t.Errorf("after backspace, searchQuery = %q, want %q", got, "a中")
+	}
+	if !utf8.ValidString(got) {
+		t.Errorf("searchQuery is not valid UTF-8 after backspace: %q", got)
+	}
+}
 
 // TestHandleSearchInputUnicode tests Unicode support in search mode
 func TestHandleSearchInputUnicode(t *testing.T) {
