@@ -2086,3 +2086,86 @@ func TestHandleEscapeKeyLadder(t *testing.T) {
 // mustTeaModel extracts the tea.Model from a handler's (tea.Model, tea.Cmd)
 // return so it can be chained into mustModel.
 func mustTeaModel(tm tea.Model, _ tea.Cmd) tea.Model { return tm }
+
+// TestModeHandlerTransitions covers the handlers that drive mode transitions
+// (search/create entry, in-modal goal navigation, and opening the detail modal
+// from the grid) — the thin layer between key presses and the transition
+// methods that TestModeTransitions exercises directly.
+func TestModeHandlerTransitions(t *testing.T) {
+	t.Run("'/' enters the search layer from browse", func(t *testing.T) {
+		m := model{appModel: appModel{mode: modeBrowse}}
+		got := mustModel(t, mustTeaModel(handleEnterSearch(m))).appModel
+		if !got.searchActive || got.searchQuery != "" {
+			t.Errorf("handleEnterSearch: searchActive=%v query=%q, want true/empty", got.searchActive, got.searchQuery)
+		}
+		if got.mode != modeBrowse {
+			t.Errorf("handleEnterSearch should leave mode as browse, got %d", got.mode)
+		}
+	})
+
+	t.Run("'/' is a no-op while search already active", func(t *testing.T) {
+		m := model{appModel: appModel{mode: modeBrowse, searchActive: true, searchQuery: "keep"}}
+		got := mustModel(t, mustTeaModel(handleEnterSearch(m))).appModel
+		if got.searchQuery != "keep" {
+			t.Errorf("handleEnterSearch should not reset an active query, got %q", got.searchQuery)
+		}
+	})
+
+	t.Run("'n' opens the create-goal form from browse", func(t *testing.T) {
+		m := model{appModel: appModel{mode: modeBrowse}}
+		got := mustModel(t, mustTeaModel(handleCreateGoal(m))).appModel
+		if got.mode != modeCreateGoal {
+			t.Errorf("handleCreateGoal: mode=%d, want modeCreateGoal", got.mode)
+		}
+	})
+
+	t.Run("'n' is a no-op while search is active", func(t *testing.T) {
+		m := model{appModel: appModel{mode: modeBrowse, searchActive: true}}
+		got := mustModel(t, mustTeaModel(handleCreateGoal(m))).appModel
+		if got.mode != modeBrowse {
+			t.Errorf("handleCreateGoal during search should be a no-op, mode=%d", got.mode)
+		}
+	})
+
+	t.Run("Enter opens the detail modal and syncs cursor to the original list", func(t *testing.T) {
+		goals := []Goal{{Slug: "a"}, {Slug: "b"}, {Slug: "c"}}
+		// Search filters to just "b" so displayGoals[0] maps to original index 1.
+		m := model{appModel: appModel{
+			goals:        goals,
+			mode:         modeBrowse,
+			searchActive: true,
+			searchQuery:  "b",
+			cursor:       0,
+			client:       &FakeClient{},
+		}}
+		updated, cmd := handleEnterKey(m)
+		got := mustModel(t, updated).appModel
+		if got.mode != modeGoalDetail {
+			t.Errorf("Enter: mode=%d, want modeGoalDetail", got.mode)
+		}
+		if got.modalGoal == nil || got.modalGoal.Slug != "b" {
+			t.Errorf("Enter should open goal 'b', got %v", got.modalGoal)
+		}
+		if got.cursor != 1 {
+			t.Errorf("Enter should sync cursor to original index 1, got %d", got.cursor)
+		}
+		if cmd == nil {
+			t.Error("Enter should return a loadGoalDetails command")
+		}
+	})
+
+	t.Run("left/right navigate goals within the detail modal", func(t *testing.T) {
+		goals := []Goal{{Slug: "a"}, {Slug: "b"}, {Slug: "c"}}
+		base := appModel{goals: goals, mode: modeGoalDetail, cursor: 1, modalGoal: &goals[1], client: &FakeClient{}}
+
+		left := mustModel(t, mustTeaModel(handleNavigationLeft(model{appModel: base}))).appModel
+		if left.cursor != 0 || left.modalGoal == nil || left.modalGoal.Slug != "a" {
+			t.Errorf("left nav: cursor=%d goal=%v, want 0/'a'", left.cursor, left.modalGoal)
+		}
+
+		right := mustModel(t, mustTeaModel(handleNavigationRight(model{appModel: base}))).appModel
+		if right.cursor != 2 || right.modalGoal == nil || right.modalGoal.Slug != "c" {
+			t.Errorf("right nav: cursor=%d goal=%v, want 2/'c'", right.cursor, right.modalGoal)
+		}
+	})
+}

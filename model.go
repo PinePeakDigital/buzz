@@ -15,7 +15,7 @@ const (
 	modeBrowse         mode = iota // the scrollable grid of goals (default)
 	modeGoalDetail                 // a single goal's detail popup, over the grid
 	modeDatapointInput             // datapoint entry form, reachable only from modeGoalDetail
-	modeCreateGoal                 // new-goal form, reachable only from modeBrowse
+	modeCreateGoal                 // new-goal form, reachable only from modeBrowse (no active search)
 )
 
 // appModel is the main application model (previously just "model")

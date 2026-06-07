@@ -190,7 +190,7 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		return handleEnterSearch(m)
 
-	// Open create goal modal with 'n' for new (only when no modal is open)
+	// Open create goal modal with 'n' for new (only in Browse mode with no active search)
 	case "n":
 		return handleCreateGoal(m)
 	}
