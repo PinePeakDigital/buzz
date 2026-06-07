@@ -240,6 +240,17 @@ func TestModeTransitions(t *testing.T) {
 		}
 	})
 
+	t.Run("openGoalDetail ignores a nil goal", func(t *testing.T) {
+		m := appModel{}
+		m.openGoalDetail(nil)
+		if m.mode != modeBrowse {
+			t.Errorf("openGoalDetail(nil) should be a no-op, mode = %d", m.mode)
+		}
+		if m.modalGoal != nil {
+			t.Error("openGoalDetail(nil) should not attach a goal")
+		}
+	})
+
 	t.Run("openGoalDetail re-targets while already open", func(t *testing.T) {
 		m := appModel{}
 		m.openGoalDetail(&Goal{Slug: "first"})

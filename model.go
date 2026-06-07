@@ -59,8 +59,13 @@ func (m *appModel) inGoalModal() bool {
 // combinations (e.g. a detail modal with no goal attached) are unrepresentable.
 
 // openGoalDetail opens (or re-targets) the goal-detail modal for goal g. Calling
-// it while already in modeGoalDetail just switches which goal is shown.
+// it while already in modeGoalDetail just switches which goal is shown. A nil
+// goal is ignored so the invariant "modalGoal is non-nil whenever a goal modal
+// is open" holds by construction.
 func (m *appModel) openGoalDetail(g *Goal) {
+	if g == nil {
+		return
+	}
 	m.mode = modeGoalDetail
 	m.modalGoal = g
 }
