@@ -326,6 +326,9 @@ func TestModeTransitions(t *testing.T) {
 		if m.mode != modeBrowse {
 			t.Errorf("openCreateGoal during search should be a no-op, mode = %d", m.mode)
 		}
+		if !m.searchActive || m.searchQuery != "x" {
+			t.Error("openCreateGoal during search should leave the search layer intact")
+		}
 	})
 
 	t.Run("openCreateGoal is a no-op outside Browse", func(t *testing.T) {
@@ -344,11 +347,11 @@ func TestModeTransitions(t *testing.T) {
 			t.Error("enterSearch outside Browse should be a no-op")
 		}
 
-		// Already searching: must not reset the existing query.
+		// Already searching: must not reset the existing query or drop the layer.
 		s := appModel{mode: modeBrowse, searchActive: true, searchQuery: "keep"}
 		s.enterSearch()
-		if s.searchQuery != "keep" {
-			t.Errorf("enterSearch should not clear an active query, got %q", s.searchQuery)
+		if !s.searchActive || s.searchQuery != "keep" {
+			t.Errorf("enterSearch should leave the active search intact, got active=%v query=%q", s.searchActive, s.searchQuery)
 		}
 	})
 
