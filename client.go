@@ -201,6 +201,11 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 // zero/negative timeout still does one check), waits pollInterval between polls,
 // and fails fast on permanent API errors (401/403/404) rather than retrying.
 func (c *HTTPClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
+	// Guard against hot-looping: with a positive timeout but no wait between
+	// polls, the loop would hammer the API until the deadline.
+	if timeout > 0 && pollInterval <= 0 {
+		return fmt.Errorf("pollInterval must be > 0 when timeout is positive")
+	}
 	deadline := time.Now().Add(timeout)
 
 	for {

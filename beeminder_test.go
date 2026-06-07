@@ -2642,21 +2642,43 @@ func TestWaitForDatapoint(t *testing.T) {
 		}
 	})
 
-	t.Run("fails fast on a permanent API error without retrying", func(t *testing.T) {
+	// Permanent API errors (401/403/404) must fail fast — one request, no retry.
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound} {
+		status := status
+		t.Run(fmt.Sprintf("fails fast on %d without retrying", status), func(t *testing.T) {
+			var calls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(status)
+			}))
+			defer srv.Close()
+			c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+			err := c.WaitForDatapoint(context.Background(), "g", "target", time.Second, time.Millisecond)
+			if err == nil {
+				t.Fatalf("expected an error on a %d", status)
+			}
+			if got := calls.Load(); got != 1 {
+				t.Errorf("expected exactly 1 request (fail fast on %d), got %d", status, got)
+			}
+		})
+	}
+
+	t.Run("rejects a non-positive poll interval with a positive timeout", func(t *testing.T) {
 		var calls atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			calls.Add(1)
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusOK)
 		}))
 		defer srv.Close()
 		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
 
-		err := c.WaitForDatapoint(context.Background(), "g", "target", time.Second, time.Millisecond)
+		err := c.WaitForDatapoint(context.Background(), "g", "target", time.Second, 0)
 		if err == nil {
-			t.Fatal("expected an error on a 404")
+			t.Fatal("expected an error for pollInterval<=0 with a positive timeout")
 		}
-		if got := calls.Load(); got != 1 {
-			t.Errorf("expected exactly 1 request (fail fast on 404), got %d", got)
+		if got := calls.Load(); got != 0 {
+			t.Errorf("expected no requests when the interval is rejected, got %d", got)
 		}
 	})
 
