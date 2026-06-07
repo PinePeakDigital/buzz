@@ -496,9 +496,12 @@ func (c *HTTPClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, err
 }
 
 // datapointPollCount is how many recent datapoints WaitForDatapoint fetches per
-// poll. A just-added datapoint sorts to the top by updated_at; the small margin
-// tolerates concurrent additions without fetching the goal's full history.
-const datapointPollCount = 10
+// poll. A just-added datapoint sorts to the top by updated_at, so the target is
+// only missed if this many *other* datapoints get a newer updated_at within the
+// poll window — implausible for the interactive single-add flow. The generous
+// margin makes that effectively impossible while still bounding the payload (the
+// whole point of not refetching the goal's full history).
+const datapointPollCount = 90
 
 // fetchRecentDatapoints returns the goal's most recently updated datapoints via
 // the dedicated datapoints endpoint, capped at count. This is far cheaper than
