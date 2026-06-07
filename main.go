@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -13,11 +12,6 @@ import (
 
 // version is set via ldflags during build
 var version = "dev"
-
-// limsumFetchDelay is the duration to wait after adding a datapoint before fetching the updated limsum.
-// This gives the Beeminder server time to update the goal's limsum with the new datapoint.
-// This is a variable (not const) to allow tests to override it.
-var limsumFetchDelay = 2 * time.Second
 
 func printHelp() {
 	fmt.Println("buzz - A terminal user interface for Beeminder")

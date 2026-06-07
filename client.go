@@ -29,8 +29,11 @@ type Client interface {
 	FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error)
 	GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error)
-	CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error
-	CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error
+	CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error)
+	CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error)
+	// WaitForDatapoint polls until the datapoint with datapointID appears in the
+	// goal's recent data or timeout elapses; it always polls at least once.
+	WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error
 	CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error)
 	CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncle(ctx context.Context, goalSlug string) (*Goal, error)
@@ -142,14 +145,17 @@ func (c *HTTPClient) GetLastDatapointValue(ctx context.Context, goalSlug string)
 	return result.LastDatapoint.Value, nil
 }
 
-// CreateDatapoint submits a new datapoint to a Beeminder goal.
-func (c *HTTPClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error {
+// CreateDatapoint submits a new datapoint to a Beeminder goal and returns the
+// created datapoint (which includes its server-assigned ID).
+func (c *HTTPClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error) {
 	return c.CreateDatapointWithDaystamp(ctx, goalSlug, timestamp, "", value, comment, requestid)
 }
 
-// CreateDatapointWithDaystamp submits a new datapoint with optional daystamp.
-// If daystamp is provided (format YYYYMMDD), it is used instead of timestamp.
-func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
+// CreateDatapointWithDaystamp submits a new datapoint with optional daystamp and
+// returns the created datapoint. If daystamp is provided (format YYYYMMDD), it is
+// used instead of timestamp. The returned datapoint's ID lets callers poll for
+// it via WaitForDatapoint instead of sleeping a fixed delay.
+func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
 
@@ -170,19 +176,72 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 
 	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
-		return fmt.Errorf("failed to create datapoint: %w", err)
+		return nil, fmt.Errorf("failed to create datapoint: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
-		}
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read create-datapoint response: %w", readErr)
 	}
 
-	return nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var dp Datapoint
+	if err := json.Unmarshal(body, &dp); err != nil {
+		return nil, fmt.Errorf("failed to decode created datapoint: %w", err)
+	}
+	return &dp, nil
+}
+
+// WaitForDatapoint polls the goal's recent data until a datapoint with
+// datapointID appears or timeout elapses. It always polls at least once (so a
+// zero/negative timeout still does one check), waits pollInterval between polls,
+// and fails fast on permanent API errors (401/403/404) rather than retrying.
+func (c *HTTPClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		goal, err := c.FetchGoalWithDatapoints(ctx, goalSlug)
+		if err != nil {
+			if isPermanentAPIError(err) {
+				return err
+			}
+			// Transient error — fall through and retry until the deadline.
+		} else {
+			for i := range goal.Datapoints {
+				if goal.Datapoints[i].ID == datapointID {
+					return nil
+				}
+			}
+		}
+
+		// At least one poll has completed; stop once we're out of time.
+		if timeout <= 0 || !time.Now().Before(deadline) {
+			return fmt.Errorf("datapoint %s did not appear within %s", datapointID, timeout)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+		}
+	}
+}
+
+// isPermanentAPIError reports whether err represents a client-side API failure
+// (401/403/404) that won't resolve by retrying. It matches the status text the
+// client embeds in its error messages ("API returned status NNN").
+func isPermanentAPIError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "status 401") ||
+		strings.Contains(msg, "status 403") ||
+		strings.Contains(msg, "status 404")
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it.

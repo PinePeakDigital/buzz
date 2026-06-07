@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1713,7 +1714,7 @@ func TestCreateDatapointWithRequestID(t *testing.T) {
 			}
 
 			// Call CreateDatapoint
-			err := NewHTTPClient(config).CreateDatapoint(context.Background(), "testgoal", "1234567890", "5.0", "test comment", tt.requestid)
+			_, err := NewHTTPClient(config).CreateDatapoint(context.Background(), "testgoal", "1234567890", "5.0", "test comment", tt.requestid)
 			if err != nil {
 				t.Fatalf("CreateDatapoint failed: %v", err)
 			}
@@ -1795,9 +1796,12 @@ func TestCreateDatapointWithDaystamp(t *testing.T) {
 			}
 
 			// Call CreateDatapointWithDaystamp
-			err := NewHTTPClient(config).CreateDatapointWithDaystamp(context.Background(), "testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
+			dp, err := NewHTTPClient(config).CreateDatapointWithDaystamp(context.Background(), "testgoal", tt.timestamp, tt.daystamp, "5.0", "test comment", "")
 			if err != nil {
 				t.Fatalf("CreateDatapointWithDaystamp failed: %v", err)
+			}
+			if dp == nil || dp.ID != "123" {
+				t.Errorf("expected created datapoint with ID 123, got %+v", dp)
 			}
 
 			// Verify daystamp vs timestamp presence in request body
@@ -2588,4 +2592,99 @@ func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
 			t.Errorf("goal %q missing datapoints", g.Slug)
 		}
 	}
+}
+
+// goalWithDatapointsHandler returns an httptest handler that serves a goal whose
+// datapoints include `target` only once `appearOnCall` requests have been made,
+// counting calls into `calls`.
+func goalWithDatapointsHandler(t *testing.T, calls *atomic.Int32, target string, appearOnCall int32) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+		if n >= appearOnCall {
+			fmt.Fprintf(w, `{"slug":"g","datapoints":[{"id":%q}]}`, target)
+		} else {
+			w.Write([]byte(`{"slug":"g","datapoints":[]}`))
+		}
+	}
+}
+
+func TestWaitForDatapoint(t *testing.T) {
+	t.Run("returns nil once the datapoint appears after polling", func(t *testing.T) {
+		var calls atomic.Int32
+		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 3))
+		defer srv.Close()
+		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+		err := c.WaitForDatapoint(context.Background(), "g", "target", time.Second, time.Millisecond)
+		if err != nil {
+			t.Fatalf("expected nil once datapoint appears, got %v", err)
+		}
+		if got := calls.Load(); got < 3 {
+			t.Errorf("expected at least 3 polls before the datapoint appeared, got %d", got)
+		}
+	})
+
+	t.Run("times out when the datapoint never appears", func(t *testing.T) {
+		var calls atomic.Int32
+		// appearOnCall huge → never returns the target.
+		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1<<30))
+		defer srv.Close()
+		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+		err := c.WaitForDatapoint(context.Background(), "g", "target", 30*time.Millisecond, time.Millisecond)
+		if err == nil {
+			t.Fatal("expected a timeout error when the datapoint never appears")
+		}
+		if !strings.Contains(err.Error(), "did not appear") {
+			t.Errorf("expected a 'did not appear' error, got %v", err)
+		}
+	})
+
+	t.Run("fails fast on a permanent API error without retrying", func(t *testing.T) {
+		var calls atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer srv.Close()
+		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+		err := c.WaitForDatapoint(context.Background(), "g", "target", time.Second, time.Millisecond)
+		if err == nil {
+			t.Fatal("expected an error on a 404")
+		}
+		if got := calls.Load(); got != 1 {
+			t.Errorf("expected exactly 1 request (fail fast on 404), got %d", got)
+		}
+	})
+
+	t.Run("zero timeout still polls once", func(t *testing.T) {
+		var calls atomic.Int32
+		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1)) // present immediately
+		defer srv.Close()
+		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+		if err := c.WaitForDatapoint(context.Background(), "g", "target", 0, time.Millisecond); err != nil {
+			t.Fatalf("expected nil (found on the single poll), got %v", err)
+		}
+		if got := calls.Load(); got != 1 {
+			t.Errorf("expected exactly 1 poll with zero timeout, got %d", got)
+		}
+	})
+
+	t.Run("zero timeout not found errors after one poll", func(t *testing.T) {
+		var calls atomic.Int32
+		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1<<30)) // never present
+		defer srv.Close()
+		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+		if err := c.WaitForDatapoint(context.Background(), "g", "target", 0, time.Millisecond); err == nil {
+			t.Fatal("expected an error when not found with zero timeout")
+		}
+		if got := calls.Load(); got != 1 {
+			t.Errorf("expected exactly 1 poll with zero timeout, got %d", got)
+		}
+	})
 }

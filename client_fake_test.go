@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // FakeClient is a test double for the Client interface. Each API method is
@@ -28,8 +29,9 @@ type FakeClient struct {
 	FetchGoalWithDatapointsFunc     func(goalSlug string) (*Goal, error)
 	FetchGoalRawJSONFunc            func(goalSlug string, includeDatapoints bool) (json.RawMessage, error)
 	GetLastDatapointValueFunc       func(goalSlug string) (float64, error)
-	CreateDatapointFunc             func(goalSlug, timestamp, value, comment, requestid string) error
-	CreateDatapointWithDaystampFunc func(goalSlug, timestamp, daystamp, value, comment, requestid string) error
+	CreateDatapointFunc             func(goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error)
+	CreateDatapointWithDaystampFunc func(goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error)
+	WaitForDatapointFunc            func(goalSlug, datapointID string, timeout, pollInterval time.Duration) error
 	CreateChargeFunc                func(amount float64, note string, dryrun bool) (*Charge, error)
 	CreateGoalFunc                  func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncleFunc                   func(goalSlug string) (*Goal, error)
@@ -78,18 +80,25 @@ func (c *FakeClient) GetLastDatapointValue(ctx context.Context, goalSlug string)
 	return c.GetLastDatapointValueFunc(goalSlug)
 }
 
-func (c *FakeClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) error {
+func (c *FakeClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error) {
 	if c.CreateDatapointFunc == nil {
-		return errFakeNotConfigured
+		return nil, errFakeNotConfigured
 	}
 	return c.CreateDatapointFunc(goalSlug, timestamp, value, comment, requestid)
 }
 
-func (c *FakeClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) error {
+func (c *FakeClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error) {
 	if c.CreateDatapointWithDaystampFunc == nil {
-		return errFakeNotConfigured
+		return nil, errFakeNotConfigured
 	}
 	return c.CreateDatapointWithDaystampFunc(goalSlug, timestamp, daystamp, value, comment, requestid)
+}
+
+func (c *FakeClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
+	if c.WaitForDatapointFunc == nil {
+		return errFakeNotConfigured
+	}
+	return c.WaitForDatapointFunc(goalSlug, datapointID, timeout, pollInterval)
 }
 
 func (c *FakeClient) CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error) {

@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+// Polling config for confirming a datapoint landed after `buzz add`, replacing
+// the old fixed post-add sleep. Vars (not consts) so tests can shorten them.
+var (
+	datapointWaitTimeout  = 10 * time.Second
+	datapointPollInterval = 500 * time.Millisecond
+)
+
 // printAddUsageAndExit prints the usage for buzz add command and exits with code 1
 func printAddUsageAndExit(errorMsg string) {
 	fmt.Println("Error: " + errorMsg)
@@ -137,7 +144,7 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	err = client.CreateDatapointWithDaystamp(context.Background(), goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
+	dp, err := client.CreateDatapointWithDaystamp(context.Background(), goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
 		os.Exit(1)
@@ -158,8 +165,15 @@ func handleAddCommand() {
 	}
 	fmt.Println(successMsg)
 
-	// Wait briefly before fetching limsum to allow the server to update
-	time.Sleep(limsumFetchDelay)
+	// Wait until the new datapoint actually appears in the goal's recent data
+	// before fetching the updated limsum, rather than sleeping a fixed delay.
+	// Best-effort: if it doesn't show in time we still fetch and display
+	// whatever limsum the server returns.
+	if dp != nil && dp.ID != "" {
+		if err := client.WaitForDatapoint(context.Background(), goalSlug, dp.ID, datapointWaitTimeout, datapointPollInterval); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: datapoint not confirmed yet: %s\n", redactError(err))
+		}
+	}
 
 	// Fetch the goal to display the updated limsum
 	goal, err := client.FetchGoal(context.Background(), goalSlug)
