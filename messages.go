@@ -69,7 +69,7 @@ func refreshTickCmd() tea.Cmd {
 // submitDatapointCmd submits a datapoint to Beeminder API
 func submitDatapointCmd(ctx context.Context, client Client, goalSlug, timestamp, value, comment string) tea.Cmd {
 	return func() tea.Msg {
-		err := client.CreateDatapoint(ctx, goalSlug, timestamp, value, comment, "")
+		_, err := client.CreateDatapoint(ctx, goalSlug, timestamp, value, comment, "")
 		return datapointSubmittedMsg{err: err}
 	}
 }

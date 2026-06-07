@@ -60,9 +60,9 @@ func TestLoadGoalsCmdError(t *testing.T) {
 func TestSubmitDatapointCmdPassesArgs(t *testing.T) {
 	var gotSlug, gotTimestamp, gotValue, gotComment, gotRequestID string
 	fake := &FakeClient{
-		CreateDatapointFunc: func(slug, ts, value, comment, requestID string) error {
+		CreateDatapointFunc: func(slug, ts, value, comment, requestID string) (*Datapoint, error) {
 			gotSlug, gotTimestamp, gotValue, gotComment, gotRequestID = slug, ts, value, comment, requestID
-			return nil
+			return &Datapoint{ID: "1"}, nil
 		},
 	}
 
@@ -85,7 +85,7 @@ func TestSubmitDatapointCmdPassesArgs(t *testing.T) {
 func TestSubmitDatapointCmdError(t *testing.T) {
 	wantErr := errors.New("rate limited")
 	fake := &FakeClient{
-		CreateDatapointFunc: func(_, _, _, _, _ string) error { return wantErr },
+		CreateDatapointFunc: func(_, _, _, _, _ string) (*Datapoint, error) { return nil, wantErr },
 	}
 
 	msg := submitDatapointCmd(context.Background(), fake, "any", "0", "1", "")().(datapointSubmittedMsg)
