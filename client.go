@@ -29,6 +29,13 @@ type Client interface {
 	// Beeminder account (e.g. "America/New_York"), or an empty string if the
 	// account has none set.
 	FetchUserTimezone(ctx context.Context) (string, error)
+	// APIRequest performs a raw, authenticated request against the Beeminder
+	// API. path is relative to the API root (e.g. "users/me.json"); a leading
+	// slash is optional. The configured auth_token is added automatically.
+	// params are sent as query parameters for GET/DELETE and as a urlencoded
+	// form body otherwise. A non-2xx status is NOT returned as an error —
+	// callers inspect the returned status code and body themselves.
+	APIRequest(ctx context.Context, method, path string, params map[string]string) (int, []byte, error)
 	FetchGoal(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error)
@@ -144,6 +151,49 @@ func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
 	}
 
 	return result.Timezone, nil
+}
+
+// APIRequest performs a raw, authenticated request against the Beeminder API.
+// See the Client interface for the contract. The auth_token is injected into
+// the query string for GET/DELETE and into the form body for methods that
+// carry one (POST/PUT/PATCH).
+func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params map[string]string) (int, []byte, error) {
+	values := url.Values{}
+	values.Set("auth_token", c.config.AuthToken)
+	for k, v := range params {
+		values.Set(k, v)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/%s", c.baseURL(), strings.TrimPrefix(path, "/"))
+
+	var reqBody io.Reader
+	contentType := ""
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		reqBody = strings.NewReader(values.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	default:
+		// GET/DELETE: carry everything in the query string, preserving any
+		// query the caller already included in path.
+		sep := "?"
+		if strings.Contains(apiURL, "?") {
+			sep = "&"
+		}
+		apiURL += sep + values.Encode()
+	}
+
+	resp, err := c.doRequest(ctx, method, apiURL, reqBody, contentType)
+	if err != nil {
+		return 0, nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	return resp.StatusCode, body, nil
 }
 
 // GetLastDatapointValue fetches the last datapoint value for a goal.
