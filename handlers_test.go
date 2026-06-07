@@ -647,51 +647,10 @@ func TestIssueEdgeCases(t *testing.T) {
 	}
 }
 
-// TestHandleNumericDecimalInput tests the handleNumericDecimalInput helper function
-func TestHandleNumericDecimalInput(t *testing.T) {
-	tests := []struct {
-		name          string
-		char          string
-		initialValue  string
-		expectedValue string
-		expectedOk    bool
-	}{
-		{"valid digit", "5", "10", "105", true},
-		{"valid decimal", ".", "10", "10.", true},
-		{"valid negative", "-", "", "-", true},
-		{"valid null char n", "n", "", "n", true},
-		{"valid null char u", "u", "n", "nu", true},
-		{"valid null char l", "l", "nu", "nul", true},
-		{"invalid letter", "a", "10", "10", false},
-		{"invalid space", " ", "10", "10", false},
-		{"invalid special", "@", "10", "10", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a test model
-			m := model{
-				appModel: appModel{},
-			}
-			field := tt.initialValue
-
-			// Call the function
-			resultModel, ok := handleNumericDecimalInput(m, tt.char, &field)
-
-			// Verify the result
-			if ok != tt.expectedOk {
-				t.Errorf("handleNumericDecimalInput(%q) returned ok=%v, want %v", tt.char, ok, tt.expectedOk)
-			}
-			if field != tt.expectedValue {
-				t.Errorf("handleNumericDecimalInput(%q) resulted in field=%q, want %q", tt.char, field, tt.expectedValue)
-			}
-			// Verify model is returned unchanged
-			if resultModel.appModel.createGoalval != "" {
-				t.Errorf("handleNumericDecimalInput should not modify model")
-			}
-		})
-	}
-}
+// TestHandleNumericDecimalInput was removed: the handleNumericDecimalInput
+// helper was folded into form.handleRune via the filterDecimalOrNull field
+// filter. The underlying predicate is covered by TestIsNumericWithDecimal, and
+// the form path by form_test.go.
 
 // TestHandleSearchInputUnicode tests Unicode support in search mode
 func TestHandleSearchInputUnicode(t *testing.T) {
@@ -755,27 +714,29 @@ func TestHandleCreateModalInputUnicode(t *testing.T) {
 		checkField func(appModel) string
 		fieldName  string
 	}{
-		{"Title with ASCII", 1, []rune{'a'}, true, func(a appModel) string { return a.createTitle }, "Title"},
-		{"Title with accented char", 1, []rune{'é'}, true, func(a appModel) string { return a.createTitle }, "Title"},
-		{"Title with Chinese", 1, []rune{'中'}, true, func(a appModel) string { return a.createTitle }, "Title"},
-		{"Title with emoji", 1, []rune{'😀'}, true, func(a appModel) string { return a.createTitle }, "Title"},
-		{"Title with Greek", 1, []rune{'Ω'}, true, func(a appModel) string { return a.createTitle }, "Title"},
-		{"Gunits with ASCII", 3, []rune{'x'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
-		{"Gunits with accented char", 3, []rune{'ñ'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
-		{"Gunits with Cyrillic", 3, []rune{'Д'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
-		{"Gunits with emoji", 3, []rune{'📊'}, true, func(a appModel) string { return a.createGunits }, "Gunits"},
+		{"Title with ASCII", cgTitle, []rune{'a'}, true, func(a appModel) string { return a.createGoal.title() }, "Title"},
+		{"Title with accented char", cgTitle, []rune{'é'}, true, func(a appModel) string { return a.createGoal.title() }, "Title"},
+		{"Title with Chinese", cgTitle, []rune{'中'}, true, func(a appModel) string { return a.createGoal.title() }, "Title"},
+		{"Title with emoji", cgTitle, []rune{'😀'}, true, func(a appModel) string { return a.createGoal.title() }, "Title"},
+		{"Title with Greek", cgTitle, []rune{'Ω'}, true, func(a appModel) string { return a.createGoal.title() }, "Title"},
+		{"Gunits with ASCII", cgGunits, []rune{'x'}, true, func(a appModel) string { return a.createGoal.gunits() }, "Gunits"},
+		{"Gunits with accented char", cgGunits, []rune{'ñ'}, true, func(a appModel) string { return a.createGoal.gunits() }, "Gunits"},
+		{"Gunits with Cyrillic", cgGunits, []rune{'Д'}, true, func(a appModel) string { return a.createGoal.gunits() }, "Gunits"},
+		{"Gunits with emoji", cgGunits, []rune{'📊'}, true, func(a appModel) string { return a.createGoal.gunits() }, "Gunits"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a mock model with create modal open
+			// Create a mock model with create modal open. Start the title and
+			// gunits fields empty so the typed character is the whole value.
+			cg := newCreateGoalForm()
+			cg.fields[cgTitle].value = ""
+			cg.fields[cgGunits].value = ""
+			cg.focus = tt.focus
 			m := model{
 				appModel: appModel{
 					showCreateModal: true,
-					creatingGoal:    false,
-					createFocus:     tt.focus,
-					createTitle:     "",
-					createGunits:    "",
+					createGoal:      cg,
 				},
 			}
 
@@ -823,14 +784,16 @@ func TestHandleDatapointInputUnicode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a mock model in input mode with comment field focused
+			// Create a mock model in input mode with comment field focused.
+			// Start the comment empty so the typed character is the whole value.
+			dp := newDatapointForm("1")
+			dp.fields[dpComment].value = ""
+			dp.focus = dpComment
 			m := model{
 				appModel: appModel{
-					showModal:    true,
-					inputMode:    true,
-					submitting:   false,
-					inputFocus:   2, // Comment field
-					inputComment: "",
+					showModal: true,
+					inputMode: true,
+					datapoint: dp,
 				},
 			}
 
@@ -848,8 +811,8 @@ func TestHandleDatapointInputUnicode(t *testing.T) {
 			// If expected to handle, check that the comment was updated
 			if tt.expected && handled {
 				expectedComment := string(tt.runes)
-				if updatedModel.appModel.inputComment != expectedComment {
-					t.Errorf("inputComment = %q, want %q", updatedModel.appModel.inputComment, expectedComment)
+				if updatedModel.appModel.datapoint.comment() != expectedComment {
+					t.Errorf("comment = %q, want %q", updatedModel.appModel.datapoint.comment(), expectedComment)
 				}
 			}
 		})
@@ -1613,14 +1576,14 @@ func TestHandleAddDatapointPrefillsLastValue(t *testing.T) {
 
 	updated, _ := handleAddDatapoint(m)
 	got := updated.(model).appModel
-	if got.inputValue != "2.5" {
-		t.Errorf("inputValue = %q, want %q", got.inputValue, "2.5")
+	if got.datapoint.value() != "2.5" {
+		t.Errorf("inputValue = %q, want %q", got.datapoint.value(), "2.5")
 	}
 	if !got.inputMode {
 		t.Error("expected inputMode to be true after handleAddDatapoint")
 	}
-	if got.inputComment != "Added via buzz" {
-		t.Errorf("inputComment = %q, want default %q", got.inputComment, "Added via buzz")
+	if got.datapoint.comment() != "Added via buzz" {
+		t.Errorf("inputComment = %q, want default %q", got.datapoint.comment(), "Added via buzz")
 	}
 }
 
@@ -1650,14 +1613,14 @@ func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 		t.Error("expected GetLastDatapointValue to be called")
 	}
 	got := updated.(model).appModel
-	if got.inputValue != "1" {
-		t.Errorf("inputValue with zero last value = %q, want %q", got.inputValue, "1")
+	if got.datapoint.value() != "1" {
+		t.Errorf("inputValue with zero last value = %q, want %q", got.datapoint.value(), "1")
 	}
 	if !got.inputMode {
 		t.Error("expected inputMode to be true after handleAddDatapoint")
 	}
-	if got.inputComment != "Added via buzz" {
-		t.Errorf("inputComment = %q, want default %q", got.inputComment, "Added via buzz")
+	if got.datapoint.comment() != "Added via buzz" {
+		t.Errorf("inputComment = %q, want default %q", got.datapoint.comment(), "Added via buzz")
 	}
 }
 
@@ -1685,14 +1648,14 @@ func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
 		t.Error("expected GetLastDatapointValue to be called")
 	}
 	got := updated.(model).appModel
-	if got.inputValue != "1" {
-		t.Errorf("inputValue on fetch error = %q, want %q", got.inputValue, "1")
+	if got.datapoint.value() != "1" {
+		t.Errorf("inputValue on fetch error = %q, want %q", got.datapoint.value(), "1")
 	}
 	if !got.inputMode {
 		t.Error("expected inputMode to be true after handleAddDatapoint")
 	}
-	if got.inputComment != "Added via buzz" {
-		t.Errorf("inputComment = %q, want default %q", got.inputComment, "Added via buzz")
+	if got.datapoint.comment() != "Added via buzz" {
+		t.Errorf("inputComment = %q, want default %q", got.datapoint.comment(), "Added via buzz")
 	}
 }
 

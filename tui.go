@@ -103,14 +103,14 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case datapointSubmittedMsg:
 		// Datapoint submission completed
-		m.appModel.submitting = false
+		m.appModel.datapoint.submitting = false
 		if msg.err != nil {
-			m.appModel.inputError = fmt.Sprintf("Failed to submit: %v", msg.err)
+			m.appModel.datapoint.err = fmt.Sprintf("Failed to submit: %v", msg.err)
 		} else {
 			// Success - exit input mode and refresh goals (without showing loading state)
 			m.appModel.inputMode = false
-			m.appModel.inputFocus = 0
-			m.appModel.inputError = ""
+			m.appModel.datapoint.focus = 0
+			m.appModel.datapoint.err = ""
 			// Don't set loading = true here to avoid the full-app loading state
 			return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 		}
@@ -132,13 +132,13 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case goalCreatedMsg:
 		// Goal creation completed
-		m.appModel.creatingGoal = false
+		m.appModel.createGoal.creating = false
 		if msg.err != nil {
-			m.appModel.createError = fmt.Sprintf("Failed to create goal: %v", msg.err)
+			m.appModel.createGoal.err = fmt.Sprintf("Failed to create goal: %v", msg.err)
 		} else {
 			// Success - close modal and refresh goals
 			m.appModel.showCreateModal = false
-			m.appModel.createError = ""
+			m.appModel.createGoal.err = ""
 			return m, loadGoalsCmd(m.appModel.ctx, m.appModel.client)
 		}
 		return m, nil
@@ -216,15 +216,17 @@ func (m model) viewApp() string {
 
 	// Show create goal modal if active
 	if m.appModel.showCreateModal {
-		modal := RenderCreateGoalModal(m.appModel.width, m.appModel.height, m.appModel.createSlug, m.appModel.createTitle,
-			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate, m.appModel.createGoalval,
-			m.appModel.createRate, m.appModel.createFocus, m.appModel.createError, m.appModel.creatingGoal)
+		cg := &m.appModel.createGoal
+		modal := RenderCreateGoalModal(m.appModel.width, m.appModel.height, cg.slug(), cg.title(),
+			cg.goalType(), cg.gunits(), cg.goaldate(), cg.goalval(),
+			cg.rate(), cg.focus, cg.err, cg.creating)
 		return modal
 	}
 
 	// Show modal overlay if modal is active
 	if m.appModel.showModal && m.appModel.modalGoal != nil {
-		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, m.appModel.inputDate, m.appModel.inputValue, m.appModel.inputComment, m.appModel.inputFocus, m.appModel.inputMode, m.appModel.inputError, m.appModel.submitting)
+		dp := &m.appModel.datapoint
+		modal := RenderModal(m.appModel.modalGoal, m.appModel.width, m.appModel.height, dp.date(), dp.value(), dp.comment(), dp.focus, m.appModel.inputMode, dp.err, dp.submitting)
 		return modal
 	}
 
