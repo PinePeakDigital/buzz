@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -81,59 +82,16 @@ func isNumericWithDecimal(char string, currentValue string) bool {
 	return strings.HasPrefix("null", newValue)
 }
 
-// handleNumericDecimalInput handles input for fields that accept numeric with decimal values
-func handleNumericDecimalInput(m model, char string, fieldPtr *string) (model, bool) {
-	if isNumericWithDecimal(char, *fieldPtr) {
-		*fieldPtr += char
-		return m, true
-	}
-	return m, false
-}
-
 // handleCreateModalInput handles text input in create goal modal
 func handleCreateModalInput(m model, msg tea.KeyMsg) (model, bool) {
-	if !m.appModel.showCreateModal || m.appModel.creatingGoal {
+	if !m.appModel.showCreateModal || m.appModel.createGoal.creating {
 		return m, false
 	}
 	if len(msg.Runes) != 1 {
 		return m, false
 	}
-
-	char := string(msg.Runes)
-	r := msg.Runes[0]
-
-	switch m.appModel.createFocus {
-	case 0: // Slug - allow alphanumeric and dashes/underscores
-		if isAlphanumericOrDash(char) {
-			m.appModel.createSlug += char
-			return m, true
-		}
-	case 1: // Title - allow all printable Unicode characters
-		if unicode.IsPrint(r) {
-			m.appModel.createTitle += char
-			return m, true
-		}
-	case 2: // Goal type - allow letters
-		if isLetter(char) {
-			m.appModel.createGoalType += char
-			return m, true
-		}
-	case 3: // Gunits - allow all printable Unicode characters
-		if unicode.IsPrint(r) {
-			m.appModel.createGunits += char
-			return m, true
-		}
-	case 4: // Goaldate - allow digits or "null"
-		if isNumericOrNull(char, m.appModel.createGoaldate) {
-			m.appModel.createGoaldate += char
-			return m, true
-		}
-	case 5: // Goalval - allow digits, decimal point, negative sign, or "null"
-		return handleNumericDecimalInput(m, char, &m.appModel.createGoalval)
-	case 6: // Rate - allow digits, decimal point, negative sign, or "null"
-		return handleNumericDecimalInput(m, char, &m.appModel.createRate)
-	}
-	return m, false
+	handled := m.appModel.createGoal.handleRune(msg.Runes[0])
+	return m, handled
 }
 
 // handleDatapointInput handles text input in datapoint input mode
@@ -141,27 +99,10 @@ func handleDatapointInput(m model, msg tea.KeyMsg) (model, bool) {
 	// Handle text input in input mode
 	// This ensures that single-character command keys (like 't', 'r', 'd', etc.)
 	// can still be typed in comment fields
-	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+	if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
 		if len(msg.Runes) == 1 {
-			char := string(msg.Runes)
-			r := msg.Runes[0]
-			switch m.appModel.inputFocus {
-			case 0: // Date field - allow digits and dashes
-				if (char >= "0" && char <= "9") || char == "-" {
-					m.appModel.inputDate += char
-					return m, true
-				}
-			case 1: // Value field - allow digits, decimal point, and negative sign
-				if (char >= "0" && char <= "9") || char == "." || char == "-" {
-					m.appModel.inputValue += char
-					return m, true
-				}
-			case 2: // Comment field - allow all printable Unicode characters
-				if unicode.IsPrint(r) {
-					m.appModel.inputComment += char
-					return m, true
-				}
-			}
+			handled := m.appModel.datapoint.handleRune(msg.Runes[0])
+			return m, handled
 		}
 	}
 	return m, false
@@ -268,13 +209,13 @@ func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 	} else if m.appModel.showCreateModal {
 		// Close create goal modal
 		m.appModel.showCreateModal = false
-		m.appModel.createError = ""
+		m.appModel.createGoal.err = ""
 	} else if m.appModel.showModal {
 		if m.appModel.inputMode {
 			// Exit input mode
 			m.appModel.inputMode = false
-			m.appModel.inputFocus = 0
-			m.appModel.inputError = ""
+			m.appModel.datapoint.focus = 0
+			m.appModel.datapoint.err = ""
 		} else {
 			// Close modal
 			m.appModel.showModal = false
@@ -288,99 +229,47 @@ func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 
 // handleAddDatapoint enters input mode for adding a datapoint
 func handleAddDatapoint(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting {
+	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.datapoint.submitting {
 		m.appModel.inputMode = true
-		m.appModel.inputFocus = 0
-		m.appModel.inputError = "" // Clear any previous errors
-		// Set default values
-		m.appModel.inputDate = time.Now().Format("2006-01-02")
-		m.appModel.inputComment = "Added via buzz"
 
 		// Try to get the last datapoint value, default to "1" if it fails
+		defaultValue := "1"
 		if lastValue, err := m.appModel.client.GetLastDatapointValue(m.appModel.ctx, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
-			m.appModel.inputValue = fmt.Sprintf("%.1f", lastValue)
-		} else {
-			m.appModel.inputValue = "1"
+			defaultValue = fmt.Sprintf("%.1f", lastValue)
 		}
+		m.appModel.datapoint = newDatapointForm(defaultValue)
 	}
 	return m, nil
 }
 
 // handleTabKey handles Tab and Shift+Tab navigation
 func handleTabKey(m model, reverse bool) (tea.Model, tea.Cmd) {
-	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
-		if reverse {
-			m.appModel.createFocus = (m.appModel.createFocus + 6) % 7 // +6 is same as -1 in mod 7
-		} else {
-			m.appModel.createFocus = (m.appModel.createFocus + 1) % 7
-		}
-	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
-		if reverse {
-			m.appModel.inputFocus = (m.appModel.inputFocus + 2) % 3 // +2 is same as -1 in mod 3
-		} else {
-			m.appModel.inputFocus = (m.appModel.inputFocus + 1) % 3
-		}
+	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
+		m.appModel.createGoal.tab(reverse)
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
+		m.appModel.datapoint.tab(reverse)
 	}
 	return m, nil
 }
 
 // handleBackspace handles Backspace key
 func handleBackspace(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
-		switch m.appModel.createFocus {
-		case 0: // Slug
-			if len(m.appModel.createSlug) > 0 {
-				m.appModel.createSlug = m.appModel.createSlug[:len(m.appModel.createSlug)-1]
-			}
-		case 1: // Title
-			if len(m.appModel.createTitle) > 0 {
-				m.appModel.createTitle = m.appModel.createTitle[:len(m.appModel.createTitle)-1]
-			}
-		case 2: // Goal type
-			if len(m.appModel.createGoalType) > 0 {
-				m.appModel.createGoalType = m.appModel.createGoalType[:len(m.appModel.createGoalType)-1]
-			}
-		case 3: // Gunits
-			if len(m.appModel.createGunits) > 0 {
-				m.appModel.createGunits = m.appModel.createGunits[:len(m.appModel.createGunits)-1]
-			}
-		case 4: // Goaldate
-			if len(m.appModel.createGoaldate) > 0 {
-				m.appModel.createGoaldate = m.appModel.createGoaldate[:len(m.appModel.createGoaldate)-1]
-			}
-		case 5: // Goalval
-			if len(m.appModel.createGoalval) > 0 {
-				m.appModel.createGoalval = m.appModel.createGoalval[:len(m.appModel.createGoalval)-1]
-			}
-		case 6: // Rate
-			if len(m.appModel.createRate) > 0 {
-				m.appModel.createRate = m.appModel.createRate[:len(m.appModel.createRate)-1]
-			}
-		}
+	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
+		m.appModel.createGoal.backspace()
 	} else if m.appModel.searchMode && !m.appModel.showModal {
-		// Remove last character from search query
+		// Remove last character from search query. Trim a whole rune rather
+		// than a byte so backspacing a multibyte character (search accepts any
+		// printable Unicode) leaves valid UTF-8.
 		if len(m.appModel.searchQuery) > 0 {
-			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-1]
+			_, size := utf8.DecodeLastRuneInString(m.appModel.searchQuery)
+			m.appModel.searchQuery = m.appModel.searchQuery[:len(m.appModel.searchQuery)-size]
 			// Reset cursor and scroll when search query changes
 			m.appModel.cursor = 0
 			m.appModel.scrollRow = 0
 			m.appModel.hasNavigated = false
 		}
-	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
-		switch m.appModel.inputFocus {
-		case 0: // Date field
-			if len(m.appModel.inputDate) > 0 {
-				m.appModel.inputDate = m.appModel.inputDate[:len(m.appModel.inputDate)-1]
-			}
-		case 1: // Value field
-			if len(m.appModel.inputValue) > 0 {
-				m.appModel.inputValue = m.appModel.inputValue[:len(m.appModel.inputValue)-1]
-			}
-		case 2: // Comment field
-			if len(m.appModel.inputComment) > 0 {
-				m.appModel.inputComment = m.appModel.inputComment[:len(m.appModel.inputComment)-1]
-			}
-		}
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
+		m.appModel.datapoint.backspace()
 	}
 	return m, nil
 }
@@ -488,43 +377,41 @@ func validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, r
 
 // handleEnterKey handles Enter key press
 func handleEnterKey(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showCreateModal && !m.appModel.creatingGoal {
+	if m.appModel.showCreateModal && !m.appModel.createGoal.creating {
 		// Clear previous error
-		m.appModel.createError = ""
+		m.appModel.createGoal.err = ""
 
 		// Validate input fields
-		if errMsg := validateCreateGoalInput(m.appModel.createSlug, m.appModel.createTitle,
-			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
-			m.appModel.createGoalval, m.appModel.createRate); errMsg != "" {
-			m.appModel.createError = errMsg
+		if errMsg := m.appModel.createGoal.validate(); errMsg != "" {
+			m.appModel.createGoal.err = errMsg
 			return m, nil
 		}
 
 		// Set creating state and submit goal creation asynchronously
-		m.appModel.creatingGoal = true
-		return m, createGoalCmd(m.appModel.ctx, m.appModel.client, m.appModel.createSlug, m.appModel.createTitle,
-			m.appModel.createGoalType, m.appModel.createGunits, m.appModel.createGoaldate,
-			m.appModel.createGoalval, m.appModel.createRate)
-	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.submitting {
+		m.appModel.createGoal.creating = true
+		return m, createGoalCmd(m.appModel.ctx, m.appModel.client, m.appModel.createGoal.slug(), m.appModel.createGoal.title(),
+			m.appModel.createGoal.goalType(), m.appModel.createGoal.gunits(), m.appModel.createGoal.goaldate(),
+			m.appModel.createGoal.goalval(), m.appModel.createGoal.rate())
+	} else if m.appModel.showModal && m.appModel.inputMode && !m.appModel.datapoint.submitting {
 		// Clear previous error
-		m.appModel.inputError = ""
+		m.appModel.datapoint.err = ""
 
 		// Validate input fields
-		if errMsg := validateDatapointInput(m.appModel.inputDate, m.appModel.inputValue); errMsg != "" {
-			m.appModel.inputError = errMsg
+		if errMsg := m.appModel.datapoint.validate(); errMsg != "" {
+			m.appModel.datapoint.err = errMsg
 			return m, nil
 		}
 
 		// Parse date to get timestamp. Interpret the entered calendar date in
 		// local time (matching validateDatapointInput) so the datapoint lands on
 		// the day the user intended rather than being shifted by the UTC offset.
-		date, _ := time.ParseInLocation("2006-01-02", m.appModel.inputDate, time.Local)
+		date, _ := time.ParseInLocation("2006-01-02", m.appModel.datapoint.date(), time.Local)
 		timestamp := fmt.Sprintf("%d", date.Unix())
 
 		// Set submitting state and submit datapoint asynchronously
-		m.appModel.submitting = true
+		m.appModel.datapoint.submitting = true
 		return m, submitDatapointCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug,
-			timestamp, m.appModel.inputValue, m.appModel.inputComment)
+			timestamp, m.appModel.datapoint.value(), m.appModel.datapoint.comment())
 	} else if !m.appModel.showModal {
 		// Show goal details modal (existing functionality)
 		displayGoals := m.appModel.getDisplayGoals()
@@ -590,7 +477,7 @@ func handleNavigationDown(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationLeft handles left arrow/h key
 func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting && len(m.appModel.goals) > 0 {
+	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.datapoint.submitting && len(m.appModel.goals) > 0 {
 		// Navigate to previous goal in modal view
 		if m.appModel.cursor > 0 {
 			m.appModel.cursor--
@@ -618,7 +505,7 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 
 // handleNavigationRight handles right arrow/l key
 func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
-	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.submitting && len(m.appModel.goals) > 0 {
+	if m.appModel.showModal && !m.appModel.inputMode && !m.appModel.datapoint.submitting && len(m.appModel.goals) > 0 {
 		// Navigate to next goal in modal view
 		if m.appModel.cursor < len(m.appModel.goals)-1 {
 			m.appModel.cursor++
@@ -700,16 +587,7 @@ func handleEnterSearch(m model) (tea.Model, tea.Cmd) {
 func handleCreateGoal(m model) (tea.Model, tea.Cmd) {
 	if !m.appModel.showModal && !m.appModel.showCreateModal && !m.appModel.searchMode {
 		m.appModel.showCreateModal = true
-		m.appModel.createFocus = 0
-		m.appModel.createError = ""
-		// Set default values
-		m.appModel.createSlug = ""
-		m.appModel.createTitle = ""
-		m.appModel.createGoalType = "hustler"
-		m.appModel.createGunits = "units"
-		m.appModel.createGoaldate = ""
-		m.appModel.createGoalval = "0"
-		m.appModel.createRate = "1"
+		m.appModel.createGoal = newCreateGoalForm()
 	}
 	return m, nil
 }

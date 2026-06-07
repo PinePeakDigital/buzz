@@ -23,31 +23,17 @@ type appModel struct {
 	hasNavigated       bool            // whether user has used arrow keys
 	lastNavigationTime time.Time       // last time user navigated with arrow keys
 
-	// Modal input fields
-	inputDate    string // date input (YYYY-MM-DD format)
-	inputValue   string // value input
-	inputComment string // comment input
-	inputFocus   int    // which input field is focused (0=date, 1=value, 2=comment)
-	inputMode    bool   // whether we're in input mode vs viewing mode
-	inputError   string // error message for input validation
-	submitting   bool   // whether we're currently submitting a datapoint
+	// Datapoint entry form (shown inside the goal detail modal)
+	inputMode bool          // whether we're in input mode vs viewing mode
+	datapoint datapointForm // date/value/comment fields + submitting flag
 
 	// Filter/search fields
 	searchMode  bool   // whether we're in search/filter mode
 	searchQuery string // current search query
 
-	// Goal creation fields
-	showCreateModal bool   // whether to show goal creation modal
-	createSlug      string // goal slug
-	createTitle     string // goal title
-	createGoalType  string // goal type (hustler, biker, etc.)
-	createGunits    string // goal units
-	createGoaldate  string // goal date (unix timestamp or "null")
-	createGoalval   string // goal value (number or "null")
-	createRate      string // rate (number or "null")
-	createFocus     int    // which input field is focused
-	createError     string // error message for creation validation
-	creatingGoal    bool   // whether we're currently creating a goal
+	// Goal creation form
+	showCreateModal bool           // whether to show goal creation modal
+	createGoal      createGoalForm // slug/title/type/... fields + creating flag
 }
 
 // model is the top-level model that switches between auth and app. It holds
