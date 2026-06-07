@@ -15,6 +15,17 @@ func mockKeyMsg(runes []rune) tea.KeyMsg {
 	}
 }
 
+// mustModel asserts that a tea.Model is the concrete model type, failing the
+// test (rather than panicking) if not.
+func mustModel(t *testing.T, tm tea.Model) model {
+	t.Helper()
+	m, ok := tm.(model)
+	if !ok {
+		t.Fatalf("expected model, got %T", tm)
+	}
+	return m
+}
+
 // TestValidateDatapointInput tests the validateDatapointInput function
 func TestValidateDatapointInput(t *testing.T) {
 	tests := []struct {
@@ -664,7 +675,7 @@ func TestHandleBackspaceSearchTrimsWholeRune(t *testing.T) {
 	}
 
 	updated, _ := handleBackspace(m)
-	got := updated.(model).appModel.searchQuery
+	got := mustModel(t, updated).appModel.searchQuery
 	if got != "a中" {
 		t.Errorf("after backspace, searchQuery = %q, want %q", got, "a中")
 	}
@@ -679,12 +690,12 @@ func TestHandleTabKeyCreateGoal(t *testing.T) {
 	m := model{appModel: appModel{showCreateModal: true, createGoal: newCreateGoalForm()}}
 
 	updated, _ := handleTabKey(m, false)
-	if got := updated.(model).appModel.createGoal.focus; got != 1 {
+	if got := mustModel(t, updated).appModel.createGoal.focus; got != 1 {
 		t.Errorf("after tab, createGoal.focus = %d, want 1", got)
 	}
 
-	updated, _ = handleTabKey(updated.(model), true)
-	if got := updated.(model).appModel.createGoal.focus; got != 0 {
+	updated, _ = handleTabKey(mustModel(t, updated), true)
+	if got := mustModel(t, updated).appModel.createGoal.focus; got != 0 {
 		t.Errorf("after shift+tab, createGoal.focus = %d, want 0", got)
 	}
 
@@ -692,7 +703,7 @@ func TestHandleTabKeyCreateGoal(t *testing.T) {
 	busy := model{appModel: appModel{showCreateModal: true, createGoal: newCreateGoalForm()}}
 	busy.appModel.createGoal.creating = true
 	updated, _ = handleTabKey(busy, false)
-	if got := updated.(model).appModel.createGoal.focus; got != 0 {
+	if got := mustModel(t, updated).appModel.createGoal.focus; got != 0 {
 		t.Errorf("tab while creating should not move focus, got %d", got)
 	}
 }
@@ -703,13 +714,13 @@ func TestHandleTabKeyDatapoint(t *testing.T) {
 	m := model{appModel: appModel{showModal: true, inputMode: true, datapoint: newDatapointForm("1")}}
 
 	updated, _ := handleTabKey(m, false)
-	if got := updated.(model).appModel.datapoint.focus; got != 1 {
+	if got := mustModel(t, updated).appModel.datapoint.focus; got != 1 {
 		t.Errorf("after tab, datapoint.focus = %d, want 1", got)
 	}
 
 	// Shift+tab from focus 0 wraps to the last field (index 2).
 	updated, _ = handleTabKey(model{appModel: appModel{showModal: true, inputMode: true, datapoint: newDatapointForm("1")}}, true)
-	if got := updated.(model).appModel.datapoint.focus; got != 2 {
+	if got := mustModel(t, updated).appModel.datapoint.focus; got != 2 {
 		t.Errorf("after shift+tab wrap, datapoint.focus = %d, want 2", got)
 	}
 }
@@ -723,7 +734,7 @@ func TestHandleBackspaceCreateGoal(t *testing.T) {
 	m := model{appModel: appModel{showCreateModal: true, createGoal: cg}}
 
 	updated, _ := handleBackspace(m)
-	am := updated.(model).appModel
+	am := mustModel(t, updated).appModel
 	if got := am.createGoal.title(); got != "Hi" {
 		t.Errorf("after backspace, title() = %q, want %q", got, "Hi")
 	}
@@ -738,7 +749,7 @@ func TestHandleBackspaceDatapoint(t *testing.T) {
 	m := model{appModel: appModel{showModal: true, inputMode: true, datapoint: dp}}
 
 	updated, _ := handleBackspace(m)
-	am := updated.(model).appModel
+	am := mustModel(t, updated).appModel
 	if got := am.datapoint.comment(); got != "note" {
 		t.Errorf("after backspace, comment() = %q, want %q", got, "note")
 	}
