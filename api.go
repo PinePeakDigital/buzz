@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -114,14 +115,16 @@ func runAPICommand(args []string, client Client, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	params := make(map[string]string)
+	// Accumulate with Add so repeated keys (e.g. -d tags=a -d tags=b) are all
+	// preserved rather than overwriting one another.
+	params := url.Values{}
 	for _, kv := range data {
 		key, val, found := strings.Cut(kv, "=")
 		if !found || key == "" {
 			fmt.Fprintf(stderr, "Error: Invalid --data %q (expected key=value)\n", kv)
 			return 1
 		}
-		params[key] = val
+		params.Add(key, val)
 	}
 
 	status, body, err := client.APIRequest(context.Background(), method, path, params)

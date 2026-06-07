@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestAPIRequestGET(t *testing.T) {
 	defer server.Close()
 
 	client := NewHTTPClient(&Config{Username: "alice", AuthToken: "secret", BaseURL: server.URL})
-	status, body, err := client.APIRequest(context.Background(), http.MethodGet, "users/me.json", map[string]string{"associations": "true"})
+	status, body, err := client.APIRequest(context.Background(), http.MethodGet, "users/me.json", url.Values{"associations": {"true"}})
 	if err != nil {
 		t.Fatalf("APIRequest returned error: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestAPIRequestAuthTokenAlwaysWins(t *testing.T) {
 	defer server.Close()
 
 	client := NewHTTPClient(&Config{Username: "alice", AuthToken: "secret", BaseURL: server.URL})
-	if _, _, err := client.APIRequest(context.Background(), http.MethodGet, "users/me.json", map[string]string{"auth_token": "attacker"}); err != nil {
+	if _, _, err := client.APIRequest(context.Background(), http.MethodGet, "users/me.json", url.Values{"auth_token": {"attacker"}}); err != nil {
 		t.Fatalf("APIRequest returned error: %v", err)
 	}
 	if !strings.Contains(gotQuery, "auth_token=secret") {
@@ -106,7 +107,7 @@ func TestAPIRequestPOSTBody(t *testing.T) {
 	defer server.Close()
 
 	client := NewHTTPClient(&Config{Username: "alice", AuthToken: "secret", BaseURL: server.URL})
-	if _, _, err := client.APIRequest(context.Background(), http.MethodPost, "users/me/goals/read/datapoints.json", map[string]string{"value": "1"}); err != nil {
+	if _, _, err := client.APIRequest(context.Background(), http.MethodPost, "users/me/goals/read/datapoints.json", url.Values{"value": {"1"}}); err != nil {
 		t.Fatalf("APIRequest returned error: %v", err)
 	}
 	if gotQuery != "" {
@@ -147,7 +148,7 @@ func TestRunAPICommand(t *testing.T) {
 	tests := []struct {
 		name         string
 		args         []string
-		fn           func(method, path string, params map[string]string) (int, []byte, error)
+		fn           func(method, path string, params url.Values) (int, []byte, error)
 		wantExit     int
 		wantStdout   string // substring; empty means don't check
 		wantStderr   string // substring; empty means don't check
@@ -159,7 +160,7 @@ func TestRunAPICommand(t *testing.T) {
 		{
 			name:       "simple GET pretty-prints JSON",
 			args:       []string{"users/me.json"},
-			fn:         func(m, p string, params map[string]string) (int, []byte, error) { return 200, []byte(`{"a":1}`), nil },
+			fn:         func(m, p string, params url.Values) (int, []byte, error) { return 200, []byte(`{"a":1}`), nil },
 			wantExit:   0,
 			wantStdout: "\"a\": 1",
 			wantMethod: "GET",
@@ -168,7 +169,7 @@ func TestRunAPICommand(t *testing.T) {
 		{
 			name: "POST with data passes method and params",
 			args: []string{"-X", "post", "-d", "value=1", "users/me/goals/read/datapoints.json"},
-			fn: func(m, p string, params map[string]string) (int, []byte, error) {
+			fn: func(m, p string, params url.Values) (int, []byte, error) {
 				return 200, []byte(`{}`), nil
 			},
 			wantExit:     0,
@@ -180,7 +181,7 @@ func TestRunAPICommand(t *testing.T) {
 		{
 			name: "non-JSON body printed raw",
 			args: []string{"something.txt"},
-			fn: func(m, p string, params map[string]string) (int, []byte, error) {
+			fn: func(m, p string, params url.Values) (int, []byte, error) {
 				return 200, []byte("plain text"), nil
 			},
 			wantExit:   0,
@@ -189,7 +190,7 @@ func TestRunAPICommand(t *testing.T) {
 		{
 			name: "non-2xx exits nonzero but prints body",
 			args: []string{"users/nope.json"},
-			fn: func(m, p string, params map[string]string) (int, []byte, error) {
+			fn: func(m, p string, params url.Values) (int, []byte, error) {
 				return 404, []byte(`{"error":"x"}`), nil
 			},
 			wantExit:   1,
@@ -223,7 +224,7 @@ func TestRunAPICommand(t *testing.T) {
 		{
 			name:       "client error",
 			args:       []string{"a.json"},
-			fn:         func(m, p string, params map[string]string) (int, []byte, error) { return 0, nil, io.ErrUnexpectedEOF },
+			fn:         func(m, p string, params url.Values) (int, []byte, error) { return 0, nil, io.ErrUnexpectedEOF },
 			wantExit:   1,
 			wantStderr: "Error:",
 		},
@@ -232,10 +233,10 @@ func TestRunAPICommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var sawMethod, sawPath string
-			var sawParams map[string]string
+			var sawParams url.Values
 			client := &FakeClient{}
 			if tt.fn != nil {
-				client.APIRequestFunc = func(method, path string, params map[string]string) (int, []byte, error) {
+				client.APIRequestFunc = func(method, path string, params url.Values) (int, []byte, error) {
 					sawMethod, sawPath, sawParams = method, path, params
 					return tt.fn(method, path, params)
 				}
@@ -259,10 +260,32 @@ func TestRunAPICommand(t *testing.T) {
 			if tt.wantPath != "" && sawPath != tt.wantPath {
 				t.Errorf("path = %q, want %q", sawPath, tt.wantPath)
 			}
-			if tt.wantParamKey != "" && sawParams[tt.wantParamKey] != tt.wantParamVal {
-				t.Errorf("param %q = %q, want %q", tt.wantParamKey, sawParams[tt.wantParamKey], tt.wantParamVal)
+			if tt.wantParamKey != "" && sawParams.Get(tt.wantParamKey) != tt.wantParamVal {
+				t.Errorf("param %q = %q, want %q", tt.wantParamKey, sawParams.Get(tt.wantParamKey), tt.wantParamVal)
 			}
 		})
+	}
+}
+
+// TestRunAPICommandRepeatedData verifies that repeating -d with the same key
+// preserves every value rather than dropping earlier ones.
+func TestRunAPICommandRepeatedData(t *testing.T) {
+	var sawParams url.Values
+	client := &FakeClient{
+		APIRequestFunc: func(method, path string, params url.Values) (int, []byte, error) {
+			sawParams = params
+			return 200, []byte(`{}`), nil
+		},
+	}
+
+	var stdout, stderr strings.Builder
+	exit := runAPICommand([]string{"-d", "tags=a", "-d", "tags=b", "x.json"}, client, &stdout, &stderr)
+	if exit != 0 {
+		t.Fatalf("exit = %d, want 0 (stderr: %s)", exit, stderr.String())
+	}
+	got := sawParams["tags"]
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("expected tags=[a b], got %v", got)
 	}
 }
 

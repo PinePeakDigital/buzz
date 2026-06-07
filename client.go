@@ -33,9 +33,10 @@ type Client interface {
 	// API. path is relative to the API root (e.g. "users/me.json"); a leading
 	// slash is optional. The configured auth_token is added automatically.
 	// params are sent as query parameters for GET/DELETE and as a urlencoded
-	// form body otherwise. A non-2xx status is NOT returned as an error —
-	// callers inspect the returned status code and body themselves.
-	APIRequest(ctx context.Context, method, path string, params map[string]string) (int, []byte, error)
+	// form body otherwise; url.Values preserves repeated keys. A non-2xx status
+	// is NOT returned as an error — callers inspect the returned status code and
+	// body themselves.
+	APIRequest(ctx context.Context, method, path string, params url.Values) (int, []byte, error)
 	FetchGoal(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error)
@@ -157,10 +158,12 @@ func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
 // See the Client interface for the contract. The auth_token is injected into
 // the query string for GET/DELETE and into the form body for methods that
 // carry one (POST/PUT/PATCH).
-func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params map[string]string) (int, []byte, error) {
+func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params url.Values) (int, []byte, error) {
 	values := url.Values{}
-	for k, v := range params {
-		values.Set(k, v)
+	for k, vs := range params {
+		for _, v := range vs {
+			values.Add(k, v)
+		}
 	}
 	// Set auth_token last so the stored credential always wins, even if the
 	// caller passed an auth_token param — honoring the "injected automatically"
