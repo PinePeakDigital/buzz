@@ -133,27 +133,27 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "q":
 		return m, tea.Quit
 
-	// Escape key closes search mode, modal, or quits
+	// Escape key backs out one level (see handleEscapeKey's ladder) or quits
 	case "esc":
 		return handleEscapeKey(m)
 
-	// Enter input mode with 'a' (only when modal is open but not in input mode and not submitting)
+	// Enter datapoint-input mode with 'a' (only from goal-detail mode)
 	case "a":
 		return handleAddDatapoint(m)
 
-	// Tab navigation between input fields (only in input mode and not submitting)
+	// Tab navigation between form fields (datapoint-input or create-goal mode, not while busy)
 	case "tab":
 		return handleTabKey(m, false)
 
-	// Shift+Tab navigation in input mode (reverse)
+	// Shift+Tab navigation between form fields (reverse)
 	case "shift+tab":
 		return handleTabKey(m, true)
 
-	// Backspace handling in search mode or input mode
+	// Backspace handling in search, datapoint-input, or create-goal mode
 	case "backspace":
 		return handleBackspace(m)
 
-	// Submit form with Enter in input mode
+	// Enter submits the active form, or opens goal details from Browse mode
 	case "enter":
 		return handleEnterKey(m)
 
@@ -186,7 +186,7 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "t":
 		return handleToggleRefresh(m)
 
-	// Enter search mode with '/' (only when modal is closed and not already in search mode)
+	// Enter the search filter layer with '/' (only in Browse mode with no active search)
 	case "/":
 		return handleEnterSearch(m)
 
