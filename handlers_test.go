@@ -78,6 +78,41 @@ func TestValidateDatapointInput(t *testing.T) {
 			errorMsg:    "Value must be a valid number",
 		},
 		{
+			name:        "NaN value rejected",
+			inputDate:   "2024-01-15",
+			inputValue:  "NaN",
+			expectError: true,
+			errorMsg:    "Value must be a valid number",
+		},
+		{
+			name:        "Inf value rejected",
+			inputDate:   "2024-01-15",
+			inputValue:  "Inf",
+			expectError: true,
+			errorMsg:    "Value must be a valid number",
+		},
+		{
+			name:        "+Inf value rejected",
+			inputDate:   "2024-01-15",
+			inputValue:  "+Inf",
+			expectError: true,
+			errorMsg:    "Value must be a valid number",
+		},
+		{
+			name:        "-Inf value rejected",
+			inputDate:   "2024-01-15",
+			inputValue:  "-Inf",
+			expectError: true,
+			errorMsg:    "Value must be a valid number",
+		},
+		{
+			name:        "Infinity value rejected",
+			inputDate:   "2024-01-15",
+			inputValue:  "Infinity",
+			expectError: true,
+			errorMsg:    "Value must be a valid number",
+		},
+		{
 			name:        "date too far in future",
 			inputDate:   time.Now().AddDate(0, 0, 5).Format("2006-01-02"),
 			inputValue:  "5",
@@ -584,6 +619,11 @@ func TestIsValidFloat(t *testing.T) {
 		{"invalid - empty string", "", false},
 		{"invalid - letters", "xyz", false},
 		{"invalid - mixed alphanumeric", "12.3abc", false},
+		{"invalid - NaN", "NaN", false},
+		{"invalid - Inf", "Inf", false},
+		{"invalid - +Inf", "+Inf", false},
+		{"invalid - -Inf", "-Inf", false},
+		{"invalid - Infinity", "Infinity", false},
 	}
 
 	for _, tt := range tests {
@@ -642,6 +682,22 @@ func TestIssueEdgeCases(t *testing.T) {
 			goalval:  "-5.5",
 			rate:     "0.25",
 			wantErr:  false,
+		},
+		{
+			name:     "NaN goalval should be rejected",
+			goaldate: "null",
+			goalval:  "NaN",
+			rate:     "1",
+			wantErr:  true,
+			errMsg:   "Goal value must be a valid number or 'null'",
+		},
+		{
+			name:     "Infinity rate should be rejected",
+			goaldate: "null",
+			goalval:  "10",
+			rate:     "Infinity",
+			wantErr:  true,
+			errMsg:   "Rate must be a valid number or 'null'",
 		},
 	}
 
