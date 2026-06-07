@@ -320,6 +320,38 @@ func TestModeTransitions(t *testing.T) {
 		}
 	})
 
+	t.Run("openCreateGoal is a no-op while search is active", func(t *testing.T) {
+		m := appModel{mode: modeBrowse, searchActive: true, searchQuery: "x"}
+		m.openCreateGoal()
+		if m.mode != modeBrowse {
+			t.Errorf("openCreateGoal during search should be a no-op, mode = %d", m.mode)
+		}
+	})
+
+	t.Run("openCreateGoal is a no-op outside Browse", func(t *testing.T) {
+		m := appModel{modalGoal: &Goal{Slug: "g"}, mode: modeGoalDetail}
+		m.openCreateGoal()
+		if m.mode != modeGoalDetail {
+			t.Errorf("openCreateGoal outside Browse should be a no-op, mode = %d", m.mode)
+		}
+	})
+
+	t.Run("enterSearch is a no-op outside Browse and never clears an active query", func(t *testing.T) {
+		// Outside Browse: no-op.
+		m := appModel{modalGoal: &Goal{Slug: "g"}, mode: modeGoalDetail}
+		m.enterSearch()
+		if m.searchActive {
+			t.Error("enterSearch outside Browse should be a no-op")
+		}
+
+		// Already searching: must not reset the existing query.
+		s := appModel{mode: modeBrowse, searchActive: true, searchQuery: "keep"}
+		s.enterSearch()
+		if s.searchQuery != "keep" {
+			t.Errorf("enterSearch should not clear an active query, got %q", s.searchQuery)
+		}
+	})
+
 	t.Run("openCreateGoal and closeCreateGoal", func(t *testing.T) {
 		m := appModel{}
 		m.openCreateGoal()

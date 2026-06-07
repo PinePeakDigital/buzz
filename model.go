@@ -98,8 +98,13 @@ func (m *appModel) closeModal() {
 	m.modalGoal = nil
 }
 
-// openCreateGoal opens the new-goal form with fresh fields.
+// openCreateGoal opens the new-goal form with fresh fields. It is a no-op
+// unless in Browse mode with no active search (create is only reachable from a
+// clean grid), so the precondition is enforced here rather than by callers.
 func (m *appModel) openCreateGoal() {
+	if m.mode != modeBrowse || m.searchActive {
+		return
+	}
 	m.mode = modeCreateGoal
 	m.createGoal = newCreateGoalForm()
 }
@@ -110,8 +115,13 @@ func (m *appModel) closeCreateGoal() {
 	m.createGoal.err = ""
 }
 
-// enterSearch activates the search filter layer with an empty query.
+// enterSearch activates the search filter layer with an empty query. It is a
+// no-op unless in Browse mode with no active search, so it never clears an
+// existing query from a non-browse caller.
 func (m *appModel) enterSearch() {
+	if m.mode != modeBrowse || m.searchActive {
+		return
+	}
 	m.searchActive = true
 	m.searchQuery = ""
 }
