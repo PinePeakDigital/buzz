@@ -27,7 +27,7 @@ type goalTypeOption struct {
 // jargon names (e.g. "hustler" really means "Do More").
 var goalTypeOptions = []goalTypeOption{
 	{"hustler", "Do More", "accumulate at least a set amount; the line is a floor you stay above (e.g. exercise, writing)"},
-	{"drinker", "Do Less", "stay under a ceiling that ratchets down; the line is a cap you stay below (e.g. junk food, spending)"},
+	{"drinker", "Do Less", "keep a running total under a limit; the line is a ceiling you stay below (e.g. junk food, spending)"},
 	{"biker", "Odometer", "track a running total that only goes up and occasionally resets, like a car odometer"},
 	{"fatloser", "Weight loss", "drive a value down toward a target; the line slopes downward (e.g. lose weight)"},
 	{"gainer", "Gain Weight", "drive a value up at a steady rate (e.g. gain weight or muscle)"},
