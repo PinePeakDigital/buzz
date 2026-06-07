@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -9,9 +10,9 @@ import (
 
 // TestExtractTimeSlots tests the extraction and grouping of time slots from goals
 func TestExtractTimeSlots(t *testing.T) {
-	// Create test goals with different deadline times. extractTimeSlots converts
-	// losedate to local time, so the fixtures are built in time.Local too; this
-	// keeps the asserted hour/minute correct regardless of the machine's timezone.
+	// Create test goals with different deadline times. The fixtures are built in
+	// time.Local and rendered with time.Local below, so the asserted hour/minute
+	// stays correct regardless of the machine's timezone.
 	goals := []Goal{
 		{
 			Slug:     "goal1",
@@ -31,7 +32,7 @@ func TestExtractTimeSlots(t *testing.T) {
 		},
 	}
 
-	slots := extractTimeSlots(goals)
+	slots := extractTimeSlots(goals, time.Local)
 
 	// Should have 3 time slots (goal1 and goal2 share the same time)
 	if len(slots) != 3 {
@@ -83,7 +84,7 @@ func TestExtractTimeSlots(t *testing.T) {
 // TestExtractTimeSlotsEmpty tests extractTimeSlots with no goals
 func TestExtractTimeSlotsEmpty(t *testing.T) {
 	var goals []Goal
-	slots := extractTimeSlots(goals)
+	slots := extractTimeSlots(goals, time.Local)
 
 	if len(slots) != 0 {
 		t.Errorf("Expected 0 time slots for empty goals, got %d", len(slots))
@@ -92,8 +93,9 @@ func TestExtractTimeSlotsEmpty(t *testing.T) {
 
 // TestExtractTimeSlotsAcrossDates tests that goals on different dates with same time are grouped together
 func TestExtractTimeSlotsAcrossDates(t *testing.T) {
-	// Fixtures built in time.Local so the asserted slot time is timezone-independent
-	// (extractTimeSlots groups by the deadline's local hour/minute).
+	// Fixtures built in time.Local and rendered with time.Local below, so the
+	// asserted slot time is timezone-independent (extractTimeSlots groups by the
+	// deadline's hour/minute in the provided location).
 	goals := []Goal{
 		{
 			Slug:     "goal1",
@@ -109,7 +111,7 @@ func TestExtractTimeSlotsAcrossDates(t *testing.T) {
 		},
 	}
 
-	slots := extractTimeSlots(goals)
+	slots := extractTimeSlots(goals, time.Local)
 
 	// Should have 1 time slot (all goals at 14:30)
 	if len(slots) != 1 {
@@ -124,6 +126,69 @@ func TestExtractTimeSlotsAcrossDates(t *testing.T) {
 	// Verify the time
 	if slots[0].hour != 14 || slots[0].minute != 30 {
 		t.Errorf("Expected slot at 14:30, got %02d:%02d", slots[0].hour, slots[0].minute)
+	}
+}
+
+// TestExtractTimeSlotsUsesProvidedLocation verifies that a goal's deadline is
+// rendered in the supplied location, so the same absolute instant yields a
+// different hour/minute across timezones (issue #214).
+func TestExtractTimeSlotsUsesProvidedLocation(t *testing.T) {
+	// A fixed absolute instant: noon UTC on 2024-01-15.
+	instant := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC).Unix()
+	goals := []Goal{{Slug: "goal1", Losedate: instant}}
+
+	utcSlots := extractTimeSlots(goals, time.UTC)
+	if len(utcSlots) != 1 || utcSlots[0].hour != 12 || utcSlots[0].minute != 0 {
+		t.Fatalf("UTC: expected one slot at 12:00, got %+v", utcSlots)
+	}
+
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("America/New_York tzdata unavailable: %v", err)
+	}
+	// New York is UTC-5 in January, so noon UTC is 07:00 local.
+	nySlots := extractTimeSlots(goals, ny)
+	if len(nySlots) != 1 || nySlots[0].hour != 7 || nySlots[0].minute != 0 {
+		t.Fatalf("America/New_York: expected one slot at 07:00, got %+v", nySlots)
+	}
+}
+
+// TestScheduleLocation verifies that scheduleLocation prefers the account
+// timezone and falls back to time.Local on error, empty, or unparseable input.
+func TestScheduleLocation(t *testing.T) {
+	if _, err := time.LoadLocation("America/New_York"); err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		tz      string
+		tzErr   error
+		wantLoc string // empty means expect time.Local
+	}{
+		{name: "account timezone used", tz: "America/New_York", wantLoc: "America/New_York"},
+		{name: "empty falls back to local", tz: ""},
+		{name: "error falls back to local", tzErr: errFakeNotConfigured},
+		{name: "unparseable falls back to local", tz: "Not/AZone"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &FakeClient{
+				FetchUserTimezoneFunc: func() (string, error) { return tt.tz, tt.tzErr },
+			}
+			loc := scheduleLocation(context.Background(), client)
+			want := tt.wantLoc
+			if want == "" {
+				if loc != time.Local {
+					t.Errorf("expected time.Local, got %s", loc)
+				}
+				return
+			}
+			if loc.String() != want {
+				t.Errorf("expected %s, got %s", want, loc)
+			}
+		})
 	}
 }
 

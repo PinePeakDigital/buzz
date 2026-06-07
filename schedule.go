@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -22,7 +23,7 @@ type timeSlot struct {
 // handleScheduleCommand displays a visual representation of goal deadline distribution throughout a 24-hour day
 func handleScheduleCommand() {
 	// Load config and goals
-	_, _, goals, err := loadConfigAndGoals()
+	_, client, goals, err := loadConfigAndGoals()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
@@ -33,8 +34,12 @@ func handleScheduleCommand() {
 		return
 	}
 
+	// Deadlines are defined in the user's Beeminder account timezone, so render
+	// them there rather than in the local machine timezone.
+	loc := scheduleLocation(context.Background(), client)
+
 	// Extract time-of-day from each goal's deadline
-	timeSlots := extractTimeSlots(goals)
+	timeSlots := extractTimeSlots(goals, loc)
 
 	// Generate hourly density data
 	hourCounts := make([]int, 24)
@@ -52,14 +57,32 @@ func handleScheduleCommand() {
 	fmt.Print(getUpdateMessage())
 }
 
-// extractTimeSlots extracts time-of-day from all goal deadlines and groups them
-func extractTimeSlots(goals []Goal) []timeSlot {
+// scheduleLocation resolves the timezone used to render goal deadlines. It
+// prefers the Beeminder account timezone (fetched from the API) so deadline
+// times match what the user sees on beeminder.com, falling back to the local
+// machine timezone if the account timezone is unavailable or unparseable.
+func scheduleLocation(ctx context.Context, client Client) *time.Location {
+	tz, err := client.FetchUserTimezone(ctx)
+	if err != nil || tz == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return time.Local
+	}
+	return loc
+}
+
+// extractTimeSlots extracts time-of-day from all goal deadlines and groups them.
+// Deadlines are rendered in loc, which should be the user's Beeminder account
+// timezone.
+func extractTimeSlots(goals []Goal, loc *time.Location) []timeSlot {
 	// Map to group goals by their time of day (hour:minute)
 	slotMap := make(map[string]*timeSlot)
 
 	for _, goal := range goals {
-		// Convert losedate to local time and extract hour/minute
-		t := time.Unix(goal.Losedate, 0).In(time.Local)
+		// Convert losedate to the account timezone and extract hour/minute
+		t := time.Unix(goal.Losedate, 0).In(loc)
 		hour := t.Hour()
 		minute := t.Minute()
 

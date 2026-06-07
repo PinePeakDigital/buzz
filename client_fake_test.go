@@ -25,6 +25,7 @@ import (
 // explicit context-capture field when the need arises.
 type FakeClient struct {
 	FetchGoalsFunc                  func() ([]Goal, error)
+	FetchUserTimezoneFunc           func() (string, error)
 	FetchGoalFunc                   func(goalSlug string) (*Goal, error)
 	FetchGoalWithDatapointsFunc     func(goalSlug string) (*Goal, error)
 	FetchGoalRawJSONFunc            func(goalSlug string, includeDatapoints bool) (json.RawMessage, error)
@@ -50,6 +51,13 @@ func (c *FakeClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 		return nil, errFakeNotConfigured
 	}
 	return c.FetchGoalsFunc()
+}
+
+func (c *FakeClient) FetchUserTimezone(ctx context.Context) (string, error) {
+	if c.FetchUserTimezoneFunc == nil {
+		return "", errFakeNotConfigured
+	}
+	return c.FetchUserTimezoneFunc()
 }
 
 func (c *FakeClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, error) {

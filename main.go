@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	// Embed the IANA timezone database so time.LoadLocation works on systems
+	// without system tzdata (e.g. Windows, minimal containers). The schedule
+	// command relies on this to render deadlines in the account timezone.
+	_ "time/tzdata"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
