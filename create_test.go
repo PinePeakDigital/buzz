@@ -60,6 +60,27 @@ func TestRunCreateCommandDefaultGoalType(t *testing.T) {
 	}
 }
 
+// TestRunCreateCommandGoalDateAndValue verifies the third accepted permutation
+// of the 2-of-3 rule: goal date + goal value provided, rate left blank.
+func TestRunCreateCommandGoalDateAndValue(t *testing.T) {
+	var got struct{ goaldate, goalval, rate string }
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			got.goaldate, got.goalval, got.rate = goaldate, goalval, rate
+			return &Goal{Slug: slug}, nil
+		},
+	}
+
+	stdin := strings.NewReader("reading\nDaily Reading\nhustler\npages\n1700000000\n365\n\n")
+	var stdout, stderr bytes.Buffer
+	if code := runCreateCommand(stdin, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if got.goaldate != "1700000000" || got.goalval != "365" || got.rate != "" {
+		t.Errorf("unexpected 2-of-3 fields: date=%q val=%q rate=%q", got.goaldate, got.goalval, got.rate)
+	}
+}
+
 // TestRunCreateCommandGoalDateAndRate verifies the other accepted permutation
 // of the 2-of-3 rule: goal date + rate provided, goal value left blank.
 func TestRunCreateCommandGoalDateAndRate(t *testing.T) {
