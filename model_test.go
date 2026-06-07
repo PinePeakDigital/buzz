@@ -163,8 +163,12 @@ func TestInitialAppModel(t *testing.T) {
 		t.Error("initialAppModel() should start with refreshActive = true")
 	}
 
-	if m.searchMode {
-		t.Error("initialAppModel() should start with searchMode = false")
+	if m.searchActive {
+		t.Error("initialAppModel() should start with searchActive = false")
+	}
+
+	if m.mode != modeBrowse {
+		t.Errorf("initialAppModel() mode = %d, want modeBrowse", m.mode)
 	}
 
 	if m.searchQuery != "" {
@@ -214,6 +218,120 @@ func TestInitialAppModelStoresCtx(t *testing.T) {
 	default:
 		t.Error("cancelling parent ctx did not cancel appModel.ctx")
 	}
+}
+
+// TestModeTransitions exercises the guard-railed mode transitions directly,
+// asserting that each one keeps mode and its companion state consistent so that
+// invalid combinations (e.g. a goal-detail modal with no goal attached) cannot
+// arise. See docs/adr/0002-mode-enum-with-guard-railed-transitions.md.
+func TestModeTransitions(t *testing.T) {
+	t.Run("openGoalDetail attaches the goal", func(t *testing.T) {
+		m := appModel{}
+		g := &Goal{Slug: "exercise"}
+		m.openGoalDetail(g)
+		if m.mode != modeGoalDetail {
+			t.Errorf("mode = %d, want modeGoalDetail", m.mode)
+		}
+		if m.modalGoal != g {
+			t.Error("openGoalDetail should attach the goal")
+		}
+		if !m.inGoalModal() {
+			t.Error("inGoalModal() should be true in modeGoalDetail")
+		}
+	})
+
+	t.Run("openGoalDetail re-targets while already open", func(t *testing.T) {
+		m := appModel{}
+		m.openGoalDetail(&Goal{Slug: "first"})
+		m.openGoalDetail(&Goal{Slug: "second"})
+		if m.modalGoal == nil || m.modalGoal.Slug != "second" {
+			t.Error("openGoalDetail should switch to the new goal")
+		}
+	})
+
+	t.Run("startDatapointInput only works from goal detail", func(t *testing.T) {
+		// From Browse it is a no-op.
+		m := appModel{}
+		m.startDatapointInput(newDatapointForm("1"))
+		if m.mode != modeBrowse {
+			t.Errorf("startDatapointInput from Browse should be a no-op, mode = %d", m.mode)
+		}
+
+		// From goal detail it enters input mode.
+		m.openGoalDetail(&Goal{Slug: "exercise"})
+		m.startDatapointInput(newDatapointForm("2.5"))
+		if m.mode != modeDatapointInput {
+			t.Errorf("mode = %d, want modeDatapointInput", m.mode)
+		}
+		if m.datapoint.value() != "2.5" {
+			t.Errorf("datapoint value = %q, want %q", m.datapoint.value(), "2.5")
+		}
+		if !m.inGoalModal() {
+			t.Error("inGoalModal() should be true in modeDatapointInput")
+		}
+	})
+
+	t.Run("exitDatapointInput returns to goal detail", func(t *testing.T) {
+		m := appModel{}
+		m.openGoalDetail(&Goal{Slug: "exercise"})
+		m.startDatapointInput(newDatapointForm("1"))
+		m.exitDatapointInput()
+		if m.mode != modeGoalDetail {
+			t.Errorf("mode = %d, want modeGoalDetail after exitDatapointInput", m.mode)
+		}
+		if m.modalGoal == nil {
+			t.Error("goal should remain attached after exiting datapoint input")
+		}
+	})
+
+	t.Run("closeModal returns to Browse and clears the goal but keeps search", func(t *testing.T) {
+		m := appModel{}
+		m.enterSearch()
+		m.searchQuery = "weight"
+		m.openGoalDetail(&Goal{Slug: "weight"})
+		m.closeModal()
+		if m.mode != modeBrowse {
+			t.Errorf("mode = %d, want modeBrowse", m.mode)
+		}
+		if m.modalGoal != nil {
+			t.Error("closeModal should clear the attached goal")
+		}
+		if !m.searchActive || m.searchQuery != "weight" {
+			t.Error("closeModal should leave the search layer intact")
+		}
+	})
+
+	t.Run("openCreateGoal and closeCreateGoal", func(t *testing.T) {
+		m := appModel{}
+		m.openCreateGoal()
+		if m.mode != modeCreateGoal {
+			t.Errorf("mode = %d, want modeCreateGoal", m.mode)
+		}
+		m.createGoal.err = "boom"
+		m.closeCreateGoal()
+		if m.mode != modeBrowse {
+			t.Errorf("mode = %d, want modeBrowse after closeCreateGoal", m.mode)
+		}
+		if m.createGoal.err != "" {
+			t.Error("closeCreateGoal should clear the form error")
+		}
+	})
+
+	t.Run("enterSearch and exitSearch", func(t *testing.T) {
+		m := appModel{cursor: 5, scrollRow: 3, hasNavigated: true}
+		m.enterSearch()
+		if !m.searchActive || m.searchQuery != "" {
+			t.Error("enterSearch should activate search with an empty query")
+		}
+		m.searchQuery = "abc"
+		m.exitSearch()
+		if m.searchActive || m.searchQuery != "" {
+			t.Error("exitSearch should clear the search layer")
+		}
+		if m.cursor != 0 || m.scrollRow != 0 || m.hasNavigated {
+			t.Error("exitSearch should reset grid navigation state")
+		}
+	})
 }
 
 // Helper function to extract slugs from goals

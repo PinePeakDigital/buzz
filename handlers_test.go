@@ -841,8 +841,8 @@ func TestIssueEdgeCases(t *testing.T) {
 func TestHandleBackspaceSearchTrimsWholeRune(t *testing.T) {
 	m := model{
 		appModel: appModel{
-			searchMode:  true,
-			searchQuery: "a中😀",
+			searchActive: true,
+			searchQuery:  "a中😀",
 		},
 	}
 
@@ -859,7 +859,7 @@ func TestHandleBackspaceSearchTrimsWholeRune(t *testing.T) {
 // TestHandleTabKeyCreateGoal verifies tab/shift+tab cycle focus through the
 // create-goal form when its modal is open.
 func TestHandleTabKeyCreateGoal(t *testing.T) {
-	m := model{appModel: appModel{showCreateModal: true, createGoal: newCreateGoalForm()}}
+	m := model{appModel: appModel{mode: modeCreateGoal, createGoal: newCreateGoalForm()}}
 
 	updated, _ := handleTabKey(m, false)
 	if got := mustModel(t, updated).appModel.createGoal.focus; got != 1 {
@@ -872,7 +872,7 @@ func TestHandleTabKeyCreateGoal(t *testing.T) {
 	}
 
 	// Tab is a no-op while a goal creation is in flight.
-	busy := model{appModel: appModel{showCreateModal: true, createGoal: newCreateGoalForm()}}
+	busy := model{appModel: appModel{mode: modeCreateGoal, createGoal: newCreateGoalForm()}}
 	busy.appModel.createGoal.creating = true
 	updated, _ = handleTabKey(busy, false)
 	if got := mustModel(t, updated).appModel.createGoal.focus; got != 0 {
@@ -883,7 +883,7 @@ func TestHandleTabKeyCreateGoal(t *testing.T) {
 // TestHandleTabKeyDatapoint verifies tab/shift+tab cycle focus through the
 // datapoint form when in input mode.
 func TestHandleTabKeyDatapoint(t *testing.T) {
-	m := model{appModel: appModel{showModal: true, inputMode: true, datapoint: newDatapointForm("1")}}
+	m := model{appModel: appModel{mode: modeDatapointInput, datapoint: newDatapointForm("1")}}
 
 	updated, _ := handleTabKey(m, false)
 	if got := mustModel(t, updated).appModel.datapoint.focus; got != 1 {
@@ -891,7 +891,7 @@ func TestHandleTabKeyDatapoint(t *testing.T) {
 	}
 
 	// Shift+tab from focus 0 wraps to the last field (index 2).
-	updated, _ = handleTabKey(model{appModel: appModel{showModal: true, inputMode: true, datapoint: newDatapointForm("1")}}, true)
+	updated, _ = handleTabKey(model{appModel: appModel{mode: modeDatapointInput, datapoint: newDatapointForm("1")}}, true)
 	if got := mustModel(t, updated).appModel.datapoint.focus; got != 2 {
 		t.Errorf("after shift+tab wrap, datapoint.focus = %d, want 2", got)
 	}
@@ -903,7 +903,7 @@ func TestHandleBackspaceCreateGoal(t *testing.T) {
 	cg := newCreateGoalForm()
 	cg.focus = cgTitle
 	cg.fields[cgTitle].value = "Hi中"
-	m := model{appModel: appModel{showCreateModal: true, createGoal: cg}}
+	m := model{appModel: appModel{mode: modeCreateGoal, createGoal: cg}}
 
 	updated, _ := handleBackspace(m)
 	am := mustModel(t, updated).appModel
@@ -918,7 +918,7 @@ func TestHandleBackspaceDatapoint(t *testing.T) {
 	dp := newDatapointForm("1")
 	dp.focus = dpComment
 	dp.fields[dpComment].value = "note😀"
-	m := model{appModel: appModel{showModal: true, inputMode: true, datapoint: dp}}
+	m := model{appModel: appModel{mode: modeDatapointInput, datapoint: dp}}
 
 	updated, _ := handleBackspace(m)
 	am := mustModel(t, updated).appModel
@@ -952,8 +952,8 @@ func TestHandleSearchInputUnicode(t *testing.T) {
 			// Create a mock model in search mode
 			m := model{
 				appModel: appModel{
-					searchMode: true,
-					showModal:  false,
+					searchActive: true,
+					mode:         modeBrowse,
 				},
 			}
 
@@ -1010,8 +1010,8 @@ func TestHandleCreateModalInputUnicode(t *testing.T) {
 			cg.focus = tt.focus
 			m := model{
 				appModel: appModel{
-					showCreateModal: true,
-					createGoal:      cg,
+					mode:       modeCreateGoal,
+					createGoal: cg,
 				},
 			}
 
@@ -1066,8 +1066,7 @@ func TestHandleDatapointInputUnicode(t *testing.T) {
 			dp.focus = dpComment
 			m := model{
 				appModel: appModel{
-					showModal: true,
-					inputMode: true,
+					mode:      modeDatapointInput,
 					datapoint: dp,
 				},
 			}
@@ -1142,8 +1141,6 @@ func TestNavigationTimeout(t *testing.T) {
 				},
 				hasNavigated:       true,
 				lastNavigationTime: pastTime,
-				showModal:          false,
-				searchMode:         false,
 			},
 		}
 
@@ -1167,8 +1164,6 @@ func TestNavigationTimeout(t *testing.T) {
 				},
 				hasNavigated:       true,
 				lastNavigationTime: recentTime,
-				showModal:          false,
-				searchMode:         false,
 			},
 		}
 
@@ -1192,8 +1187,7 @@ func TestNavigationTimeout(t *testing.T) {
 				},
 				hasNavigated:       true,
 				lastNavigationTime: pastTime,
-				showModal:          true,
-				searchMode:         false,
+				mode:               modeGoalDetail,
 			},
 		}
 
@@ -1217,8 +1211,7 @@ func TestNavigationTimeout(t *testing.T) {
 				},
 				hasNavigated:       true,
 				lastNavigationTime: pastTime,
-				showModal:          false,
-				searchMode:         true,
+				searchActive:       true,
 			},
 		}
 
@@ -1553,7 +1546,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        80, // 4 columns (80/20)
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1566,8 +1558,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Check modal is open
-		if !resultModel.appModel.showModal {
-			t.Error("showModal should be true after clicking a goal")
+		if resultModel.appModel.mode != modeGoalDetail {
+			t.Error("mode should be modeGoalDetail after clicking a goal")
 		}
 
 		// Check correct goal is selected
@@ -1602,7 +1594,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        40, // 2 columns (40/20)
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1615,8 +1606,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Check modal is open with goal2
-		if !resultModel.appModel.showModal {
-			t.Error("showModal should be true after clicking a goal")
+		if resultModel.appModel.mode != modeGoalDetail {
+			t.Error("mode should be modeGoalDetail after clicking a goal")
 		}
 
 		if resultModel.appModel.modalGoal == nil {
@@ -1640,7 +1631,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        40, // 2 columns
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1652,8 +1642,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Check modal is open with goal3
-		if !resultModel.appModel.showModal {
-			t.Error("showModal should be true after clicking a goal")
+		if resultModel.appModel.mode != modeGoalDetail {
+			t.Error("mode should be modeGoalDetail after clicking a goal")
 		}
 
 		if resultModel.appModel.modalGoal == nil {
@@ -1679,7 +1669,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    1,  // Scrolled down by 1 row
 				width:        40, // 2 columns
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1692,8 +1681,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Check modal is open with goal3 (row 1, col 0)
-		if !resultModel.appModel.showModal {
-			t.Error("showModal should be true after clicking a goal")
+		if resultModel.appModel.mode != modeGoalDetail {
+			t.Error("mode should be modeGoalDetail after clicking a goal")
 		}
 
 		if resultModel.appModel.modalGoal == nil {
@@ -1714,7 +1703,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        80, // 4 columns
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1725,8 +1713,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Modal should not open
-		if resultModel.appModel.showModal {
-			t.Error("showModal should be false when clicking empty space")
+		if resultModel.appModel.mode != modeBrowse {
+			t.Error("mode should stay modeBrowse when clicking empty space")
 		}
 
 		// No command should be returned
@@ -1746,7 +1734,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        80,
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1757,8 +1744,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Modal should not open
-		if resultModel.appModel.showModal {
-			t.Error("showModal should be false when clicking header area")
+		if resultModel.appModel.mode != modeBrowse {
+			t.Error("mode should stay modeBrowse when clicking header area")
 		}
 
 		if cmd != nil {
@@ -1775,7 +1762,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        80,
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1785,8 +1771,8 @@ func TestHandleMouseClick(t *testing.T) {
 		resultModel := result.(model)
 
 		// Modal should not open
-		if resultModel.appModel.showModal {
-			t.Error("showModal should be false when no goals exist")
+		if resultModel.appModel.mode != modeBrowse {
+			t.Error("mode should stay modeBrowse when no goals exist")
 		}
 
 		if cmd != nil {
@@ -1807,7 +1793,6 @@ func TestHandleMouseClick(t *testing.T) {
 				scrollRow:    0,
 				width:        80,
 				height:       24,
-				showModal:    false,
 				hasNavigated: false,
 			},
 		}
@@ -1845,7 +1830,7 @@ func TestHandleAddDatapointPrefillsLastValue(t *testing.T) {
 		appModel: appModel{
 			client:    fake,
 			modalGoal: &Goal{Slug: "exercise"},
-			showModal: true,
+			mode:      modeGoalDetail,
 		},
 	}
 
@@ -1854,8 +1839,8 @@ func TestHandleAddDatapointPrefillsLastValue(t *testing.T) {
 	if got.datapoint.value() != "2.5" {
 		t.Errorf("inputValue = %q, want %q", got.datapoint.value(), "2.5")
 	}
-	if !got.inputMode {
-		t.Error("expected inputMode to be true after handleAddDatapoint")
+	if got.mode != modeDatapointInput {
+		t.Error("expected mode to be modeDatapointInput after handleAddDatapoint")
 	}
 	if got.datapoint.comment() != "Added via buzz" {
 		t.Errorf("inputComment = %q, want default %q", got.datapoint.comment(), "Added via buzz")
@@ -1879,7 +1864,7 @@ func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 		appModel: appModel{
 			client:    fake,
 			modalGoal: &Goal{Slug: "any"},
-			showModal: true,
+			mode:      modeGoalDetail,
 		},
 	}
 
@@ -1891,8 +1876,8 @@ func TestHandleAddDatapointDefaultsToOneOnZeroValue(t *testing.T) {
 	if got.datapoint.value() != "1" {
 		t.Errorf("inputValue with zero last value = %q, want %q", got.datapoint.value(), "1")
 	}
-	if !got.inputMode {
-		t.Error("expected inputMode to be true after handleAddDatapoint")
+	if got.mode != modeDatapointInput {
+		t.Error("expected mode to be modeDatapointInput after handleAddDatapoint")
 	}
 	if got.datapoint.comment() != "Added via buzz" {
 		t.Errorf("inputComment = %q, want default %q", got.datapoint.comment(), "Added via buzz")
@@ -1914,7 +1899,7 @@ func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
 		appModel: appModel{
 			client:    fake,
 			modalGoal: &Goal{Slug: "any"},
-			showModal: true,
+			mode:      modeGoalDetail,
 		},
 	}
 
@@ -1926,8 +1911,8 @@ func TestHandleAddDatapointDefaultsToOneOnFetchError(t *testing.T) {
 	if got.datapoint.value() != "1" {
 		t.Errorf("inputValue on fetch error = %q, want %q", got.datapoint.value(), "1")
 	}
-	if !got.inputMode {
-		t.Error("expected inputMode to be true after handleAddDatapoint")
+	if got.mode != modeDatapointInput {
+		t.Error("expected mode to be modeDatapointInput after handleAddDatapoint")
 	}
 	if got.datapoint.comment() != "Added via buzz" {
 		t.Errorf("inputComment = %q, want default %q", got.datapoint.comment(), "Added via buzz")
@@ -1943,14 +1928,12 @@ func TestMouseClickIntegration(t *testing.T) {
 				goals: []Goal{
 					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
 				},
-				config:          &Config{Username: "testuser", AuthToken: "testtoken"},
-				cursor:          0,
-				scrollRow:       0,
-				width:           80,
-				height:          24,
-				showModal:       false,
-				showCreateModal: false,
-				hasNavigated:    false,
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80,
+				height:       24,
+				hasNavigated: false,
 			},
 		}
 
@@ -1958,7 +1941,7 @@ func TestMouseClickIntegration(t *testing.T) {
 		rightClickMsg := mockMouseMsg(0, 2, tea.MouseButtonRight, tea.MouseActionRelease)
 		result, _ := m.updateApp(rightClickMsg)
 		resultModel := result.(model)
-		if resultModel.appModel.showModal {
+		if resultModel.appModel.mode != modeBrowse {
 			t.Error("right click should not open modal")
 		}
 
@@ -1966,7 +1949,7 @@ func TestMouseClickIntegration(t *testing.T) {
 		pressMsg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionPress)
 		result, _ = m.updateApp(pressMsg)
 		resultModel = result.(model)
-		if resultModel.appModel.showModal {
+		if resultModel.appModel.mode != modeBrowse {
 			t.Error("mouse press should not open modal")
 		}
 
@@ -1974,7 +1957,7 @@ func TestMouseClickIntegration(t *testing.T) {
 		releaseMsg := mockMouseMsg(0, 2, tea.MouseButtonLeft, tea.MouseActionRelease)
 		result, _ = m.updateApp(releaseMsg)
 		resultModel = result.(model)
-		if !resultModel.appModel.showModal {
+		if resultModel.appModel.mode != modeGoalDetail {
 			t.Error("left click release should open modal")
 		}
 	})
@@ -1987,15 +1970,14 @@ func TestMouseClickIntegration(t *testing.T) {
 					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
 					{Slug: "goal2", Title: "Goal 2", Losedate: 1234567891},
 				},
-				config:          &Config{Username: "testuser", AuthToken: "testtoken"},
-				cursor:          0,
-				scrollRow:       0,
-				width:           80,
-				height:          24,
-				showModal:       true,
-				modalGoal:       &Goal{Slug: "goal1"},
-				showCreateModal: false,
-				hasNavigated:    false,
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80,
+				height:       24,
+				mode:         modeGoalDetail,
+				modalGoal:    &Goal{Slug: "goal1"},
+				hasNavigated: false,
 			},
 		}
 
@@ -2005,7 +1987,7 @@ func TestMouseClickIntegration(t *testing.T) {
 		resultModel := result.(model)
 
 		// Modal should still be showing the same goal
-		if !resultModel.appModel.showModal {
+		if resultModel.appModel.mode != modeGoalDetail {
 			t.Error("modal should still be open")
 		}
 		if resultModel.appModel.modalGoal.Slug != "goal1" {
@@ -2020,14 +2002,13 @@ func TestMouseClickIntegration(t *testing.T) {
 				goals: []Goal{
 					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
 				},
-				config:          &Config{Username: "testuser", AuthToken: "testtoken"},
-				cursor:          0,
-				scrollRow:       0,
-				width:           80,
-				height:          24,
-				showModal:       false,
-				showCreateModal: true,
-				hasNavigated:    false,
+				config:       &Config{Username: "testuser", AuthToken: "testtoken"},
+				cursor:       0,
+				scrollRow:    0,
+				width:        80,
+				height:       24,
+				mode:         modeCreateGoal,
+				hasNavigated: false,
 			},
 		}
 
@@ -2037,7 +2018,7 @@ func TestMouseClickIntegration(t *testing.T) {
 		resultModel := result.(model)
 
 		// Goal modal should not open
-		if resultModel.appModel.showModal {
+		if resultModel.appModel.mode != modeCreateGoal {
 			t.Error("goal modal should not open when create modal is open")
 		}
 	})
