@@ -2710,3 +2710,42 @@ func TestWaitForDatapoint(t *testing.T) {
 		}
 	})
 }
+
+func TestWaitForDatapointSurfacesLastError(t *testing.T) {
+	// Transient 500s (not permanent) on every poll → on timeout the error
+	// should include the last underlying failure, not just "did not appear".
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+	err := c.WaitForDatapoint(context.Background(), "g", "target", 30*time.Millisecond, time.Millisecond)
+	if err == nil {
+		t.Fatal("expected a timeout error")
+	}
+	if !strings.Contains(err.Error(), "did not appear") || !strings.Contains(err.Error(), "last error") {
+		t.Errorf("expected the timeout error to surface the last transient error, got %v", err)
+	}
+	if calls.Load() < 2 {
+		t.Errorf("expected multiple polls on transient errors, got %d", calls.Load())
+	}
+}
+
+func TestWaitForDatapointCallerCancellation(t *testing.T) {
+	// A cancelled caller context returns context.Canceled verbatim, not the
+	// "did not appear" timeout error.
+	var calls atomic.Int32
+	srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1<<30)) // never present
+	defer srv.Close()
+	c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+	err := c.WaitForDatapoint(ctx, "g", "target", time.Second, time.Millisecond)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}

@@ -200,13 +200,32 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 // datapointID appears or timeout elapses. It always polls at least once (so a
 // zero/negative timeout still does one check), waits pollInterval between polls,
 // and fails fast on permanent API errors (401/403/404) rather than retrying.
-func (c *HTTPClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
+func (c *HTTPClient) WaitForDatapoint(parent context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
 	// Guard against hot-looping: with a positive timeout but no wait between
 	// polls, the loop would hammer the API until the deadline.
 	if timeout > 0 && pollInterval <= 0 {
 		return fmt.Errorf("pollInterval must be > 0 when timeout is positive")
 	}
+
+	// Bound the whole wait — and every fetch within it — by timeout, so one slow
+	// request can't overrun it (a fetch otherwise blocks up to the client's
+	// httpClientTimeout). The original ctx is watched separately so caller
+	// cancellation is reported verbatim, distinct from our own timeout.
+	ctx := parent
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(parent, timeout)
+		defer cancel()
+	}
 	deadline := time.Now().Add(timeout)
+
+	var lastErr error
+	timedOut := func() error {
+		if lastErr != nil {
+			return fmt.Errorf("datapoint %s did not appear within %s (last error: %w)", datapointID, timeout, lastErr)
+		}
+		return fmt.Errorf("datapoint %s did not appear within %s", datapointID, timeout)
+	}
 
 	for {
 		goal, err := c.FetchGoalWithDatapoints(ctx, goalSlug)
@@ -214,7 +233,9 @@ func (c *HTTPClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID
 			if isPermanentAPIError(err) {
 				return err
 			}
-			// Transient error — fall through and retry until the deadline.
+			// Transient (or our own deadline) — remember it for the timeout
+			// message and retry until the deadline.
+			lastErr = err
 		} else {
 			for i := range goal.Datapoints {
 				if goal.Datapoints[i].ID == datapointID {
@@ -223,14 +244,21 @@ func (c *HTTPClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID
 			}
 		}
 
+		// Caller cancellation propagates immediately and verbatim.
+		if parent.Err() != nil {
+			return parent.Err()
+		}
 		// At least one poll has completed; stop once we're out of time.
 		if timeout <= 0 || !time.Now().Before(deadline) {
-			return fmt.Errorf("datapoint %s did not appear within %s", datapointID, timeout)
+			return timedOut()
 		}
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if parent.Err() != nil {
+				return parent.Err()
+			}
+			return timedOut()
 		case <-time.After(pollInterval):
 		}
 	}
