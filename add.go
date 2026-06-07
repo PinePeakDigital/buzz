@@ -150,12 +150,6 @@ func handleAddCommand() {
 		os.Exit(1)
 	}
 
-	// Signal any running TUI instances to refresh
-	if err := createRefreshFlag(); err != nil {
-		// Don't fail the command if flag creation fails
-		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %s\n", redactError(err))
-	}
-
 	successMsg := fmt.Sprintf("Successfully added datapoint to %s: value=%s, comment=\"%s\"", goalSlug, value, comment)
 	if *daystamp != "" {
 		successMsg += fmt.Sprintf(", daystamp=%s", *daystamp)
@@ -173,6 +167,14 @@ func handleAddCommand() {
 		if err := client.WaitForDatapoint(context.Background(), goalSlug, dp.ID, datapointWaitTimeout, datapointPollInterval); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: datapoint not confirmed yet: %s\n", redactError(err))
 		}
+	}
+
+	// Signal any running TUI instances to refresh — after confirming the
+	// datapoint has propagated, so the TUI refreshes against fresh data rather
+	// than racing the write.
+	if err := createRefreshFlag(); err != nil {
+		// Don't fail the command if flag creation fails
+		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %s\n", redactError(err))
 	}
 
 	// Fetch the goal to display the updated limsum
