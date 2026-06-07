@@ -60,6 +60,75 @@ func TestRunCreateCommandDefaultGoalType(t *testing.T) {
 	}
 }
 
+// TestRunCreateCommandGoalDateAndRate verifies the other accepted permutation
+// of the 2-of-3 rule: goal date + rate provided, goal value left blank.
+func TestRunCreateCommandGoalDateAndRate(t *testing.T) {
+	var got struct{ goaldate, goalval, rate string }
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			got.goaldate, got.goalval, got.rate = goaldate, goalval, rate
+			return &Goal{Slug: slug}, nil
+		},
+	}
+
+	stdin := strings.NewReader("reading\nDaily Reading\nhustler\npages\n1700000000\n\n1\n")
+	var stdout, stderr bytes.Buffer
+	if code := runCreateCommand(stdin, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if got.goaldate != "1700000000" || got.goalval != "" || got.rate != "1" {
+		t.Errorf("unexpected 2-of-3 fields: date=%q val=%q rate=%q", got.goaldate, got.goalval, got.rate)
+	}
+}
+
+// TestRunCreateCommandTrimsWhitespace verifies that surrounding whitespace and
+// Windows CRLF line endings (\r\n) are stripped from each field, so piped or
+// pasted input doesn't leak a stray \r or spaces into the API call.
+func TestRunCreateCommandTrimsWhitespace(t *testing.T) {
+	var got struct{ slug, title, gunits string }
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			got.slug, got.title, got.gunits = slug, title, gunits
+			return &Goal{Slug: slug}, nil
+		},
+	}
+
+	stdin := strings.NewReader("  reading  \r\nDaily Reading\r\nhustler\r\n pages \r\n\r\n365\r\n1\r\n")
+	var stdout, stderr bytes.Buffer
+	if code := runCreateCommand(stdin, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if got.slug != "reading" || got.title != "Daily Reading" || got.gunits != "pages" {
+		t.Errorf("fields not trimmed: slug=%q title=%q gunits=%q", got.slug, got.title, got.gunits)
+	}
+}
+
+// TestRunCreateCommandTruncatedInput verifies graceful failure when stdin ends
+// before all prompts are answered (e.g. a short pipe): the missing required
+// fields fail validation, no API call is made, and the exit code is non-zero.
+func TestRunCreateCommandTruncatedInput(t *testing.T) {
+	called := false
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			called = true
+			return &Goal{Slug: slug}, nil
+		},
+	}
+
+	// Only slug and a partial (newline-less) title are supplied; the remaining
+	// prompts read empty strings at EOF.
+	stdin := strings.NewReader("reading\nDaily Reading")
+	var stdout, stderr bytes.Buffer
+	code := runCreateCommand(stdin, client, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("expected exit code 1, got %d", code)
+	}
+	if called {
+		t.Error("CreateGoal should not be called when required input is missing")
+	}
+}
+
 // TestRunCreateCommandValidationError verifies that invalid input (here, all
 // three of goaldate/goalval/rate provided, violating the 2-of-3 rule) is
 // rejected before any API call and surfaces a non-zero exit code.
