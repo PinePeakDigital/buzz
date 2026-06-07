@@ -2023,3 +2023,66 @@ func TestMouseClickIntegration(t *testing.T) {
 		}
 	})
 }
+
+// TestHandleEscapeKeyLadder covers the Esc "back out one level" ladder, the
+// busy-form lock during in-flight writes, and the search-vs-modal precedence.
+func TestHandleEscapeKeyLadder(t *testing.T) {
+	t.Run("datapoint input cancels back to goal detail", func(t *testing.T) {
+		m := model{appModel: appModel{modalGoal: &Goal{Slug: "g"}, mode: modeGoalDetail}}
+		m.appModel.startDatapointInput(newDatapointForm("1"))
+		got := mustModel(t, mustTeaModel(handleEscapeKey(m))).appModel
+		if got.mode != modeGoalDetail {
+			t.Errorf("Esc from datapoint input: mode = %d, want modeGoalDetail", got.mode)
+		}
+	})
+
+	t.Run("Esc is locked while a datapoint submit is in-flight", func(t *testing.T) {
+		m := model{appModel: appModel{modalGoal: &Goal{Slug: "g"}, mode: modeDatapointInput}}
+		m.appModel.datapoint = newDatapointForm("1")
+		m.appModel.datapoint.submitting = true
+		got := mustModel(t, mustTeaModel(handleEscapeKey(m))).appModel
+		if got.mode != modeDatapointInput {
+			t.Errorf("Esc during submit should be locked: mode = %d, want modeDatapointInput", got.mode)
+		}
+	})
+
+	t.Run("Esc is locked while a goal create is in-flight", func(t *testing.T) {
+		m := model{appModel: appModel{mode: modeCreateGoal, createGoal: newCreateGoalForm()}}
+		m.appModel.createGoal.creating = true
+		got := mustModel(t, mustTeaModel(handleEscapeKey(m))).appModel
+		if got.mode != modeCreateGoal {
+			t.Errorf("Esc during create should be locked: mode = %d, want modeCreateGoal", got.mode)
+		}
+	})
+
+	t.Run("goal detail over a search closes the modal and keeps the search", func(t *testing.T) {
+		m := model{appModel: appModel{searchActive: true, searchQuery: "weight", modalGoal: &Goal{Slug: "weight"}, mode: modeGoalDetail}}
+		got := mustModel(t, mustTeaModel(handleEscapeKey(m))).appModel
+		if got.mode != modeBrowse {
+			t.Errorf("Esc on modal: mode = %d, want modeBrowse", got.mode)
+		}
+		if !got.searchActive || got.searchQuery != "weight" {
+			t.Error("Esc on modal should keep the search layer intact")
+		}
+	})
+
+	t.Run("search then exits on the next Esc", func(t *testing.T) {
+		m := model{appModel: appModel{searchActive: true, searchQuery: "weight", mode: modeBrowse}}
+		got := mustModel(t, mustTeaModel(handleEscapeKey(m))).appModel
+		if got.searchActive {
+			t.Error("Esc in browse+search should exit search")
+		}
+	})
+
+	t.Run("browse with no search quits", func(t *testing.T) {
+		m := model{appModel: appModel{mode: modeBrowse}}
+		_, cmd := handleEscapeKey(m)
+		if cmd == nil {
+			t.Error("Esc in plain browse should return a quit command")
+		}
+	})
+}
+
+// mustTeaModel extracts the tea.Model from a handler's (tea.Model, tea.Cmd)
+// return so it can be chained into mustModel.
+func mustTeaModel(tm tea.Model, _ tea.Cmd) tea.Model { return tm }

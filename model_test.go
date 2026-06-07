@@ -268,6 +268,14 @@ func TestModeTransitions(t *testing.T) {
 			t.Errorf("startDatapointInput from Browse should be a no-op, mode = %d", m.mode)
 		}
 
+		// With a goal-detail mode but no attached goal it is also a no-op (the
+		// submit path dereferences modalGoal.Slug).
+		orphan := appModel{mode: modeGoalDetail}
+		orphan.startDatapointInput(newDatapointForm("1"))
+		if orphan.mode != modeGoalDetail {
+			t.Errorf("startDatapointInput with nil modalGoal should be a no-op, mode = %d", orphan.mode)
+		}
+
 		// From goal detail it enters input mode.
 		m.openGoalDetail(&Goal{Slug: "exercise"})
 		m.startDatapointInput(newDatapointForm("2.5"))

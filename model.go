@@ -71,9 +71,10 @@ func (m *appModel) openGoalDetail(g *Goal) {
 }
 
 // startDatapointInput focuses the datapoint-entry form nested in the goal-detail
-// modal. It is a no-op unless a goal detail is currently open.
+// modal. It is a no-op unless a goal detail with an attached goal is open (the
+// submit path dereferences modalGoal.Slug).
 func (m *appModel) startDatapointInput(form datapointForm) {
-	if m.mode != modeGoalDetail {
+	if m.mode != modeGoalDetail || m.modalGoal == nil {
 		return
 	}
 	m.mode = modeDatapointInput

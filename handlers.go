@@ -203,9 +203,16 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // modal opened over a search closes the modal while keeping the search.
 func handleEscapeKey(m model) (tea.Model, tea.Cmd) {
 	switch {
+	case m.appModel.mode == modeDatapointInput && m.appModel.datapoint.submitting:
+		// Keep the form locked during an in-flight submit so the user can't
+		// close it and fire a second non-idempotent write before it returns.
+		return m, nil
 	case m.appModel.mode == modeDatapointInput:
 		// Cancel datapoint entry, back to goal detail
 		m.appModel.exitDatapointInput()
+	case m.appModel.mode == modeCreateGoal && m.appModel.createGoal.creating:
+		// Keep the form locked during an in-flight create.
+		return m, nil
 	case m.appModel.mode == modeCreateGoal:
 		// Close create goal form
 		m.appModel.closeCreateGoal()
