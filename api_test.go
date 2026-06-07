@@ -93,6 +93,57 @@ func TestAPIRequestAuthTokenAlwaysWins(t *testing.T) {
 	}
 }
 
+// TestAPIRequestPathCannotOverrideAuthToken verifies that an auth_token embedded
+// in the path's query string cannot smuggle in a second token — the stored
+// credential is the only one sent.
+func TestAPIRequestPathCannotOverrideAuthToken(t *testing.T) {
+	var gotQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(&Config{Username: "alice", AuthToken: "secret", BaseURL: server.URL})
+	if _, _, err := client.APIRequest(context.Background(), http.MethodGet, "users/me.json?auth_token=attacker", nil); err != nil {
+		t.Fatalf("APIRequest returned error: %v", err)
+	}
+	if strings.Contains(gotQuery, "attacker") {
+		t.Errorf("path-embedded auth_token leaked into request: %s", gotQuery)
+	}
+	if strings.Count(gotQuery, "auth_token=") != 1 || !strings.Contains(gotQuery, "auth_token=secret") {
+		t.Errorf("expected exactly one auth_token=secret, got query: %s", gotQuery)
+	}
+}
+
+// TestAPIRequestDELETEUsesQuery verifies that DELETE (like GET) carries params
+// in the query string and sends no body or content-type.
+func TestAPIRequestDELETEUsesQuery(t *testing.T) {
+	var gotQuery, gotBody, gotContentType string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		gotContentType = r.Header.Get("Content-Type")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(&Config{Username: "alice", AuthToken: "secret", BaseURL: server.URL})
+	if _, _, err := client.APIRequest(context.Background(), http.MethodDelete, "users/me/goals/read/datapoints/123.json", url.Values{"foo": {"bar"}}); err != nil {
+		t.Fatalf("APIRequest returned error: %v", err)
+	}
+	if !strings.Contains(gotQuery, "foo=bar") || !strings.Contains(gotQuery, "auth_token=secret") {
+		t.Errorf("expected foo and auth_token in query, got: %s", gotQuery)
+	}
+	if gotBody != "" {
+		t.Errorf("expected empty body for DELETE, got: %s", gotBody)
+	}
+	if gotContentType != "" {
+		t.Errorf("expected no content-type for DELETE, got: %s", gotContentType)
+	}
+}
+
 // TestAPIRequestPOSTBody verifies that POST sends auth_token and params in the
 // urlencoded form body, not the query string.
 func TestAPIRequestPOSTBody(t *testing.T) {
@@ -216,10 +267,22 @@ func TestRunAPICommand(t *testing.T) {
 			wantStderr: "Unsupported method",
 		},
 		{
-			name:       "invalid data",
+			name:       "invalid data - no equals",
 			args:       []string{"-d", "novalue", "a.json"},
 			wantExit:   1,
 			wantStderr: "Invalid --data",
+		},
+		{
+			name:       "invalid data - empty key",
+			args:       []string{"-d", "=value", "a.json"},
+			wantExit:   1,
+			wantStderr: "Invalid --data",
+		},
+		{
+			name:     "empty body prints nothing and exits 0",
+			args:     []string{"a.json"},
+			fn:       func(m, p string, params url.Values) (int, []byte, error) { return 200, []byte{}, nil },
+			wantExit: 0,
 		},
 		{
 			name:       "client error",

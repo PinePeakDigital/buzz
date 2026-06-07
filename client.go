@@ -159,36 +159,39 @@ func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
 // the query string for GET/DELETE and into the form body for methods that
 // carry one (POST/PUT/PATCH).
 func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params url.Values) (int, []byte, error) {
-	values := url.Values{}
+	u, err := url.Parse(fmt.Sprintf("%s/api/v1/%s", c.baseURL(), strings.TrimPrefix(path, "/")))
+	if err != nil {
+		return 0, nil, fmt.Errorf("invalid API path: %w", err)
+	}
+
+	// Start from any query already embedded in path, then layer caller params on
+	// top (caller wins per key). Parsing rather than string-concatenating means
+	// a path like "...?auth_token=x" can't smuggle in a duplicate auth_token.
+	values := u.Query()
 	for k, vs := range params {
+		values.Del(k)
 		for _, v := range vs {
 			values.Add(k, v)
 		}
 	}
-	// Set auth_token last so the stored credential always wins, even if the
-	// caller passed an auth_token param — honoring the "injected automatically"
-	// contract.
+	// Set auth_token last so the stored credential always wins over anything in
+	// the path or params — honoring the "injected automatically" contract.
 	values.Set("auth_token", c.config.AuthToken)
-
-	apiURL := fmt.Sprintf("%s/api/v1/%s", c.baseURL(), strings.TrimPrefix(path, "/"))
 
 	var reqBody io.Reader
 	contentType := ""
 	switch method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		// Carry everything (including auth_token) in the form body.
+		u.RawQuery = ""
 		reqBody = strings.NewReader(values.Encode())
 		contentType = "application/x-www-form-urlencoded"
 	default:
-		// GET/DELETE: carry everything in the query string, preserving any
-		// query the caller already included in path.
-		sep := "?"
-		if strings.Contains(apiURL, "?") {
-			sep = "&"
-		}
-		apiURL += sep + values.Encode()
+		// GET/DELETE: carry everything in the query string.
+		u.RawQuery = values.Encode()
 	}
 
-	resp, err := c.doRequest(ctx, method, apiURL, reqBody, contentType)
+	resp, err := c.doRequest(ctx, method, u.String(), reqBody, contentType)
 	if err != nil {
 		return 0, nil, fmt.Errorf("request failed: %w", err)
 	}
