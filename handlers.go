@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -297,8 +298,10 @@ func validateDatapointInput(inputDate, inputValue string) string {
 		return "Date cannot be more than 1 day in the future"
 	}
 
-	// Parse and validate value (must be a valid number)
-	if _, err := strconv.ParseFloat(inputValue, 64); err != nil {
+	// Parse and validate value (must be a valid, finite number). ParseFloat
+	// accepts "NaN"/"Inf"/"+Inf"/"-Inf"/"Infinity"/"+Infinity"/"-Infinity", so
+	// reject non-finite results explicitly.
+	if v, err := strconv.ParseFloat(inputValue, 64); err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
 		return "Value must be a valid number"
 	}
 
@@ -314,13 +317,15 @@ func isValidInteger(s string) bool {
 	return err == nil
 }
 
-// isValidFloat checks if a string is a valid float
+// isValidFloat checks if a string is a valid, finite float. ParseFloat accepts
+// "NaN"/"Inf"/"+Inf"/"-Inf"/"Infinity"/"+Infinity"/"-Infinity", so reject
+// non-finite results explicitly.
 func isValidFloat(s string) bool {
 	if s == "" || s == "null" {
 		return false
 	}
-	_, err := strconv.ParseFloat(s, 64)
-	return err == nil
+	v, err := strconv.ParseFloat(s, 64)
+	return err == nil && !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
 // validateCreateGoalInput validates create goal input fields and returns error message if invalid
