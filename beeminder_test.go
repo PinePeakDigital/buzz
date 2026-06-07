@@ -2594,18 +2594,18 @@ func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
 	}
 }
 
-// goalWithDatapointsHandler returns an httptest handler that serves a goal whose
-// datapoints include `target` only once `appearOnCall` requests have been made,
-// counting calls into `calls`.
+// goalWithDatapointsHandler returns an httptest handler that serves the recent
+// datapoints list (the endpoint WaitForDatapoint polls), including `target` only
+// once `appearOnCall` requests have been made, counting calls into `calls`.
 func goalWithDatapointsHandler(t *testing.T, calls *atomic.Int32, target string, appearOnCall int32) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		n := calls.Add(1)
 		w.WriteHeader(http.StatusOK)
 		if n >= appearOnCall {
-			fmt.Fprintf(w, `{"slug":"g","datapoints":[{"id":%q}]}`, target)
+			fmt.Fprintf(w, `[{"id":%q}]`, target)
 		} else {
-			w.Write([]byte(`{"slug":"g","datapoints":[]}`))
+			w.Write([]byte(`[]`))
 		}
 	}
 }
