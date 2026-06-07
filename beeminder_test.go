@@ -2600,6 +2600,19 @@ func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
 func goalWithDatapointsHandler(t *testing.T, calls *atomic.Int32, target string, appearOnCall int32) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Confirm WaitForDatapoint hits the lightweight datapoints endpoint with
+		// the expected params, not the full-history goal fetch — otherwise this
+		// regression test would pass even if the client called the wrong path.
+		if got := r.URL.Path; !strings.HasSuffix(got, "/goals/g/datapoints.json") {
+			t.Errorf("expected the datapoints endpoint, got path %q", got)
+		}
+		q := r.URL.Query()
+		if got := q.Get("sort"); got != "updated_at" {
+			t.Errorf("expected sort=updated_at, got %q", got)
+		}
+		if got := q.Get("count"); got == "" {
+			t.Error("expected a count query param to bound the fetch, got none")
+		}
 		n := calls.Add(1)
 		w.WriteHeader(http.StatusOK)
 		if n >= appearOnCall {
