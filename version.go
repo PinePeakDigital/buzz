@@ -121,9 +121,12 @@ func compareVersions(currentVersion, newVersion string) bool {
 	currentVersion = strings.TrimPrefix(currentVersion, "v")
 	newVersion = strings.TrimPrefix(newVersion, "v")
 
-	// Handle dev version - always consider any release as newer
+	// An unstamped "dev" build has no real version to compare against, so don't
+	// claim an update is available: the check would always fire and the message
+	// ("dev → vX.Y.Z, run brew upgrade") is misleading even when the user already
+	// has the latest (issue #233). Release builds stamp main.version via ldflags.
 	if currentVersion == "dev" {
-		return newVersion != "dev"
+		return false
 	}
 
 	// If versions are identical, no update available
