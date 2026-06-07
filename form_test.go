@@ -231,6 +231,35 @@ func TestCreateGoalFormFieldFilters(t *testing.T) {
 	if c.goaldate() != "null" {
 		t.Errorf("goaldate() = %q, want %q", c.goaldate(), "null")
 	}
+
+	// Goalval (focus 5): digits, decimal, negative — or the literal "null".
+	c.focus = cgGoalval
+	c.fields[cgGoalval].value = ""
+	if c.handleRune('x') {
+		t.Error("goalval should reject letters that don't extend \"null\"")
+	}
+	typeInto(&c.form, "-2.5")
+	if c.goalval() != "-2.5" {
+		t.Errorf("goalval() = %q, want %q", c.goalval(), "-2.5")
+	}
+	c.fields[cgGoalval].value = ""
+	typeInto(&c.form, "null")
+	if c.goalval() != "null" {
+		t.Errorf("goalval() = %q, want %q", c.goalval(), "null")
+	}
+
+	// Rate (focus 6): same filter as goalval (filterDecimalOrNull).
+	c.focus = cgRate
+	c.fields[cgRate].value = ""
+	typeInto(&c.form, "3.5")
+	if c.rate() != "3.5" {
+		t.Errorf("rate() = %q, want %q", c.rate(), "3.5")
+	}
+	c.fields[cgRate].value = ""
+	typeInto(&c.form, "null")
+	if c.rate() != "null" {
+		t.Errorf("rate() = %q, want %q", c.rate(), "null")
+	}
 }
 
 // TestCreateGoalFormValidate verifies validate() delegates to the existing

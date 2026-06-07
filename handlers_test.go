@@ -673,6 +673,77 @@ func TestHandleBackspaceSearchTrimsWholeRune(t *testing.T) {
 	}
 }
 
+// TestHandleTabKeyCreateGoal verifies tab/shift+tab cycle focus through the
+// create-goal form when its modal is open.
+func TestHandleTabKeyCreateGoal(t *testing.T) {
+	m := model{appModel: appModel{showCreateModal: true, createGoal: newCreateGoalForm()}}
+
+	updated, _ := handleTabKey(m, false)
+	if got := updated.(model).appModel.createGoal.focus; got != 1 {
+		t.Errorf("after tab, createGoal.focus = %d, want 1", got)
+	}
+
+	updated, _ = handleTabKey(updated.(model), true)
+	if got := updated.(model).appModel.createGoal.focus; got != 0 {
+		t.Errorf("after shift+tab, createGoal.focus = %d, want 0", got)
+	}
+
+	// Tab is a no-op while a goal creation is in flight.
+	busy := model{appModel: appModel{showCreateModal: true, createGoal: newCreateGoalForm()}}
+	busy.appModel.createGoal.creating = true
+	updated, _ = handleTabKey(busy, false)
+	if got := updated.(model).appModel.createGoal.focus; got != 0 {
+		t.Errorf("tab while creating should not move focus, got %d", got)
+	}
+}
+
+// TestHandleTabKeyDatapoint verifies tab/shift+tab cycle focus through the
+// datapoint form when in input mode.
+func TestHandleTabKeyDatapoint(t *testing.T) {
+	m := model{appModel: appModel{showModal: true, inputMode: true, datapoint: newDatapointForm("1")}}
+
+	updated, _ := handleTabKey(m, false)
+	if got := updated.(model).appModel.datapoint.focus; got != 1 {
+		t.Errorf("after tab, datapoint.focus = %d, want 1", got)
+	}
+
+	// Shift+tab from focus 0 wraps to the last field (index 2).
+	updated, _ = handleTabKey(model{appModel: appModel{showModal: true, inputMode: true, datapoint: newDatapointForm("1")}}, true)
+	if got := updated.(model).appModel.datapoint.focus; got != 2 {
+		t.Errorf("after shift+tab wrap, datapoint.focus = %d, want 2", got)
+	}
+}
+
+// TestHandleBackspaceCreateGoal verifies backspace trims the focused create-goal
+// field (rune-aware) when the modal is open.
+func TestHandleBackspaceCreateGoal(t *testing.T) {
+	cg := newCreateGoalForm()
+	cg.focus = cgTitle
+	cg.fields[cgTitle].value = "Hi中"
+	m := model{appModel: appModel{showCreateModal: true, createGoal: cg}}
+
+	updated, _ := handleBackspace(m)
+	am := updated.(model).appModel
+	if got := am.createGoal.title(); got != "Hi" {
+		t.Errorf("after backspace, title() = %q, want %q", got, "Hi")
+	}
+}
+
+// TestHandleBackspaceDatapoint verifies backspace trims the focused datapoint
+// field when in input mode.
+func TestHandleBackspaceDatapoint(t *testing.T) {
+	dp := newDatapointForm("1")
+	dp.focus = dpComment
+	dp.fields[dpComment].value = "note😀"
+	m := model{appModel: appModel{showModal: true, inputMode: true, datapoint: dp}}
+
+	updated, _ := handleBackspace(m)
+	am := updated.(model).appModel
+	if got := am.datapoint.comment(); got != "note" {
+		t.Errorf("after backspace, comment() = %q, want %q", got, "note")
+	}
+}
+
 // TestHandleSearchInputUnicode tests Unicode support in search mode
 func TestHandleSearchInputUnicode(t *testing.T) {
 	tests := []struct {
