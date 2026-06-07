@@ -2594,10 +2594,10 @@ func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
 	}
 }
 
-// goalWithDatapointsHandler returns an httptest handler that serves the recent
+// recentDatapointsHandler returns an httptest handler that serves the recent
 // datapoints list (the endpoint WaitForDatapoint polls), including `target` only
 // once `appearOnCall` requests have been made, counting calls into `calls`.
-func goalWithDatapointsHandler(t *testing.T, calls *atomic.Int32, target string, appearOnCall int32) http.HandlerFunc {
+func recentDatapointsHandler(t *testing.T, calls *atomic.Int32, target string, appearOnCall int32) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Confirm WaitForDatapoint hits the lightweight datapoints endpoint with
@@ -2626,7 +2626,7 @@ func goalWithDatapointsHandler(t *testing.T, calls *atomic.Int32, target string,
 func TestWaitForDatapoint(t *testing.T) {
 	t.Run("returns nil once the datapoint appears after polling", func(t *testing.T) {
 		var calls atomic.Int32
-		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 3))
+		srv := httptest.NewServer(recentDatapointsHandler(t, &calls, "target", 3))
 		defer srv.Close()
 		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
 
@@ -2642,7 +2642,7 @@ func TestWaitForDatapoint(t *testing.T) {
 	t.Run("times out when the datapoint never appears", func(t *testing.T) {
 		var calls atomic.Int32
 		// appearOnCall huge → never returns the target.
-		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1<<30))
+		srv := httptest.NewServer(recentDatapointsHandler(t, &calls, "target", 1<<30))
 		defer srv.Close()
 		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
 
@@ -2697,7 +2697,7 @@ func TestWaitForDatapoint(t *testing.T) {
 
 	t.Run("zero timeout still polls once", func(t *testing.T) {
 		var calls atomic.Int32
-		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1)) // present immediately
+		srv := httptest.NewServer(recentDatapointsHandler(t, &calls, "target", 1)) // present immediately
 		defer srv.Close()
 		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
 
@@ -2711,7 +2711,7 @@ func TestWaitForDatapoint(t *testing.T) {
 
 	t.Run("zero timeout not found errors after one poll", func(t *testing.T) {
 		var calls atomic.Int32
-		srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1<<30)) // never present
+		srv := httptest.NewServer(recentDatapointsHandler(t, &calls, "target", 1<<30)) // never present
 		defer srv.Close()
 		c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
 
@@ -2751,7 +2751,7 @@ func TestWaitForDatapointCallerCancellation(t *testing.T) {
 	// A cancelled caller context returns context.Canceled verbatim, not the
 	// "did not appear" timeout error.
 	var calls atomic.Int32
-	srv := httptest.NewServer(goalWithDatapointsHandler(t, &calls, "target", 1<<30)) // never present
+	srv := httptest.NewServer(recentDatapointsHandler(t, &calls, "target", 1<<30)) // never present
 	defer srv.Close()
 	c := NewHTTPClient(&Config{Username: "u", AuthToken: "t", BaseURL: srv.URL})
 
