@@ -25,6 +25,10 @@ const httpClientTimeout = 30 * time.Second
 // further interface changes — that wiring is tracked in a follow-up.
 type Client interface {
 	FetchGoals(ctx context.Context) ([]Goal, error)
+	// FetchUserTimezone returns the IANA timezone configured on the user's
+	// Beeminder account (e.g. "America/New_York"), or an empty string if the
+	// account has none set.
+	FetchUserTimezone(ctx context.Context) (string, error)
 	FetchGoal(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error)
@@ -113,6 +117,33 @@ func (c *HTTPClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	}
 
 	return goals, nil
+}
+
+// FetchUserTimezone fetches the IANA timezone configured on the user's
+// Beeminder account from the user endpoint. Returns an empty string (no error)
+// if the account has no timezone set.
+func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s.json?auth_token=%s",
+		c.baseURL(), c.config.Username, c.config.AuthToken)
+
+	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Timezone string `json:"timezone"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode user: %w", err)
+	}
+
+	return result.Timezone, nil
 }
 
 // GetLastDatapointValue fetches the last datapoint value for a goal.
