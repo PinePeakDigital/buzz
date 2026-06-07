@@ -159,10 +159,13 @@ func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
 // carry one (POST/PUT/PATCH).
 func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params map[string]string) (int, []byte, error) {
 	values := url.Values{}
-	values.Set("auth_token", c.config.AuthToken)
 	for k, v := range params {
 		values.Set(k, v)
 	}
+	// Set auth_token last so the stored credential always wins, even if the
+	// caller passed an auth_token param — honoring the "injected automatically"
+	// contract.
+	values.Set("auth_token", c.config.AuthToken)
 
 	apiURL := fmt.Sprintf("%s/api/v1/%s", c.baseURL(), strings.TrimPrefix(path, "/"))
 

@@ -70,6 +70,28 @@ func TestAPIRequestLeadingSlashAndExistingQuery(t *testing.T) {
 	}
 }
 
+// TestAPIRequestAuthTokenAlwaysWins verifies that a caller-supplied auth_token
+// param cannot override the configured credential.
+func TestAPIRequestAuthTokenAlwaysWins(t *testing.T) {
+	var gotQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(&Config{Username: "alice", AuthToken: "secret", BaseURL: server.URL})
+	if _, _, err := client.APIRequest(context.Background(), http.MethodGet, "users/me.json", map[string]string{"auth_token": "attacker"}); err != nil {
+		t.Fatalf("APIRequest returned error: %v", err)
+	}
+	if !strings.Contains(gotQuery, "auth_token=secret") {
+		t.Errorf("expected stored auth_token to win, got query: %s", gotQuery)
+	}
+	if strings.Contains(gotQuery, "attacker") {
+		t.Errorf("caller-supplied auth_token leaked into request: %s", gotQuery)
+	}
+}
+
 // TestAPIRequestPOSTBody verifies that POST sends auth_token and params in the
 // urlencoded form body, not the query string.
 func TestAPIRequestPOSTBody(t *testing.T) {
