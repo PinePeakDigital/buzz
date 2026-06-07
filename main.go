@@ -46,6 +46,7 @@ func printHelp() {
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
+	fmt.Println("  buzz create                       Interactively create a new Beeminder goal")
 	fmt.Println("  buzz deadline [--yes] <goalslug> <time>")
 	fmt.Println("                                    Change a goal's deadline (e.g., \"3:00 PM\" or \"15:00\")")
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")
@@ -138,6 +139,9 @@ func main() {
 		case "charge":
 			handleChargeCommand()
 			return
+		case "create":
+			handleCreateCommand()
+			return
 		case "deadline":
 			handleDeadlineCommand()
 			return
@@ -164,7 +168,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, deadline, schedule, uncle, ratchet, api, auth, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, create, refresh, view, review, charge, deadline, schedule, uncle, ratchet, api, auth, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
