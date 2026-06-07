@@ -157,7 +157,7 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return handleEnterKey(m)
 
-	// Navigation keys - spatial movement through grid (only when modal is closed)
+	// Navigation keys - spatial movement through grid (only in Browse mode)
 	case "up", "k":
 		return handleNavigationUp(m)
 
@@ -170,19 +170,19 @@ func handleKeyPress(m model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "right", "l":
 		return handleNavigationRight(m)
 
-	// Scroll up with Page Up or 'u' (only when modal is closed)
+	// Scroll up with Page Up or 'u' (only in Browse mode)
 	case "pgup", "u":
 		return handleScrollUp(m)
 
-	// Scroll down with Page Down or 'd' (only when modal is closed)
+	// Scroll down with Page Down or 'd' (only in Browse mode)
 	case "pgdown", "d":
 		return handleScrollDown(m)
 
-	// Manual refresh with 'r' (only when modal is closed)
+	// Manual refresh with 'r' (only in Browse mode)
 	case "r":
 		return handleRefresh(m)
 
-	// Toggle auto-refresh with 't' (only when modal is closed)
+	// Toggle auto-refresh with 't' (only in Browse mode)
 	case "t":
 		return handleToggleRefresh(m)
 

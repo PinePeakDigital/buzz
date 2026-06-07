@@ -1201,6 +1201,31 @@ func TestNavigationTimeout(t *testing.T) {
 		}
 	})
 
+	t.Run("timeout does not disable highlight while in datapoint input", func(t *testing.T) {
+		// inGoalModal() covers both modeGoalDetail and modeDatapointInput, so
+		// the highlight must also survive a timeout while the datapoint form is
+		// focused inside the modal.
+		pastTime := time.Now().Add(-4 * time.Second)
+		testModel := model{
+			appModel: appModel{
+				goals: []Goal{
+					{Slug: "goal1", Title: "Goal 1", Losedate: 1234567890},
+				},
+				hasNavigated:       true,
+				lastNavigationTime: pastTime,
+				modalGoal:          &Goal{Slug: "goal1"},
+				mode:               modeDatapointInput,
+			},
+		}
+
+		result, _ := testModel.updateApp(navigationTimeoutMsg{})
+		resultAppModel := result.(model).appModel
+
+		if !resultAppModel.hasNavigated {
+			t.Error("hasNavigated should remain true while in datapoint input")
+		}
+	})
+
 	t.Run("timeout does not disable highlight while in search mode", func(t *testing.T) {
 		// Create model with navigation that happened 4 seconds ago, in search mode
 		pastTime := time.Now().Add(-4 * time.Second)
