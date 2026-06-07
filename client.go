@@ -29,6 +29,14 @@ type Client interface {
 	// Beeminder account (e.g. "America/New_York"), or an empty string if the
 	// account has none set.
 	FetchUserTimezone(ctx context.Context) (string, error)
+	// APIRequest performs a raw, authenticated request against the Beeminder
+	// API. path is relative to the API root (e.g. "users/me.json"); a leading
+	// slash is optional. The configured auth_token is added automatically.
+	// params are sent as query parameters for GET/DELETE and as a urlencoded
+	// form body otherwise; url.Values preserves repeated keys. A non-2xx status
+	// is NOT returned as an error — callers inspect the returned status code and
+	// body themselves.
+	APIRequest(ctx context.Context, method, path string, params url.Values) (int, []byte, error)
 	FetchGoal(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error)
 	FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error)
@@ -144,6 +152,57 @@ func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
 	}
 
 	return result.Timezone, nil
+}
+
+// APIRequest performs a raw, authenticated request against the Beeminder API.
+// See the Client interface for the contract. The auth_token is injected into
+// the query string for GET/DELETE and into the form body for methods that
+// carry one (POST/PUT/PATCH).
+func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params url.Values) (int, []byte, error) {
+	u, err := url.Parse(fmt.Sprintf("%s/api/v1/%s", c.baseURL(), strings.TrimPrefix(path, "/")))
+	if err != nil {
+		return 0, nil, fmt.Errorf("invalid API path: %w", err)
+	}
+
+	// Start from any query already embedded in path, then layer caller params on
+	// top (caller wins per key). Parsing rather than string-concatenating means
+	// a path like "...?auth_token=x" can't smuggle in a duplicate auth_token.
+	values := u.Query()
+	for k, vs := range params {
+		values.Del(k)
+		for _, v := range vs {
+			values.Add(k, v)
+		}
+	}
+	// Set auth_token last so the stored credential always wins over anything in
+	// the path or params — honoring the "injected automatically" contract.
+	values.Set("auth_token", c.config.AuthToken)
+
+	var reqBody io.Reader
+	contentType := ""
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		// Carry everything (including auth_token) in the form body.
+		u.RawQuery = ""
+		reqBody = strings.NewReader(values.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	default:
+		// GET/DELETE: carry everything in the query string.
+		u.RawQuery = values.Encode()
+	}
+
+	resp, err := c.doRequest(ctx, method, u.String(), reqBody, contentType)
+	if err != nil {
+		return 0, nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	return resp.StatusCode, body, nil
 }
 
 // GetLastDatapointValue fetches the last datapoint value for a goal.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"time"
 )
 
@@ -26,6 +27,7 @@ import (
 type FakeClient struct {
 	FetchGoalsFunc                  func() ([]Goal, error)
 	FetchUserTimezoneFunc           func() (string, error)
+	APIRequestFunc                  func(method, path string, params url.Values) (int, []byte, error)
 	FetchGoalFunc                   func(goalSlug string) (*Goal, error)
 	FetchGoalWithDatapointsFunc     func(goalSlug string) (*Goal, error)
 	FetchGoalRawJSONFunc            func(goalSlug string, includeDatapoints bool) (json.RawMessage, error)
@@ -58,6 +60,13 @@ func (c *FakeClient) FetchUserTimezone(ctx context.Context) (string, error) {
 		return "", errFakeNotConfigured
 	}
 	return c.FetchUserTimezoneFunc()
+}
+
+func (c *FakeClient) APIRequest(ctx context.Context, method, path string, params url.Values) (int, []byte, error) {
+	if c.APIRequestFunc == nil {
+		return 0, nil, errFakeNotConfigured
+	}
+	return c.APIRequestFunc(method, path, params)
 }
 
 func (c *FakeClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, error) {
