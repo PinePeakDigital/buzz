@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
-	"time"
 )
 
 // FakeClient is a test double for the Client interface. Each API method is
@@ -34,7 +33,6 @@ type FakeClient struct {
 	GetLastDatapointValueFunc       func(goalSlug string) (float64, error)
 	CreateDatapointFunc             func(goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error)
 	CreateDatapointWithDaystampFunc func(goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error)
-	WaitForDatapointFunc            func(goalSlug, datapointID string, timeout, pollInterval time.Duration) error
 	CreateChargeFunc                func(amount float64, note string, dryrun bool) (*Charge, error)
 	CreateGoalFunc                  func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncleFunc                   func(goalSlug string) (*Goal, error)
@@ -109,13 +107,6 @@ func (c *FakeClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 		return nil, errFakeNotConfigured
 	}
 	return c.CreateDatapointWithDaystampFunc(goalSlug, timestamp, daystamp, value, comment, requestid)
-}
-
-func (c *FakeClient) WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
-	if c.WaitForDatapointFunc == nil {
-		return errFakeNotConfigured
-	}
-	return c.WaitForDatapointFunc(goalSlug, datapointID, timeout, pollInterval)
 }
 
 func (c *FakeClient) CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error) {

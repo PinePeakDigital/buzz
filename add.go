@@ -11,13 +11,6 @@ import (
 	"time"
 )
 
-// Polling config for confirming a datapoint landed after `buzz add`, replacing
-// the old fixed post-add sleep. Vars (not consts) so tests can shorten them.
-var (
-	datapointWaitTimeout  = 10 * time.Second
-	datapointPollInterval = 500 * time.Millisecond
-)
-
 // printAddUsageAndExit prints the usage for buzz add command and exits with code 1
 func printAddUsageAndExit(errorMsg string) {
 	fmt.Println("Error: " + errorMsg)
@@ -144,7 +137,7 @@ func handleAddCommand() {
 	}
 
 	// Create the datapoint
-	dp, err := client.CreateDatapointWithDaystamp(context.Background(), goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
+	_, err = client.CreateDatapointWithDaystamp(context.Background(), goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
 	if err != nil {
 		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
 		os.Exit(1)
@@ -159,31 +152,11 @@ func handleAddCommand() {
 	}
 	fmt.Println(successMsg)
 
-	// Wait until the new datapoint actually appears in the goal's recent data
-	// before fetching the updated limsum, rather than sleeping a fixed delay.
-	// Best-effort: if it doesn't show in time we still fetch and display
-	// whatever limsum the server returns.
-	if dp != nil && dp.ID != "" {
-		if err := client.WaitForDatapoint(context.Background(), goalSlug, dp.ID, datapointWaitTimeout, datapointPollInterval); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: datapoint not confirmed yet: %s\n", redactError(err))
-		}
-	}
-
-	// Signal any running TUI instances to refresh — after confirming the
-	// datapoint has propagated, so the TUI refreshes against fresh data rather
-	// than racing the write.
+	// Signal any running TUI instances to refresh so they pick up the new
+	// datapoint.
 	if err := createRefreshFlag(); err != nil {
 		// Don't fail the command if flag creation fails
 		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %s\n", redactError(err))
-	}
-
-	// Fetch the goal to display the updated limsum
-	goal, err := client.FetchGoal(context.Background(), goalSlug)
-	if err != nil {
-		// Don't fail the command if fetching limsum fails, just skip displaying it
-		fmt.Fprintf(os.Stderr, "Warning: Could not fetch goal status: %s\n", redactError(err))
-	} else {
-		fmt.Printf("Limsum: %s\n", goal.Limsum)
 	}
 
 	// Check for updates and display message if available
