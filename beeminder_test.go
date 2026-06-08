@@ -2592,4 +2592,3 @@ func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
 		}
 	}
 }
-
