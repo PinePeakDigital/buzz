@@ -43,9 +43,6 @@ type Client interface {
 	GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error)
 	CreateDatapoint(ctx context.Context, goalSlug, timestamp, value, comment, requestid string) (*Datapoint, error)
 	CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error)
-	// WaitForDatapoint polls until the datapoint with datapointID appears in the
-	// goal's recent data or timeout elapses; it always polls at least once.
-	WaitForDatapoint(ctx context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error
 	CreateCharge(ctx context.Context, amount float64, note string, dryrun bool) (*Charge, error)
 	CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncle(ctx context.Context, goalSlug string) (*Goal, error)
@@ -243,8 +240,7 @@ func (c *HTTPClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, v
 
 // CreateDatapointWithDaystamp submits a new datapoint with optional daystamp and
 // returns the created datapoint. If daystamp is provided (format YYYYMMDD), it is
-// used instead of timestamp. The returned datapoint's ID lets callers poll for
-// it via WaitForDatapoint instead of sleeping a fixed delay.
+// used instead of timestamp.
 func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
@@ -284,92 +280,6 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 		return nil, fmt.Errorf("failed to decode created datapoint: %w", err)
 	}
 	return &dp, nil
-}
-
-// WaitForDatapoint polls the goal's recent data until a datapoint with
-// datapointID appears or timeout elapses. It always polls at least once (so a
-// zero/negative timeout still does one check), waits pollInterval between polls,
-// and fails fast on permanent API errors (401/403/404) rather than retrying.
-func (c *HTTPClient) WaitForDatapoint(parent context.Context, goalSlug, datapointID string, timeout, pollInterval time.Duration) error {
-	// Guard against hot-looping: with a positive timeout but no wait between
-	// polls, the loop would hammer the API until the deadline.
-	if timeout > 0 && pollInterval <= 0 {
-		return fmt.Errorf("pollInterval must be > 0 when timeout is positive")
-	}
-
-	// Bound the whole wait — and every fetch within it — by timeout, so one slow
-	// request can't overrun it (a fetch otherwise blocks up to the client's
-	// httpClientTimeout). The original ctx is watched separately so caller
-	// cancellation is reported verbatim, distinct from our own timeout.
-	ctx := parent
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(parent, timeout)
-		defer cancel()
-	}
-	deadline := time.Now().Add(timeout)
-
-	var lastErr error
-	timedOut := func() error {
-		if lastErr != nil {
-			return fmt.Errorf("datapoint %s did not appear within %s (last error: %w)", datapointID, timeout, lastErr)
-		}
-		return fmt.Errorf("datapoint %s did not appear within %s", datapointID, timeout)
-	}
-
-	for {
-		// Poll the lightweight recent-datapoints list rather than the goal's
-		// full history (?datapoints=true): the latter grows with the goal and
-		// can take longer than the whole poll timeout, which manifested as
-		// "context deadline exceeded". A just-added datapoint sorts to the top
-		// by updated_at, so a small count reliably surfaces it.
-		dps, err := c.fetchRecentDatapoints(ctx, goalSlug, datapointPollCount)
-		if err != nil {
-			if isPermanentAPIError(err) {
-				return err
-			}
-			// Transient (or our own deadline) — remember it for the timeout
-			// message and retry until the deadline.
-			lastErr = err
-		} else {
-			for i := range dps {
-				if dps[i].ID == datapointID {
-					return nil
-				}
-			}
-		}
-
-		// Caller cancellation propagates immediately and verbatim.
-		if parent.Err() != nil {
-			return parent.Err()
-		}
-		// At least one poll has completed; stop once we're out of time.
-		if timeout <= 0 || !time.Now().Before(deadline) {
-			return timedOut()
-		}
-
-		select {
-		case <-ctx.Done():
-			if parent.Err() != nil {
-				return parent.Err()
-			}
-			return timedOut()
-		case <-time.After(pollInterval):
-		}
-	}
-}
-
-// isPermanentAPIError reports whether err represents a client-side API failure
-// (401/403/404) that won't resolve by retrying. It matches the status text the
-// client embeds in its error messages ("API returned status NNN").
-func isPermanentAPIError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "status 401") ||
-		strings.Contains(msg, "status 403") ||
-		strings.Contains(msg, "status 404")
 }
 
 // CreateCharge creates a new charge for the authenticated user and returns it.
@@ -493,40 +403,6 @@ func (c *HTTPClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, err
 	}
 
 	return &goal, nil
-}
-
-// datapointPollCount is how many recent datapoints WaitForDatapoint fetches per
-// poll. A just-added datapoint sorts to the top by updated_at, so the target is
-// only missed if this many *other* datapoints get a newer updated_at within the
-// poll window — implausible for the interactive single-add flow. The generous
-// margin makes that effectively impossible while still bounding the payload (the
-// whole point of not refetching the goal's full history).
-const datapointPollCount = 90
-
-// fetchRecentDatapoints returns the goal's most recently updated datapoints via
-// the dedicated datapoints endpoint, capped at count. This is far cheaper than
-// FetchGoalWithDatapoints (which pulls the entire history) and is used for the
-// quick post-add confirmation poll.
-func (c *HTTPClient) fetchRecentDatapoints(ctx context.Context, goalSlug string, count int) ([]Datapoint, error) {
-	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/datapoints.json?auth_token=%s&sort=updated_at&count=%d",
-		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken, count)
-
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch datapoints: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var dps []Datapoint
-	if err := json.NewDecoder(resp.Body).Decode(&dps); err != nil {
-		return nil, fmt.Errorf("failed to decode datapoints: %w", err)
-	}
-
-	return dps, nil
 }
 
 // FetchGoalWithDatapoints fetches goal details including recent datapoints.
