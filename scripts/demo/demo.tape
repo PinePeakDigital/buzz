@@ -55,7 +55,26 @@ Type "clear"
 Enter
 Sleep 700ms
 
+# Goals due today.
+Type@60ms "buzz today"
+Enter
+Sleep 2.5s
+
+Type "clear"
+Enter
+Sleep 700ms
+
 # Detailed view with the 7-day "amount due" forecast.
 Type@60ms "buzz view meditate"
 Enter
 Sleep 4s
+
+Type "clear"
+Enter
+Sleep 700ms
+
+# Log progress straight from the terminal. (Runs last; the demo's mock API
+# acknowledges it without changing the earlier views.)
+Type@60ms 'buzz add read 5 "read a chapter"'
+Enter
+Sleep 3s

@@ -32,6 +32,14 @@ WORK_DIR="$(mktemp -d)"
 BIN_DIR="$WORK_DIR/bin"
 mkdir -p "$BIN_DIR"
 
+# Fail fast if something is already on the port — otherwise the readiness
+# probe below would happily pass against a stale/foreign server and record a
+# misleading demo.
+if curl -sf "http://127.0.0.1:$PORT/api/v1/users/demo.json" >/dev/null 2>&1; then
+  echo "error: something is already listening on port $PORT; stop it or set BUZZ_DEMO_PORT" >&2
+  exit 1
+fi
+
 MOCK_PID=""
 cleanup() {
   [ -n "$MOCK_PID" ] && kill "$MOCK_PID" 2>/dev/null || true
