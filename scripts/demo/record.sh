@@ -35,7 +35,7 @@ mkdir -p "$BIN_DIR"
 # Fail fast if something is already on the port — otherwise the readiness
 # probe below would happily pass against a stale/foreign server and record a
 # misleading demo.
-if curl -sf "http://127.0.0.1:$PORT/api/v1/users/demo.json" >/dev/null 2>&1; then
+if curl -sf --connect-timeout 1 --max-time 2 "http://127.0.0.1:$PORT/api/v1/users/demo.json" >/dev/null 2>&1; then
   echo "error: something is already listening on port $PORT; stop it or set BUZZ_DEMO_PORT" >&2
   exit 1
 fi
@@ -62,7 +62,7 @@ EOF
 # Wait for the mock server to accept connections.
 ready=false
 for _ in $(seq 1 50); do
-  if curl -sf "http://127.0.0.1:$PORT/api/v1/users/demo.json" >/dev/null 2>&1; then
+  if curl -sf --connect-timeout 1 --max-time 2 "http://127.0.0.1:$PORT/api/v1/users/demo.json" >/dev/null 2>&1; then
     ready=true
     break
   fi

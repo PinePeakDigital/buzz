@@ -85,7 +85,7 @@ func handle(w http.ResponseWriter, r *http.Request, user string, now time.Time) 
 	case path == prefix+".json":
 		writeJSON(w, map[string]any{"username": user, "timezone": "America/New_York"})
 
-	case r.Method == http.MethodPost && strings.HasSuffix(path, "/datapoints.json"):
+	case r.Method == http.MethodPost && strings.HasPrefix(path, prefix+"/goals/") && strings.HasSuffix(path, "/datapoints.json"):
 		// Acknowledge a new datapoint without persisting it. `buzz add` runs
 		// last in the demo, so nothing else needs to reflect the change — this
 		// keeps the mock stateless.
