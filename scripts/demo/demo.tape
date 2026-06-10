@@ -13,9 +13,14 @@ Set Height 720
 Set Padding 20
 Set Theme "Dracula"
 
-# Quiet, clean prompt for the recording.
+# Quiet, clean prompt for the recording. Force a truecolor profile so buzz's
+# lipgloss styling renders in color: headless CI terminals hand the program a
+# TERM that termenv treats as colorless, falling back to monochrome. Setting
+# COLORTERM=truecolor short-circuits that detection regardless of TERM.
 Hide
 Type "export PS1='$ '"
+Enter
+Type "export COLORTERM=truecolor TERM=xterm-256color CLICOLOR_FORCE=1"
 Enter
 Type "clear"
 Enter
