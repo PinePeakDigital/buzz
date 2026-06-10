@@ -4,13 +4,10 @@
   "version": "0.0.1",
   "scripts": {
     "sync:demo": "node -e \"require('fs').copyFileSync('../scripts/demo/demo.gif','public/demo.gif')\"",
-    "predev": "pnpm run sync:demo",
-    "prestart": "pnpm run sync:demo",
-    "prebuild": "pnpm run sync:demo",
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
+    "dev": "pnpm run sync:demo && astro dev",
+    "start": "pnpm run sync:demo && astro dev",
+    "build": "pnpm run sync:demo && astro build",
+    "preview": "pnpm run sync:demo && astro preview",
     "astro": "astro"
   },
   "dependencies": {
