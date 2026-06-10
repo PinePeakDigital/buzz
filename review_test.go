@@ -701,7 +701,7 @@ func TestFineprintOrderInOutput(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
-	output := formatGoalDetails(&goal, config)
+	output := formatGoalDetails(&goal, config, time.Now())
 
 	// Find positions of URL and Fine print in the output
 	urlIndex := strings.Index(output, "URL:")
@@ -857,7 +857,7 @@ func TestFormatGoalDetailsWithDatapoints(t *testing.T) {
 
 	config := &Config{Username: "testuser"}
 
-	result := formatGoalDetails(goal, config)
+	result := formatGoalDetails(goal, config, time.Now())
 
 	for _, want := range []string{
 		"Recent datapoints:",
@@ -885,7 +885,7 @@ func TestFormatGoalDetailsWithoutDatapoints(t *testing.T) {
 
 	config := &Config{Username: "testuser"}
 
-	result := formatGoalDetails(goal, config)
+	result := formatGoalDetails(goal, config, time.Now())
 
 	if strings.Contains(result, "Recent datapoints:") {
 		t.Error("Expected result to NOT contain 'Recent datapoints:' header when no datapoints present")
@@ -1048,7 +1048,7 @@ func TestGoalDetailsFieldOrder(t *testing.T) {
 	}
 	config := &Config{Username: "narthur"}
 
-	out := formatGoalDetails(goal, config)
+	out := formatGoalDetails(goal, config, time.Now())
 
 	// Each label must appear, and in this exact relative order.
 	want := []string{
@@ -1079,7 +1079,7 @@ func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
 		Losedate: 4102444800, // fixed future timestamp; only label positions matter
 		// Rate nil, Autoratchet nil, Title/Autodata/Fineprint empty → all omitted.
 	}
-	out := formatGoalDetails(goal, &Config{Username: "narthur"})
+	out := formatGoalDetails(goal, &Config{Username: "narthur"}, time.Now())
 
 	for _, absent := range []string{"Rate:", "Autoratchet:", "Title:", "Autodata:", "Fine print:"} {
 		if strings.Contains(out, absent) {
@@ -1397,9 +1397,9 @@ func TestFormatSevenDayForecastAlignsColumnsWithTimeValues(t *testing.T) {
 }
 
 func TestFormatGoalDetailsIncludesForecastBeforeDatapoints(t *testing.T) {
-	// formatGoalDetails uses the real clock, so key the dueby entry to today's
-	// actual daystamp; the forecast drops anything before today.
-	today := todayDaystampFor(Goal{}, time.Now())
+	// Inject a fixed clock so the test is deterministic (no midnight-rollover
+	// flake): key the dueby entry to that clock's daystamp.
+	today := todayDaystampFor(Goal{}, forecastTestNow)
 	goal := &Goal{
 		Slug:       "test",
 		Dueby:      map[string]DuebyEntry{today: {FormattedDelta: "+1", FormattedTotal: "10"}},
@@ -1407,7 +1407,7 @@ func TestFormatGoalDetailsIncludesForecastBeforeDatapoints(t *testing.T) {
 	}
 	config := &Config{Username: "u", BaseURL: "https://example.com"}
 
-	out := formatGoalDetails(goal, config)
+	out := formatGoalDetails(goal, config, forecastTestNow)
 
 	fi := strings.Index(out, "7-Day Forecast:")
 	di := strings.Index(out, "Recent datapoints:")
