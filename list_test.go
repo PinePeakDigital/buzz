@@ -98,6 +98,10 @@ func TestParseListArgs(t *testing.T) {
 		if !strings.Contains(out.String(), "Usage: buzz list") {
 			t.Errorf("expected usage on stdout, got: %q", out.String())
 		}
+		// Help goes to stdout only; flag's built-in usage must not leak to stderr.
+		if errOut.Len() != 0 {
+			t.Errorf("expected nothing on stderr for help, got: %q", errOut.String())
+		}
 	})
 
 	t.Run("unknown flag errors with exit code 2", func(t *testing.T) {
@@ -108,6 +112,14 @@ func TestParseListArgs(t *testing.T) {
 		}
 		if !strings.Contains(errOut.String(), "Usage: buzz list") {
 			t.Errorf("expected usage on stderr, got: %q", errOut.String())
+		}
+		// Only our explicit message should print — flag's auto-output is
+		// suppressed, so usage appears exactly once and nothing leaks to stdout.
+		if n := strings.Count(errOut.String(), "Usage:"); n != 1 {
+			t.Errorf("expected usage printed once, got %d times: %q", n, errOut.String())
+		}
+		if out.Len() != 0 {
+			t.Errorf("expected nothing on stdout for parse error, got: %q", out.String())
 		}
 	})
 

@@ -50,7 +50,9 @@ func handleListCommand() {
 // out/errOut rather than fixed streams so the parsing is unit-testable.
 func parseListArgs(args []string, out, errOut io.Writer) (archived bool, exitCode int, done bool) {
 	listFlags := flag.NewFlagSet("list", flag.ContinueOnError)
-	listFlags.SetOutput(errOut)
+	// Silence flag's built-in error/usage printing so it doesn't duplicate (and
+	// cross-stream) the explicit messages below; we own all user-facing output.
+	listFlags.SetOutput(io.Discard)
 	archivedFlag := listFlags.Bool("archived", false, "List archived goals instead of active ones")
 	if err := listFlags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
