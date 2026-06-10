@@ -562,8 +562,8 @@ func TestChartTimeframeHonorsTminWithoutTmax(t *testing.T) {
 
 func TestRenderGoalChartHonorsTminForStaleGoal(t *testing.T) {
 	// Regression for the real-world "fam" goal: tmin set far in the past, tmax
-	// null, last datapoint older than 30 days. Honoring tmin (and ending at the
-	// stale last datapoint) means the goal charts instead of going blank.
+	// null, last datapoint older than 30 days. Honoring tmin as the window start
+	// (the end defaults to now) means the goal charts instead of going blank.
 	last := time.Now().AddDate(0, 0, -40)
 	goal := Goal{
 		Slug:  "fam",

@@ -184,7 +184,11 @@ func lastDatapointTime(goal Goal) (t time.Time, ok bool) {
 			latest = dp.Timestamp
 		}
 	}
-	return time.Unix(latest, 0), true
+	// Return in the local zone: chartTimeframe resolves every other bound in
+	// local time, and when this value becomes the window start/end it drives the
+	// timeframe header and x-axis labels — a UTC instant could render the wrong
+	// calendar day near midnight.
+	return time.Unix(latest, 0).In(time.Local), true
 }
 
 // timedValue is a datapoint reduced to the two things the chart cares about:
