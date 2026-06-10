@@ -1264,3 +1264,83 @@ func TestReviewViewMergesDetailFieldsOntoSummaryGoal(t *testing.T) {
 		t.Errorf("expected chart (from merged road + datapoints) to render\n%s", out)
 	}
 }
+
+func TestFormatSevenDayForecast(t *testing.T) {
+	goal := &Goal{
+		Gunits: "clears",
+		Dueby: map[string]DuebyEntry{
+			"20260610": {FormattedDelta: "+1", FormattedTotal: "138"},
+			"20260611": {FormattedDelta: "+2", FormattedTotal: "139"},
+			"20260612": {FormattedDelta: "+3", FormattedTotal: "140"},
+		},
+	}
+
+	out := formatSevenDayForecast(goal)
+
+	for _, want := range []string{"7-Day Forecast:", "Day", "Due", "Total", "Today", "Tomorrow", "Fri (12th)", "+1", "138", "+3", "140"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected forecast to contain %q, got:\n%s", want, out)
+		}
+	}
+
+	// Rows must be in chronological order regardless of map iteration order.
+	iToday, iTomorrow, iFri := strings.Index(out, "Today"), strings.Index(out, "Tomorrow"), strings.Index(out, "Fri (12th)")
+	if !(iToday < iTomorrow && iTomorrow < iFri) {
+		t.Errorf("expected chronological order Today < Tomorrow < Fri, got positions %d/%d/%d in:\n%s", iToday, iTomorrow, iFri, out)
+	}
+}
+
+func TestFormatSevenDayForecastEmpty(t *testing.T) {
+	if got := formatSevenDayForecast(&Goal{}); got != "" {
+		t.Errorf("expected empty string for goal with no dueby, got: %q", got)
+	}
+}
+
+func TestFormatSevenDayForecastTruncatesToSeven(t *testing.T) {
+	dueby := map[string]DuebyEntry{}
+	for _, d := range []string{"20260610", "20260611", "20260612", "20260613", "20260614", "20260615", "20260616", "20260617", "20260618"} {
+		dueby[d] = DuebyEntry{FormattedDelta: "+1", FormattedTotal: "10"}
+	}
+	out := formatSevenDayForecast(&Goal{Dueby: dueby})
+
+	// The 7th day (index 6) is 20260616 = Tue 16th; the 8th (20260617 = Wed 17th)
+	// must be dropped.
+	if !strings.Contains(out, "Tue (16th)") {
+		t.Errorf("expected the 7th day (Tue (16th)) to be present, got:\n%s", out)
+	}
+	if strings.Contains(out, "(17th)") {
+		t.Errorf("expected days beyond the 7th to be truncated, but found (17th) in:\n%s", out)
+	}
+}
+
+func TestForecastDayLabel(t *testing.T) {
+	tests := []struct {
+		daystamp string
+		index    int
+		want     string
+	}{
+		{"20260610", 0, "Today"},
+		{"20260611", 1, "Tomorrow"},
+		{"20260612", 2, "Fri (12th)"},
+		{"20260621", 3, "Sun (21st)"},
+		{"notadate", 4, "notadate"},
+	}
+	for _, tt := range tests {
+		if got := forecastDayLabel(tt.daystamp, tt.index); got != tt.want {
+			t.Errorf("forecastDayLabel(%q, %d) = %q, want %q", tt.daystamp, tt.index, got, tt.want)
+		}
+	}
+}
+
+func TestOrdinalSuffix(t *testing.T) {
+	tests := map[int]string{
+		1: "st", 2: "nd", 3: "rd", 4: "th", 10: "th",
+		11: "th", 12: "th", 13: "th",
+		21: "st", 22: "nd", 23: "rd", 31: "st",
+	}
+	for day, want := range tests {
+		if got := ordinalSuffix(day); got != want {
+			t.Errorf("ordinalSuffix(%d) = %q, want %q", day, got, want)
+		}
+	}
+}
