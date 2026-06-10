@@ -5,7 +5,7 @@
 # buzz at it via an isolated $HOME/.buzzrc (so the real ~/.buzzrc and a real
 # account are never touched), then drives the recording with VHS.
 #
-# Requires: go, vhs (which needs ttyd and ffmpeg). Install with `brew install vhs`.
+# Requires: go, curl, vhs (which needs ttyd and ffmpeg). Install with `brew install vhs`.
 #
 # Usage: scripts/demo/record.sh
 
@@ -18,7 +18,7 @@ cd "$REPO_ROOT"
 
 PORT="${BUZZ_DEMO_PORT:-7180}"
 
-for tool in go vhs; do
+for tool in go curl vhs; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "error: '$tool' is required but not installed" >&2
     [ "$tool" = vhs ] && echo "       install with: brew install vhs" >&2

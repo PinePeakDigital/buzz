@@ -262,6 +262,11 @@ jobs:
   demo:
     runs-on: ubuntu-latest
     needs: build
+    # This job builds and runs the PR's code (record.sh compiles buzz and the
+    # mock server) in a job that holds a write token, so restrict it to
+    # same-repo PRs — i.e. trusted collaborator branches. Fork PRs don't run it
+    # at all, so untrusted code never executes alongside a writable token.
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     permissions:
       contents: write
@@ -289,18 +294,13 @@ jobs:
           name: demo-gif
           path: scripts/demo/demo.gif
 
-      # Publishing the GIF to the PR's pre-release and commenting needs a
-      # write token, which fork PRs don't get — so gate these on same-repo PRs.
-      # Forks still get the artifact uploaded above.
       - name: Attach demo GIF to PR pre-release
-        if: github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh release upload "pr-${PR_NUMBER}-latest" scripts/demo/demo.gif --clobber
 
       - name: Post or update demo comment
-        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@v7
         with:
           script: |
