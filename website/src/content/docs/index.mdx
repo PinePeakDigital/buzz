@@ -16,6 +16,16 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+<figure style="margin: 0 auto 2.5rem; max-width: 880px; text-align: center;">
+	{/* Served from public/ (copied from scripts/demo/demo.gif by `sync:demo`) so
+	    the animation is preserved — Astro's image pipeline would re-encode it. */}
+	<img
+		src="/demo.gif"
+		alt="Animated demo of buzz: the colorful TUI dashboard, then buzz list, buzz today, buzz view, and buzz add in the terminal."
+		style="width: 100%; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"
+	/>
+</figure>
+
 <CardGrid stagger>
 	<Card title="Interactive TUI" icon="laptop">
 		Browse your goals in a colorful, keyboard-driven grid. Goals are
