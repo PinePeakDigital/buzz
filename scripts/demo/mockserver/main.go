@@ -66,8 +66,11 @@ func main() {
 	})
 
 	addr := "127.0.0.1:" + *port
+	// ReadHeaderTimeout guards against a stalled client holding the connection
+	// open; harmless for a localhost demo server but keeps linters quiet.
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("mock Beeminder API listening on http://%s (user %q)", addr, *user)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("mockserver: %v", err)
 	}
 }

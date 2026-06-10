@@ -269,12 +269,17 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
 
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write # upload the demo GIF to the PR pre-release
+      pull-requests: write # post/update the demo comment
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # This job builds and runs PR code; don't leave the token in
+          # .git/config where a build step could read it. The publish steps use
+          # GH_TOKEN / the github-script token, not git credentials.
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v6
