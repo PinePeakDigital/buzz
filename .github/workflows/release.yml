@@ -38,7 +38,7 @@ jobs:
       - name: Calculate semantic version
         id: semver
         if: github.event_name == 'push' || github.event.inputs.version == ''
-        uses: ietf-tools/semver-action@c90370b2958652d71c06a3484129a4d423a6d8a8 # v1.9.0
+        uses: ietf-tools/semver-action@c90370b2958652d71c06a3484129a4d423a6d8a8 # v1.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
