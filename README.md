@@ -4,6 +4,10 @@ A terminal user interface for [Beeminder](https://beeminder.com) built with [Bub
 
 View your goals in a colorful grid, navigate with arrow keys, and add datapoints directly from your terminal.
 
+![buzz demo](scripts/demo/demo.gif)
+
+> The demo above is generated automatically from fictional data — see [`scripts/demo/`](scripts/demo/).
+
 📖 **Full documentation:** [buzz.nathanarthur.com](https://buzz.nathanarthur.com)
 
 ## Installation
