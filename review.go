@@ -509,25 +509,43 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 // an empty string when the goal has no dueby data (e.g. a freshly created
 // goal), so callers can append the result unconditionally.
 func formatSevenDayForecast(goal *Goal) string {
+	return formatSevenDayForecastAt(goal, time.Now())
+}
+
+// formatSevenDayForecastAt is the testable core of formatSevenDayForecast with
+// the clock injected. It anchors on the goal's current daystamp (deadline-aware)
+// rather than the dueby map's sort position: Beeminder's dueby can carry past
+// daystamps as well as today's and future ones, so we drop anything before today
+// and label each remaining day by its actual date — never by slice index — to
+// avoid mislabelling a stale past day as "Today".
+func formatSevenDayForecastAt(goal *Goal, now time.Time) string {
 	if len(goal.Dueby) == 0 {
 		return ""
 	}
 
+	today := todayDaystampFor(*goal, now)
+
 	days := make([]string, 0, len(goal.Dueby))
 	for daystamp := range goal.Dueby {
-		days = append(days, daystamp)
+		// YYYYMMDD strings compare chronologically; drop stale past daystamps.
+		if daystamp >= today {
+			days = append(days, daystamp)
+		}
 	}
-	sort.Strings(days) // YYYYMMDD daystamps sort chronologically
+	sort.Strings(days)
 	if len(days) > 7 {
 		days = days[:7]
+	}
+	if len(days) == 0 {
+		return ""
 	}
 
 	type forecastRow struct{ label, due, total string }
 	rows := make([]forecastRow, 0, len(days))
-	for i, daystamp := range days {
+	for _, daystamp := range days {
 		entry := goal.Dueby[daystamp]
 		rows = append(rows, forecastRow{
-			label: forecastDayLabel(daystamp, i),
+			label: forecastDayLabel(daystamp, today),
 			due:   entry.FormattedDelta,
 			total: entry.FormattedTotal,
 		})
@@ -551,20 +569,23 @@ func formatSevenDayForecast(goal *Goal) string {
 	return b.String()
 }
 
-// forecastDayLabel returns a human label for a dueby daystamp (YYYYMMDD).
-// Index 0 is "Today" and index 1 is "Tomorrow" (Beeminder's dueby map always
-// begins at today); any later day is shown as weekday + ordinal day-of-month,
-// e.g. "Fri (12th)". Falls back to the raw daystamp if it can't be parsed.
-func forecastDayLabel(daystamp string, index int) string {
-	switch index {
-	case 0:
+// forecastDayLabel returns a human label for a dueby daystamp (YYYYMMDD),
+// relative to today's daystamp: "Today", "Tomorrow", or otherwise weekday +
+// ordinal day-of-month, e.g. "Fri (12th)". Labelling by actual date (rather
+// than position) keeps the labels correct even if the dueby map has gaps or
+// stale entries. Falls back to the raw daystamp if it can't be parsed.
+func forecastDayLabel(daystamp, today string) string {
+	if daystamp == today {
 		return "Today"
-	case 1:
-		return "Tomorrow"
 	}
 	t, err := time.Parse("20060102", daystamp)
 	if err != nil {
 		return daystamp
+	}
+	if todayTime, err := time.Parse("20060102", today); err == nil {
+		if daystamp == todayTime.AddDate(0, 0, 1).Format("20060102") {
+			return "Tomorrow"
+		}
 	}
 	return fmt.Sprintf("%s (%d%s)", t.Format("Mon"), t.Day(), ordinalSuffix(t.Day()))
 }

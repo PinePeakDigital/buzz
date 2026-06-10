@@ -1265,6 +1265,10 @@ func TestReviewViewMergesDetailFieldsOntoSummaryGoal(t *testing.T) {
 	}
 }
 
+// forecastTestNow is a fixed clock for the forecast tests: 2026-06-10 (a
+// Wednesday) at noon UTC, so today's daystamp is "20260610".
+var forecastTestNow = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+
 func TestFormatSevenDayForecast(t *testing.T) {
 	goal := &Goal{
 		Gunits: "clears",
@@ -1275,7 +1279,7 @@ func TestFormatSevenDayForecast(t *testing.T) {
 		},
 	}
 
-	out := formatSevenDayForecast(goal)
+	out := formatSevenDayForecastAt(goal, forecastTestNow)
 
 	for _, want := range []string{"7-Day Forecast:", "Day", "Due", "Total", "Today", "Tomorrow", "Fri (12th)", "+1", "138", "+3", "140"} {
 		if !strings.Contains(out, want) {
@@ -1291,20 +1295,28 @@ func TestFormatSevenDayForecast(t *testing.T) {
 }
 
 func TestFormatSevenDayForecastEmpty(t *testing.T) {
-	if got := formatSevenDayForecast(&Goal{}); got != "" {
+	if got := formatSevenDayForecastAt(&Goal{}, forecastTestNow); got != "" {
 		t.Errorf("expected empty string for goal with no dueby, got: %q", got)
 	}
 }
 
-func TestFormatSevenDayForecastTruncatesToSeven(t *testing.T) {
+func TestFormatSevenDayForecastDropsPastDaysAndTruncatesToSeven(t *testing.T) {
 	dueby := map[string]DuebyEntry{}
-	for _, d := range []string{"20260610", "20260611", "20260612", "20260613", "20260614", "20260615", "20260616", "20260617", "20260618"} {
+	// A stale past day (20260609) plus eight forward days from today.
+	for _, d := range []string{"20260609", "20260610", "20260611", "20260612", "20260613", "20260614", "20260615", "20260616", "20260617"} {
 		dueby[d] = DuebyEntry{FormattedDelta: "+1", FormattedTotal: "10"}
 	}
-	out := formatSevenDayForecast(&Goal{Dueby: dueby})
+	out := formatSevenDayForecastAt(&Goal{Dueby: dueby}, forecastTestNow)
 
-	// The 7th day (index 6) is 20260616 = Tue 16th; the 8th (20260617 = Wed 17th)
-	// must be dropped.
+	// The past day (Tue 9th) must be dropped, not labelled "Today".
+	if strings.Contains(out, "(9th)") {
+		t.Errorf("expected the past day (9th) to be dropped, but found it in:\n%s", out)
+	}
+	if !strings.Contains(out, "Today") {
+		t.Errorf("expected today's row to be present, got:\n%s", out)
+	}
+	// Seven forward days are kept (today..20260616 = Tue 16th); the 8th forward
+	// day (20260617 = Wed 17th) is truncated.
 	if !strings.Contains(out, "Tue (16th)") {
 		t.Errorf("expected the 7th day (Tue (16th)) to be present, got:\n%s", out)
 	}
@@ -1314,20 +1326,20 @@ func TestFormatSevenDayForecastTruncatesToSeven(t *testing.T) {
 }
 
 func TestForecastDayLabel(t *testing.T) {
+	const today = "20260610"
 	tests := []struct {
 		daystamp string
-		index    int
 		want     string
 	}{
-		{"20260610", 0, "Today"},
-		{"20260611", 1, "Tomorrow"},
-		{"20260612", 2, "Fri (12th)"},
-		{"20260621", 3, "Sun (21st)"},
-		{"notadate", 4, "notadate"},
+		{"20260610", "Today"},
+		{"20260611", "Tomorrow"},
+		{"20260612", "Fri (12th)"},
+		{"20260621", "Sun (21st)"},
+		{"notadate", "notadate"},
 	}
 	for _, tt := range tests {
-		if got := forecastDayLabel(tt.daystamp, tt.index); got != tt.want {
-			t.Errorf("forecastDayLabel(%q, %d) = %q, want %q", tt.daystamp, tt.index, got, tt.want)
+		if got := forecastDayLabel(tt.daystamp, today); got != tt.want {
+			t.Errorf("forecastDayLabel(%q, %q) = %q, want %q", tt.daystamp, today, got, tt.want)
 		}
 	}
 }
@@ -1352,7 +1364,7 @@ func TestFormatSevenDayForecastAlignsColumnsWithTimeValues(t *testing.T) {
 			"20260611": {FormattedDelta: "+2", FormattedTotal: "139"},             // Tomorrow
 		},
 	}
-	out := formatSevenDayForecast(goal)
+	out := formatSevenDayForecastAt(goal, forecastTestNow)
 
 	// Time-formatted values (HH:MM:SS) must render intact — the case the
 	// dynamic column widths exist for.
@@ -1385,9 +1397,12 @@ func TestFormatSevenDayForecastAlignsColumnsWithTimeValues(t *testing.T) {
 }
 
 func TestFormatGoalDetailsIncludesForecastBeforeDatapoints(t *testing.T) {
+	// formatGoalDetails uses the real clock, so key the dueby entry to today's
+	// actual daystamp; the forecast drops anything before today.
+	today := todayDaystampFor(Goal{}, time.Now())
 	goal := &Goal{
 		Slug:       "test",
-		Dueby:      map[string]DuebyEntry{"20260610": {FormattedDelta: "+1", FormattedTotal: "10"}},
+		Dueby:      map[string]DuebyEntry{today: {FormattedDelta: "+1", FormattedTotal: "10"}},
 		Datapoints: []Datapoint{{Daystamp: "20260609", Value: 1, Comment: "x"}},
 	}
 	config := &Config{Username: "u", BaseURL: "https://example.com"}
