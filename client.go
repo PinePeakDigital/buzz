@@ -25,6 +25,10 @@ const httpClientTimeout = 30 * time.Second
 // further interface changes — that wiring is tracked in a follow-up.
 type Client interface {
 	FetchGoals(ctx context.Context) ([]Goal, error)
+	// FetchArchivedGoals returns the user's archived goals. Beeminder exposes
+	// these on a separate endpoint from active goals; the response uses the
+	// same Goal shape.
+	FetchArchivedGoals(ctx context.Context) ([]Goal, error)
 	// FetchUserTimezone returns the IANA timezone configured on the user's
 	// Beeminder account (e.g. "America/New_York"), or an empty string if the
 	// account has none set.
@@ -119,6 +123,29 @@ func (c *HTTPClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	var goals []Goal
 	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
 		return nil, fmt.Errorf("failed to decode goals: %w", err)
+	}
+
+	return goals, nil
+}
+
+// FetchArchivedGoals fetches the user's archived goals from the Beeminder API.
+func (c *HTTPClient) FetchArchivedGoals(ctx context.Context) ([]Goal, error) {
+	url := fmt.Sprintf("%s/api/v1/users/%s/goals/archived.json?auth_token=%s",
+		c.baseURL(), c.config.Username, c.config.AuthToken)
+
+	resp, err := c.doRequest(ctx, http.MethodGet, url, nil, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch archived goals: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var goals []Goal
+	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
+		return nil, fmt.Errorf("failed to decode archived goals: %w", err)
 	}
 
 	return goals, nil

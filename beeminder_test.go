@@ -1256,6 +1256,55 @@ func TestFetchGoalsWithGoalType(t *testing.T) {
 	}
 }
 
+// TestFetchArchivedGoals tests that FetchArchivedGoals hits the archived
+// endpoint and decodes the returned goals.
+func TestFetchArchivedGoals(t *testing.T) {
+	t.Run("fetches and decodes archived goals", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Errorf("Expected GET request, got %s", r.Method)
+			}
+			expectedPath := "/api/v1/users/testuser/goals/archived.json"
+			if r.URL.Path != expectedPath {
+				t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+			}
+			goals := []Goal{
+				{Slug: "olddiet", Title: "Old Diet", Gunits: "lbs", Pledge: 30},
+				{Slug: "retired", Title: "Retired Goal", Gunits: "reps"},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(goals)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: mockServer.URL}
+
+		goals, err := NewHTTPClient(config).FetchArchivedGoals(context.Background())
+		if err != nil {
+			t.Fatalf("FetchArchivedGoals failed: %v", err)
+		}
+		if len(goals) != 2 {
+			t.Fatalf("Expected 2 archived goals, got %d", len(goals))
+		}
+		if goals[0].Slug != "olddiet" {
+			t.Errorf("Expected first archived goal slug %q, got %q", "olddiet", goals[0].Slug)
+		}
+	})
+
+	t.Run("non-200 status returns an error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: mockServer.URL}
+
+		if _, err := NewHTTPClient(config).FetchArchivedGoals(context.Background()); err == nil {
+			t.Error("Expected an error for non-200 status, got nil")
+		}
+	})
+}
+
 // TestRefreshGoalWithMockServer tests RefreshGoal function with a mock HTTP server
 func TestRefreshGoalWithMockServer(t *testing.T) {
 	// Test case 1: successful refresh (returns true)
