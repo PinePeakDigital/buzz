@@ -41,10 +41,19 @@ Sleep 800ms
 Type "q"
 Sleep 1s
 
+# Clear the screen between commands so outputs don't stack up.
+Type "clear"
+Enter
+Sleep 700ms
+
 # --- Scriptable output ---
 Type@60ms "buzz list"
 Enter
 Sleep 2.5s
+
+Type "clear"
+Enter
+Sleep 700ms
 
 # Detailed view with the 7-day "amount due" forecast.
 Type@60ms "buzz view meditate"
