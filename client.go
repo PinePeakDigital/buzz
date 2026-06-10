@@ -488,6 +488,7 @@ func (c *HTTPClient) FetchGoalsWithDatapoints(ctx context.Context) ([]Goal, erro
 				goals[i].Roadall = goalWithDatapoints.Roadall
 				goals[i].Tmin = goalWithDatapoints.Tmin
 				goals[i].Tmax = goalWithDatapoints.Tmax
+				goals[i].Initday = goalWithDatapoints.Initday
 				goals[i].Kyoom = goalWithDatapoints.Kyoom
 				goals[i].Yaw = goalWithDatapoints.Yaw
 			}

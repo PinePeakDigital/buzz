@@ -427,23 +427,174 @@ func TestChartTimeframeTmaxAcrossDSTFallBack(t *testing.T) {
 	}
 }
 
-func TestRenderGoalChartCumulativeAllBeforeWindow(t *testing.T) {
-	// Cumulative goal whose only datapoints predate the 30-day window. There
-	// are no in-window datapoints, so no chart should render even though the
-	// running total is non-zero (a lone carry-over anchor must not draw a line).
-	old := time.Now().AddDate(0, 0, -60).Unix()
+func TestRenderGoalChartStaleGoalStillCharts(t *testing.T) {
+	// A goal not updated within the last 30 days (and with no tmin/tmax) used to
+	// render no chart at all: the fallback window was anchored at now, so every
+	// datapoint fell before it. The default window now shifts back to the most
+	// recent datapoint, so the goal still charts. This is the fix for graphs
+	// appearing only on recently-touched goals and seeming random.
+	old := time.Now().AddDate(0, 0, -60)
 	goal := Goal{
 		Slug:  "stale",
 		Yaw:   1,
 		Kyoom: true,
 		Datapoints: []Datapoint{
-			{Timestamp: old, Value: 5.0},
-			{Timestamp: old + 3600, Value: 7.0},
+			{Timestamp: old.Unix(), Value: 5.0},
+			{Timestamp: old.AddDate(0, 0, 1).Unix(), Value: 7.0},
 		},
-		// No Tmin/Tmax → 30-day fallback window, which excludes both points.
+		// No Tmin/Tmax → data-aware default window, which now reaches the points.
 	}
-	if chart := renderGoalChart(goal, 100); chart != "" {
-		t.Errorf("expected empty chart when no datapoints fall in the window, got:\n%s", chart)
+	if chart := renderGoalChart(goal, 100); chart == "" {
+		t.Error("expected a chart for a stale goal whose datapoints predate 30 days")
+	}
+}
+
+func TestChartTimeframeDefaultsStartToInitday(t *testing.T) {
+	// With no user-set tmin/tmax, the window defaults to the goal's start
+	// (initday) through now, charting the whole goal — matching Beeminder's
+	// default of showing all data. initday carries a midday (deadline-aligned)
+	// instant, which must be floored to the start of its local day.
+	now := time.Date(2026, 6, 10, 23, 0, 0, 0, time.Local)
+	initday := time.Date(2024, 1, 15, 16, 30, 0, 0, time.Local)
+	goal := Goal{Slug: "wholehistory", Initday: initday.Unix()}
+
+	start, end := chartTimeframe(goal, now)
+	wantStart := time.Date(2024, 1, 15, 0, 0, 0, 0, time.Local) // floored to local midnight
+	if !start.Equal(wantStart) {
+		t.Errorf("start = %s, want goal-start day floored to local midnight %s", start, wantStart)
+	}
+	if !end.Equal(now) {
+		t.Errorf("end = %s, want now %s", end, now)
+	}
+}
+
+func TestRenderGoalChartIncludesSameDayDatapointBeforeInitdayInstant(t *testing.T) {
+	// A brand-new goal whose initday instant is midday and whose only datapoint
+	// was logged earlier the same day: flooring initday to the start of the day
+	// must keep that datapoint inside the window so the goal still charts.
+	day := time.Date(2026, 6, 10, 0, 0, 0, 0, time.Local)
+	initday := day.Add(16 * time.Hour) // midday-ish initday instant
+	dp := day.Add(6 * time.Hour)       // logged earlier the same day
+	now := day.Add(20 * time.Hour)
+	goal := Goal{
+		Slug:       "newgoal",
+		Yaw:        1,
+		Kyoom:      true,
+		Initday:    initday.Unix(),
+		Datapoints: []Datapoint{{Timestamp: dp.Unix(), Value: 1.0}},
+	}
+
+	start, _ := chartTimeframe(goal, now)
+	if dp.Before(start) {
+		t.Fatalf("datapoint %s fell before window start %s", dp, start)
+	}
+	if chart := renderGoalChart(goal, 100); chart == "" {
+		t.Error("expected a chart for a same-day datapoint logged before the initday instant")
+	}
+}
+
+func TestChartTimeframeWidensEndForFutureDatapoint(t *testing.T) {
+	// A datapoint timestamped after now (e.g. a scheduled/future-dated point)
+	// would otherwise sit past the default end (now); the end widens to include
+	// it.
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.Local)
+	future := now.AddDate(0, 0, 3)
+	goal := Goal{
+		Slug:       "future",
+		Initday:    now.AddDate(0, 0, -10).Unix(),
+		Datapoints: []Datapoint{{Timestamp: future.Unix(), Value: 1.0}},
+	}
+
+	_, end := chartTimeframe(goal, now)
+	if end.Before(future) {
+		t.Errorf("end = %s, want >= future datapoint %s", end, future)
+	}
+}
+
+func TestLastDatapointTime(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Empty: ok is false.
+	if _, ok := lastDatapointTime(Goal{}); ok {
+		t.Error("expected ok=false for a goal with no datapoints")
+	}
+
+	// Single datapoint.
+	if got, ok := lastDatapointTime(Goal{Datapoints: []Datapoint{
+		{Timestamp: base.Unix(), Value: 1},
+	}}); !ok || !got.Equal(base) {
+		t.Errorf("single: got %s ok=%v, want %s true", got, ok, base)
+	}
+
+	// Unsorted: must return the maximum timestamp, not the last element.
+	want := base.AddDate(0, 0, 100)
+	got, ok := lastDatapointTime(Goal{Datapoints: []Datapoint{
+		{Timestamp: want.Unix(), Value: 1},
+		{Timestamp: base.Unix(), Value: 2},
+		{Timestamp: base.AddDate(0, 0, 50).Unix(), Value: 3},
+	}})
+	if !ok || !got.Equal(want) {
+		t.Errorf("unsorted: got %s ok=%v, want %s true", got, ok, want)
+	}
+}
+
+func TestChartTimeframeHonorsTminWithoutTmax(t *testing.T) {
+	// Beeminder force-nulls tmax once it's in the past, so tmax is null on
+	// virtually every goal while tmin is commonly set. The window must still
+	// honor an explicit tmin rather than collapsing onto the default window.
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.Local)
+	goal := Goal{
+		Slug: "has-tmin",
+		Tmin: "2024-08-02",
+		// Tmax empty (null from the API).
+	}
+	start, end := chartTimeframe(goal, now)
+
+	wantStart := time.Date(2024, 8, 2, 0, 0, 0, 0, time.Local)
+	if !start.Equal(wantStart) {
+		t.Errorf("start = %s, want explicit tmin %s", start, wantStart)
+	}
+	// With no tmax and no datapoints, the end falls back to now.
+	if !end.Equal(now) {
+		t.Errorf("end = %s, want fallback to now %s", end, now)
+	}
+}
+
+func TestRenderGoalChartHonorsTminForStaleGoal(t *testing.T) {
+	// Regression for the real-world "fam" goal: tmin set far in the past, tmax
+	// null, last datapoint older than 30 days. Honoring tmin as the window start
+	// (the end defaults to now) means the goal charts instead of going blank.
+	last := time.Now().AddDate(0, 0, -40)
+	goal := Goal{
+		Slug:  "fam",
+		Yaw:   1,
+		Kyoom: true,
+		Tmin:  last.AddDate(0, 0, -300).Format("2006-01-02"),
+		Datapoints: []Datapoint{
+			{Timestamp: last.AddDate(0, 0, -5).Unix(), Value: 2.0},
+			{Timestamp: last.Unix(), Value: 3.0},
+		},
+	}
+	if chart := renderGoalChart(goal, 100); chart == "" {
+		t.Error("expected a chart for a goal with an explicit tmin and stale data")
+	}
+}
+
+func TestProcessCumulativeNoInWindowDatapointsReturnsNil(t *testing.T) {
+	// Invariant: when no datapoints fall inside the window, processCumulative
+	// returns nil even though earlier datapoints push the running total above
+	// zero — a lone carry-over anchor must never draw a dataless flat line.
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 30)
+	goal := Goal{
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: start.AddDate(0, 0, -10).Unix(), Value: 5.0},
+			{Timestamp: start.AddDate(0, 0, -5).Unix(), Value: 7.0},
+		},
+	}
+	if got := processCumulative(goal, start, end); got != nil {
+		t.Errorf("expected nil when no datapoints fall in the window, got %v", got)
 	}
 }
 

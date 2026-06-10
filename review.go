@@ -226,6 +226,7 @@ func (m reviewModel) View() string {
 		goal.Roadall = d.Roadall
 		goal.Tmin = d.Tmin
 		goal.Tmax = d.Tmax
+		goal.Initday = d.Initday
 		goal.Kyoom = d.Kyoom
 		goal.Yaw = d.Yaw
 	}

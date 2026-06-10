@@ -23,11 +23,12 @@ const (
 	maxChartWidth = 80
 )
 
-// renderGoalChart renders an ASCII chart of a goal's recent progress: the
-// goal's datapoints (blue) against its bright red line (red), over the graph
-// window the Beeminder API reports (tmin..tmax), falling back to the last 30
-// days. It returns "" when there is nothing chartable (no datapoints, or none
-// inside the window).
+// renderGoalChart renders an ASCII chart of a goal's progress: the goal's
+// datapoints (blue) against its bright red line (red), over the goal's graph
+// window — the user-set tmin/tmax axis limits where present, otherwise the
+// goal's full history (initday..now). See chartTimeframe and defaultTimeframe
+// for the exact window resolution. It returns "" when there is nothing
+// chartable (no datapoints, or none inside the window).
 func renderGoalChart(goal Goal, width int) string {
 	if len(goal.Datapoints) == 0 {
 		return ""
@@ -104,28 +105,90 @@ func renderGoalChart(goal Goal, width int) string {
 }
 
 // chartTimeframe resolves the [start, end] window to chart from the goal's
-// tmin/tmax (parsed in the user's local zone), falling back to the last 30
-// days when those are missing or unparseable. tmax is a calendar day, not an
-// instant, so it is extended to the end of that day — otherwise a datapoint
-// logged late on the tmax day (in local time) would fall outside the window.
+// tmin/tmax (the graph axis limits the user set, parsed in the user's local
+// zone), each falling back to defaultTimeframe independently when absent or
+// unparseable.
+//
+// tmin and tmax are resolved separately rather than all-or-nothing because
+// Beeminder force-nulls tmax once it falls into the past (gen_graph/writer.rb
+// drops it; the goal model nils it on save), so tmax is null for virtually
+// every goal — while tmin is commonly set. Gating on both would mean a user's
+// explicit tmin was ignored on every goal, collapsing every chart onto the
+// default window.
 func chartTimeframe(goal Goal, now time.Time) (start, end time.Time) {
-	if goal.Tmin == "" || goal.Tmax == "" {
-		return now.AddDate(0, 0, -30), now
+	defStart, defEnd := defaultTimeframe(goal, now)
+
+	start = defStart
+	if t, err := time.ParseInLocation("2006-01-02", goal.Tmin, time.Local); err == nil {
+		start = t
 	}
 
-	start, err := time.ParseInLocation("2006-01-02", goal.Tmin, time.Local)
-	if err != nil {
-		start = now.AddDate(0, 0, -30)
+	end = defEnd
+	if t, err := time.ParseInLocation("2006-01-02", goal.Tmax, time.Local); err == nil {
+		// Extend to the last second of the Tmax calendar day. Build it as the
+		// start of the next day minus one second (not +24h) so DST transitions —
+		// where a local day is 23h or 25h — don't spill into the next day or clip
+		// late ones.
+		end = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location()).Add(-time.Second)
 	}
-	end, err = time.ParseInLocation("2006-01-02", goal.Tmax, time.Local)
-	if err != nil {
-		return start, now
-	}
-	// Extend to the last second of the Tmax calendar day. Build it as the start
-	// of the next day minus one second (not +24h) so DST transitions — where a
-	// local day is 23h or 25h — don't spill into the next day or clip late ones.
-	end = time.Date(end.Year(), end.Month(), end.Day()+1, 0, 0, 0, 0, end.Location()).Add(-time.Second)
 	return start, end
+}
+
+// defaultTimeframe is the window charted when the goal carries no usable
+// tmin/tmax. Beeminder leaves both null unless the user has set custom graph
+// axis limits, so in practice this is the window almost every goal uses.
+//
+// The default start is the goal's own start (initday) — the date the bright red
+// line begins — so the whole goal is charted, matching Beeminder's own default
+// of showing all of a goal's data. The default end is now.
+//
+// When initday is unavailable, it falls back to the last 30 days, widened back
+// to the most recent datapoint if that predates the window — otherwise a goal
+// not updated within 30 days would have every datapoint fall outside the window
+// and render no chart at all (graphs would appear only for recently-touched
+// goals, seemingly at random).
+func defaultTimeframe(goal Goal, now time.Time) (start, end time.Time) {
+	end = now
+
+	if goal.Initday > 0 {
+		// initday marks a calendar day, so floor it to the start of that local
+		// day. Using the raw instant (which Beeminder aligns to the goal's
+		// deadline, often midday) would exclude a same-day datapoint logged
+		// earlier in the day — e.g. a brand-new goal's only point.
+		d := time.Unix(goal.Initday, 0).In(time.Local)
+		start = time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.Local)
+	} else {
+		start = now.AddDate(0, 0, -30)
+		if last, ok := lastDatapointTime(goal); ok && last.Before(start) {
+			start = last
+		}
+	}
+
+	// A future-dated most-recent datapoint would otherwise sit past the window;
+	// widen the end so it still shows.
+	if last, ok := lastDatapointTime(goal); ok && last.After(end) {
+		end = last
+	}
+	return start, end
+}
+
+// lastDatapointTime returns the timestamp of the goal's most recent datapoint.
+// ok is false when the goal has no datapoints.
+func lastDatapointTime(goal Goal) (t time.Time, ok bool) {
+	if len(goal.Datapoints) == 0 {
+		return time.Time{}, false
+	}
+	latest := goal.Datapoints[0].Timestamp
+	for _, dp := range goal.Datapoints[1:] {
+		if dp.Timestamp > latest {
+			latest = dp.Timestamp
+		}
+	}
+	// Return in the local zone: chartTimeframe resolves every other bound in
+	// local time, and when this value becomes the window start/end it drives the
+	// timeframe header and x-axis labels — a UTC instant could render the wrong
+	// calendar day near midnight.
+	return time.Unix(latest, 0).In(time.Local), true
 }
 
 // timedValue is a datapoint reduced to the two things the chart cares about:
