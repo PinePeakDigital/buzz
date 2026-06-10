@@ -69,6 +69,60 @@ func float64Ptr(f float64) *float64 {
 	return &f
 }
 
+// TestParseListArgs covers the `buzz list` argument-parsing branches: the
+// default and --archived success paths, help, an unknown flag, and an
+// unexpected positional argument.
+func TestParseListArgs(t *testing.T) {
+	t.Run("no args defaults to active", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		archived, code, done := parseListArgs(nil, &out, &errOut)
+		if archived || code != 0 || done {
+			t.Fatalf("got archived=%v code=%d done=%v, want false/0/false", archived, code, done)
+		}
+	})
+
+	t.Run("--archived selects archived", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		archived, code, done := parseListArgs([]string{"--archived"}, &out, &errOut)
+		if !archived || code != 0 || done {
+			t.Fatalf("got archived=%v code=%d done=%v, want true/0/false", archived, code, done)
+		}
+	})
+
+	t.Run("help prints usage and stops cleanly", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		archived, code, done := parseListArgs([]string{"-h"}, &out, &errOut)
+		if archived || code != 0 || !done {
+			t.Fatalf("got archived=%v code=%d done=%v, want false/0/true", archived, code, done)
+		}
+		if !strings.Contains(out.String(), "Usage: buzz list") {
+			t.Errorf("expected usage on stdout, got: %q", out.String())
+		}
+	})
+
+	t.Run("unknown flag errors with exit code 2", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		_, code, done := parseListArgs([]string{"--bogus"}, &out, &errOut)
+		if code != 2 || !done {
+			t.Fatalf("got code=%d done=%v, want 2/true", code, done)
+		}
+		if !strings.Contains(errOut.String(), "Usage: buzz list") {
+			t.Errorf("expected usage on stderr, got: %q", errOut.String())
+		}
+	})
+
+	t.Run("unexpected positional arg errors with exit code 2", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		_, code, done := parseListArgs([]string{"extra"}, &out, &errOut)
+		if code != 2 || !done {
+			t.Fatalf("got code=%d done=%v, want 2/true", code, done)
+		}
+		if !strings.Contains(errOut.String(), "Unknown arguments") {
+			t.Errorf("expected unknown-arguments message on stderr, got: %q", errOut.String())
+		}
+	})
+}
+
 // TestRunListCommand exercises the testable core of `buzz list`, covering the
 // active/archived split, sorting, the empty case, and fetch errors.
 func TestRunListCommand(t *testing.T) {

@@ -13,21 +13,12 @@ import (
 // rate, and stakes. With --archived it lists archived goals instead of active
 // ones.
 func handleListCommand() {
-	listFlags := flag.NewFlagSet("list", flag.ContinueOnError)
-	archived := listFlags.Bool("archived", false, "List archived goals instead of active ones")
-	if err := listFlags.Parse(os.Args[2:]); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			fmt.Println("Usage: buzz list [--archived]")
-			return
+	archived, code, done := parseListArgs(os.Args[2:], os.Stdout, os.Stderr)
+	if done {
+		if code != 0 {
+			os.Exit(code)
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
-		fmt.Fprintln(os.Stderr, "Usage: buzz list [--archived]")
-		os.Exit(2)
-	}
-	if args := listFlags.Args(); len(args) > 0 {
-		fmt.Fprintf(os.Stderr, "Unknown arguments: %v\n", args)
-		fmt.Fprintln(os.Stderr, "Usage: buzz list [--archived]")
-		os.Exit(2)
+		return
 	}
 
 	// Load config
@@ -43,12 +34,39 @@ func handleListCommand() {
 	}
 
 	client := NewHTTPClient(config)
-	code := runListCommand(context.Background(), client, *archived, os.Stdout)
+	code = runListCommand(context.Background(), client, archived, os.Stdout)
 	if code == 0 {
 		// Check for updates and display message if available
 		fmt.Print(getUpdateMessage())
 	}
 	os.Exit(code)
+}
+
+// parseListArgs parses the `buzz list` arguments (everything after the
+// subcommand). It returns the --archived flag, a process exit code, and done:
+// when done is true the caller should stop (help was printed, or a usage error
+// occurred) and honor exitCode (0 = help/clean stop, non-zero = error). On the
+// normal path done is false and exitCode is 0. Usage/errors are written to
+// out/errOut rather than fixed streams so the parsing is unit-testable.
+func parseListArgs(args []string, out, errOut io.Writer) (archived bool, exitCode int, done bool) {
+	listFlags := flag.NewFlagSet("list", flag.ContinueOnError)
+	listFlags.SetOutput(errOut)
+	archivedFlag := listFlags.Bool("archived", false, "List archived goals instead of active ones")
+	if err := listFlags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(out, "Usage: buzz list [--archived]")
+			return false, 0, true
+		}
+		fmt.Fprintf(errOut, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(errOut, "Usage: buzz list [--archived]")
+		return false, 2, true
+	}
+	if extra := listFlags.Args(); len(extra) > 0 {
+		fmt.Fprintf(errOut, "Unknown arguments: %v\n", extra)
+		fmt.Fprintln(errOut, "Usage: buzz list [--archived]")
+		return false, 2, true
+	}
+	return *archivedFlag, 0, false
 }
 
 // runListCommand is the testable core of `buzz list`. It fetches the requested
