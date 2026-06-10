@@ -1344,3 +1344,65 @@ func TestOrdinalSuffix(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatSevenDayForecastAlignsColumnsWithTimeValues(t *testing.T) {
+	goal := &Goal{
+		Dueby: map[string]DuebyEntry{
+			"20260610": {FormattedDelta: "+00:05:59", FormattedTotal: "56:08:17"}, // Today
+			"20260611": {FormattedDelta: "+2", FormattedTotal: "139"},             // Tomorrow
+		},
+	}
+	out := formatSevenDayForecast(goal)
+
+	// Time-formatted values (HH:MM:SS) must render intact — the case the
+	// dynamic column widths exist for.
+	for _, want := range []string{"+00:05:59", "56:08:17"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected time value %q in output:\n%s", want, out)
+		}
+	}
+
+	var todayLine, tomorrowLine string
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.Contains(l, "Today"):
+			todayLine = l
+		case strings.Contains(l, "Tomorrow"):
+			tomorrowLine = l
+		}
+	}
+	if todayLine == "" || tomorrowLine == "" {
+		t.Fatalf("expected Today and Tomorrow rows, got:\n%s", out)
+	}
+	// Despite the very different value widths ("+00:05:59" vs "+2"), the Due and
+	// Total columns must start at the same offset on both rows.
+	if a, b := strings.Index(todayLine, "+00:05:59"), strings.Index(tomorrowLine, "+2"); a != b {
+		t.Errorf("Due column misaligned: Today at %d, Tomorrow at %d\n%s", a, b, out)
+	}
+	if a, b := strings.Index(todayLine, "56:08:17"), strings.Index(tomorrowLine, "139"); a != b {
+		t.Errorf("Total column misaligned: Today at %d, Tomorrow at %d\n%s", a, b, out)
+	}
+}
+
+func TestFormatGoalDetailsIncludesForecastBeforeDatapoints(t *testing.T) {
+	goal := &Goal{
+		Slug:       "test",
+		Dueby:      map[string]DuebyEntry{"20260610": {FormattedDelta: "+1", FormattedTotal: "10"}},
+		Datapoints: []Datapoint{{Daystamp: "20260609", Value: 1, Comment: "x"}},
+	}
+	config := &Config{Username: "u", BaseURL: "https://example.com"}
+
+	out := formatGoalDetails(goal, config)
+
+	fi := strings.Index(out, "7-Day Forecast:")
+	di := strings.Index(out, "Recent datapoints:")
+	if fi == -1 {
+		t.Fatalf("expected forecast section in formatGoalDetails output:\n%s", out)
+	}
+	if di == -1 {
+		t.Fatalf("expected recent datapoints section in output:\n%s", out)
+	}
+	if fi > di {
+		t.Errorf("expected forecast (at %d) before recent datapoints (at %d):\n%s", fi, di, out)
+	}
+}
