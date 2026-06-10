@@ -701,7 +701,7 @@ func TestFineprintOrderInOutput(t *testing.T) {
 		AuthToken: "testtoken",
 	}
 
-	output := formatGoalDetails(&goal, config)
+	output := formatGoalDetails(&goal, config, time.Now())
 
 	// Find positions of URL and Fine print in the output
 	urlIndex := strings.Index(output, "URL:")
@@ -857,7 +857,7 @@ func TestFormatGoalDetailsWithDatapoints(t *testing.T) {
 
 	config := &Config{Username: "testuser"}
 
-	result := formatGoalDetails(goal, config)
+	result := formatGoalDetails(goal, config, time.Now())
 
 	for _, want := range []string{
 		"Recent datapoints:",
@@ -885,7 +885,7 @@ func TestFormatGoalDetailsWithoutDatapoints(t *testing.T) {
 
 	config := &Config{Username: "testuser"}
 
-	result := formatGoalDetails(goal, config)
+	result := formatGoalDetails(goal, config, time.Now())
 
 	if strings.Contains(result, "Recent datapoints:") {
 		t.Error("Expected result to NOT contain 'Recent datapoints:' header when no datapoints present")
@@ -1048,7 +1048,7 @@ func TestGoalDetailsFieldOrder(t *testing.T) {
 	}
 	config := &Config{Username: "narthur"}
 
-	out := formatGoalDetails(goal, config)
+	out := formatGoalDetails(goal, config, time.Now())
 
 	// Each label must appear, and in this exact relative order.
 	want := []string{
@@ -1079,7 +1079,7 @@ func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
 		Losedate: 4102444800, // fixed future timestamp; only label positions matter
 		// Rate nil, Autoratchet nil, Title/Autodata/Fineprint empty → all omitted.
 	}
-	out := formatGoalDetails(goal, &Config{Username: "narthur"})
+	out := formatGoalDetails(goal, &Config{Username: "narthur"}, time.Now())
 
 	for _, absent := range []string{"Rate:", "Autoratchet:", "Title:", "Autodata:", "Fine print:"} {
 		if strings.Contains(out, absent) {
@@ -1262,5 +1262,162 @@ func TestReviewViewMergesDetailFieldsOntoSummaryGoal(t *testing.T) {
 	}
 	if !strings.Contains(out, "Goal Progress Chart") {
 		t.Errorf("expected chart (from merged road + datapoints) to render\n%s", out)
+	}
+}
+
+// forecastTestNow is a fixed clock for the forecast tests: 2026-06-10 (a
+// Wednesday) at noon UTC, so today's daystamp is "20260610".
+var forecastTestNow = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+
+func TestFormatSevenDayForecast(t *testing.T) {
+	goal := &Goal{
+		Gunits: "clears",
+		Dueby: map[string]DuebyEntry{
+			"20260610": {FormattedDelta: "+1", FormattedTotal: "138"},
+			"20260611": {FormattedDelta: "+2", FormattedTotal: "139"},
+			"20260612": {FormattedDelta: "+3", FormattedTotal: "140"},
+		},
+	}
+
+	out := formatSevenDayForecastAt(goal, forecastTestNow)
+
+	for _, want := range []string{"7-Day Forecast:", "Day", "Due", "Total", "Today", "Tomorrow", "Fri (12th)", "+1", "138", "+3", "140"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected forecast to contain %q, got:\n%s", want, out)
+		}
+	}
+
+	// Rows must be in chronological order regardless of map iteration order.
+	iToday, iTomorrow, iFri := strings.Index(out, "Today"), strings.Index(out, "Tomorrow"), strings.Index(out, "Fri (12th)")
+	if !(iToday < iTomorrow && iTomorrow < iFri) {
+		t.Errorf("expected chronological order Today < Tomorrow < Fri, got positions %d/%d/%d in:\n%s", iToday, iTomorrow, iFri, out)
+	}
+}
+
+func TestFormatSevenDayForecastEmpty(t *testing.T) {
+	if got := formatSevenDayForecastAt(&Goal{}, forecastTestNow); got != "" {
+		t.Errorf("expected empty string for goal with no dueby, got: %q", got)
+	}
+}
+
+func TestFormatSevenDayForecastDropsPastDaysAndTruncatesToSeven(t *testing.T) {
+	dueby := map[string]DuebyEntry{}
+	// A stale past day (20260609) plus eight forward days from today.
+	for _, d := range []string{"20260609", "20260610", "20260611", "20260612", "20260613", "20260614", "20260615", "20260616", "20260617"} {
+		dueby[d] = DuebyEntry{FormattedDelta: "+1", FormattedTotal: "10"}
+	}
+	out := formatSevenDayForecastAt(&Goal{Dueby: dueby}, forecastTestNow)
+
+	// The past day (Tue 9th) must be dropped, not labelled "Today".
+	if strings.Contains(out, "(9th)") {
+		t.Errorf("expected the past day (9th) to be dropped, but found it in:\n%s", out)
+	}
+	if !strings.Contains(out, "Today") {
+		t.Errorf("expected today's row to be present, got:\n%s", out)
+	}
+	// Seven forward days are kept (today..20260616 = Tue 16th); the 8th forward
+	// day (20260617 = Wed 17th) is truncated.
+	if !strings.Contains(out, "Tue (16th)") {
+		t.Errorf("expected the 7th day (Tue (16th)) to be present, got:\n%s", out)
+	}
+	if strings.Contains(out, "(17th)") {
+		t.Errorf("expected days beyond the 7th to be truncated, but found (17th) in:\n%s", out)
+	}
+}
+
+func TestForecastDayLabel(t *testing.T) {
+	const today = "20260610"
+	tests := []struct {
+		daystamp string
+		want     string
+	}{
+		{"20260610", "Today"},
+		{"20260611", "Tomorrow"},
+		{"20260612", "Fri (12th)"},
+		{"20260621", "Sun (21st)"},
+		{"notadate", "notadate"},
+	}
+	for _, tt := range tests {
+		if got := forecastDayLabel(tt.daystamp, today); got != tt.want {
+			t.Errorf("forecastDayLabel(%q, %q) = %q, want %q", tt.daystamp, today, got, tt.want)
+		}
+	}
+}
+
+func TestOrdinalSuffix(t *testing.T) {
+	tests := map[int]string{
+		1: "st", 2: "nd", 3: "rd", 4: "th", 10: "th",
+		11: "th", 12: "th", 13: "th",
+		21: "st", 22: "nd", 23: "rd", 31: "st",
+	}
+	for day, want := range tests {
+		if got := ordinalSuffix(day); got != want {
+			t.Errorf("ordinalSuffix(%d) = %q, want %q", day, got, want)
+		}
+	}
+}
+
+func TestFormatSevenDayForecastAlignsColumnsWithTimeValues(t *testing.T) {
+	goal := &Goal{
+		Dueby: map[string]DuebyEntry{
+			"20260610": {FormattedDelta: "+00:05:59", FormattedTotal: "56:08:17"}, // Today
+			"20260611": {FormattedDelta: "+2", FormattedTotal: "139"},             // Tomorrow
+		},
+	}
+	out := formatSevenDayForecastAt(goal, forecastTestNow)
+
+	// Time-formatted values (HH:MM:SS) must render intact — the case the
+	// dynamic column widths exist for.
+	for _, want := range []string{"+00:05:59", "56:08:17"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected time value %q in output:\n%s", want, out)
+		}
+	}
+
+	var todayLine, tomorrowLine string
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.Contains(l, "Today"):
+			todayLine = l
+		case strings.Contains(l, "Tomorrow"):
+			tomorrowLine = l
+		}
+	}
+	if todayLine == "" || tomorrowLine == "" {
+		t.Fatalf("expected Today and Tomorrow rows, got:\n%s", out)
+	}
+	// Despite the very different value widths ("+00:05:59" vs "+2"), the Due and
+	// Total columns must start at the same offset on both rows.
+	if a, b := strings.Index(todayLine, "+00:05:59"), strings.Index(tomorrowLine, "+2"); a != b {
+		t.Errorf("Due column misaligned: Today at %d, Tomorrow at %d\n%s", a, b, out)
+	}
+	if a, b := strings.Index(todayLine, "56:08:17"), strings.Index(tomorrowLine, "139"); a != b {
+		t.Errorf("Total column misaligned: Today at %d, Tomorrow at %d\n%s", a, b, out)
+	}
+}
+
+func TestFormatGoalDetailsIncludesForecastBeforeDatapoints(t *testing.T) {
+	// Inject a fixed clock so the test is deterministic (no midnight-rollover
+	// flake): key the dueby entry to that clock's daystamp.
+	today := todayDaystampFor(Goal{}, forecastTestNow)
+	goal := &Goal{
+		Slug:       "test",
+		Dueby:      map[string]DuebyEntry{today: {FormattedDelta: "+1", FormattedTotal: "10"}},
+		Datapoints: []Datapoint{{Daystamp: "20260609", Value: 1, Comment: "x"}},
+	}
+	config := &Config{Username: "u", BaseURL: "https://example.com"}
+
+	out := formatGoalDetails(goal, config, forecastTestNow)
+
+	fi := strings.Index(out, "7-Day Forecast:")
+	di := strings.Index(out, "Recent datapoints:")
+	if fi == -1 {
+		t.Fatalf("expected forecast section in formatGoalDetails output:\n%s", out)
+	}
+	if di == -1 {
+		t.Fatalf("expected recent datapoints section in output:\n%s", out)
+	}
+	if fi > di {
+		t.Errorf("expected forecast (at %d) before recent datapoints (at %d):\n%s", fi, di, out)
 	}
 }

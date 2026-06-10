@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 )
 
 // handleViewCommand displays detailed information about a specific goal
@@ -117,7 +118,7 @@ func handleViewCommand() {
 
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
-	fmt.Print(formatGoalDetails(goal, config))
+	fmt.Print(formatGoalDetails(goal, config, time.Now()))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())

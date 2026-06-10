@@ -289,17 +289,23 @@ func bareminFromDueby(g Goal, now time.Time) (string, bool) {
 	return entry.FormattedDelta, true
 }
 
-// tomorrowDaystampFor returns the YYYYMMDD daystamp representing the day
-// after the goal's current Beeminder day. Beeminder shifts day boundaries
-// by the goal's `deadline` seconds — positive deadlines push the boundary
-// past midnight (e.g. +10800 = 3am cutoff), negative deadlines pull it
-// before (e.g. -10800 = 9pm cutoff). Subtracting the deadline from `now`
-// produces a wall-clock time inside the user's calendar date that matches
-// the goal's current daystamp; the next calendar day is tomorrow's.
-func tomorrowDaystampFor(g Goal, now time.Time) string {
+// todayDaystampFor returns the YYYYMMDD daystamp of the goal's current
+// Beeminder day. Beeminder shifts day boundaries by the goal's `deadline`
+// seconds — positive deadlines push the boundary past midnight (e.g. +10800 =
+// 3am cutoff), negative deadlines pull it before (e.g. -10800 = 9pm cutoff).
+// Subtracting the deadline from `now` produces a wall-clock time inside the
+// user's calendar date that matches the goal's current daystamp.
+func todayDaystampFor(g Goal, now time.Time) string {
 	shifted := now.Add(-time.Duration(g.Deadline) * time.Second).In(now.Location())
-	tomorrow := time.Date(shifted.Year(), shifted.Month(), shifted.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
-	return tomorrow.Format("20060102")
+	return time.Date(shifted.Year(), shifted.Month(), shifted.Day(), 0, 0, 0, 0, now.Location()).Format("20060102")
+}
+
+// tomorrowDaystampFor returns the YYYYMMDD daystamp representing the day after
+// the goal's current Beeminder day (see todayDaystampFor for the deadline-shift
+// rationale).
+func tomorrowDaystampFor(g Goal, now time.Time) string {
+	today, _ := time.ParseInLocation("20060102", todayDaystampFor(g, now), now.Location())
+	return today.AddDate(0, 0, 1).Format("20060102")
 }
 
 // losedateByEndOfTomorrowAt returns the deadline timestamp to display for a

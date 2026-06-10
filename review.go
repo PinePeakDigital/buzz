@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -270,7 +272,7 @@ func (m reviewModel) View() string {
 	detailStyle := lipgloss.NewStyle().
 		Padding(0, 2)
 
-	details := formatGoalDetails(&goal, m.config)
+	details := formatGoalDetails(&goal, m.config, time.Now())
 
 	view += detailStyle.Render(details) + "\n"
 
@@ -421,8 +423,10 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 	return output
 }
 
-// formatGoalDetails formats the goal details in a consistent way for both view and review commands
-func formatGoalDetails(goal *Goal, config *Config) string {
+// formatGoalDetails formats the goal details in a consistent way for both view
+// and review commands. now is the reference clock for the 7-day forecast; pass
+// time.Now() in production.
+func formatGoalDetails(goal *Goal, config *Config, now time.Time) string {
 	var details string
 
 	// Field order follows issue #229: the goal's commitment (rate, autoratchet)
@@ -488,10 +492,117 @@ func formatGoalDetails(goal *Goal, config *Config) string {
 		details += fmt.Sprintf("Fine print:  %s\n", goal.Fineprint)
 	}
 
+	// Display the next-seven-days "amount due" forecast, when available.
+	details += formatSevenDayForecastAt(goal, now)
+
 	// Display recent datapoints if available
 	if len(goal.Datapoints) > 0 {
 		details += formatRecentDatapoints(goal.Datapoints)
 	}
 
 	return details
+}
+
+// formatSevenDayForecastAt renders the goal's per-day "amount due" forecast for
+// the next seven days from Beeminder's dueby map. Each entry carries the delta
+// (how much is needed that day to stay on the safe side of the bright line) and
+// the running red-line total, both pre-formatted by Beeminder to the goal's
+// display precision — the same strings the Beeminder Android app shows. Returns
+// an empty string when the goal has no dueby data (e.g. a freshly created
+// goal), so callers can append the result unconditionally.
+//
+// now is the reference clock (injected for testability). The forecast anchors
+// on the goal's current daystamp (deadline-aware) rather than the dueby map's
+// sort position: Beeminder's dueby can carry past daystamps as well as today's
+// and future ones, so we drop anything before today and label each remaining
+// day by its actual date — never by slice index — to avoid mislabelling a stale
+// past day as "Today".
+func formatSevenDayForecastAt(goal *Goal, now time.Time) string {
+	if len(goal.Dueby) == 0 {
+		return ""
+	}
+
+	today := todayDaystampFor(*goal, now)
+
+	days := make([]string, 0, len(goal.Dueby))
+	for daystamp := range goal.Dueby {
+		// YYYYMMDD strings compare chronologically; drop stale past daystamps.
+		if daystamp >= today {
+			days = append(days, daystamp)
+		}
+	}
+	sort.Strings(days)
+	if len(days) > 7 {
+		days = days[:7]
+	}
+	if len(days) == 0 {
+		return ""
+	}
+
+	type forecastRow struct{ label, due, total string }
+	rows := make([]forecastRow, 0, len(days))
+	for _, daystamp := range days {
+		entry := goal.Dueby[daystamp]
+		rows = append(rows, forecastRow{
+			label: forecastDayLabel(daystamp, today),
+			due:   entry.FormattedDelta,
+			total: entry.FormattedTotal,
+		})
+	}
+
+	// Size each column to the widest of its header and values so the columns
+	// line up regardless of count-vs-time formatting (e.g. "+1" vs "+00:05:59").
+	dayW, dueW, totW := len("Day"), len("Due"), len("Total")
+	for _, r := range rows {
+		dayW = max(dayW, len(r.label))
+		dueW = max(dueW, len(r.due))
+		totW = max(totW, len(r.total))
+	}
+
+	var b strings.Builder
+	b.WriteString("\n7-Day Forecast:\n")
+	fmt.Fprintf(&b, "  %-*s  %-*s  %-*s\n", dayW, "Day", dueW, "Due", totW, "Total")
+	for _, r := range rows {
+		fmt.Fprintf(&b, "  %-*s  %-*s  %-*s\n", dayW, r.label, dueW, r.due, totW, r.total)
+	}
+	return b.String()
+}
+
+// forecastDayLabel returns a human label for a dueby daystamp (YYYYMMDD),
+// relative to today's daystamp: "Today", "Tomorrow", or otherwise weekday +
+// ordinal day-of-month, e.g. "Fri (12th)". Labelling by actual date (rather
+// than position) keeps the labels correct even if the dueby map has gaps or
+// stale entries. Falls back to the raw daystamp if it can't be parsed.
+func forecastDayLabel(daystamp, today string) string {
+	if daystamp == today {
+		return "Today"
+	}
+	t, err := time.Parse("20060102", daystamp)
+	if err != nil {
+		return daystamp
+	}
+	if todayTime, err := time.Parse("20060102", today); err == nil {
+		if daystamp == todayTime.AddDate(0, 0, 1).Format("20060102") {
+			return "Tomorrow"
+		}
+	}
+	return fmt.Sprintf("%s (%d%s)", t.Format("Mon"), t.Day(), ordinalSuffix(t.Day()))
+}
+
+// ordinalSuffix returns the English ordinal suffix ("st", "nd", "rd", "th") for
+// a day-of-month, handling the 11–13 exceptions.
+func ordinalSuffix(day int) string {
+	if day >= 11 && day <= 13 {
+		return "th"
+	}
+	switch day % 10 {
+	case 1:
+		return "st"
+	case 2:
+		return "nd"
+	case 3:
+		return "rd"
+	default:
+		return "th"
+	}
 }
