@@ -138,19 +138,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # VHS from Charm's apt repo; ffmpeg from Ubuntu (preinstalled, but
-          # ensure it's present). We install these ourselves rather than via
-          # charmbracelet/vhs-action because that action's ffmpeg installer
-          # pins a stale FFmpeg-Builds asset name and fails.
-          sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list >/dev/null
+          # ffmpeg from Ubuntu's signed apt repo (also preinstalled on runners).
           sudo apt-get update -qq
-          sudo apt-get install -y vhs ffmpeg
-          # ttyd (required by VHS) — static binary from its GitHub releases.
-          gh release download --repo tsl0922/ttyd --pattern 'ttyd.x86_64' --output ttyd
+          sudo apt-get install -y ffmpeg
+          # VHS and ttyd: download pinned release binaries and verify their
+          # SHA256 before installing. We install these ourselves rather than via
+          # charmbracelet/vhs-action, whose ffmpeg installer pins a stale
+          # FFmpeg-Builds asset name and fails. Bump these pins deliberately.
+          VHS_VERSION=v0.11.0
+          VHS_SHA256=99cb634587eaae0473c1ea377db80c3a048c27f99fe0a7febb1a1e8cb7ee5009
+          TTYD_VERSION=1.7.7
+          TTYD_SHA256=8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55
+          gh release download "$VHS_VERSION" --repo charmbracelet/vhs --pattern 'vhs_*_Linux_x86_64.tar.gz' --output vhs.tar.gz
+          echo "${VHS_SHA256}  vhs.tar.gz" | sha256sum -c -
+          mkdir -p vhs_extract && tar -xzf vhs.tar.gz -C vhs_extract
+          sudo install -m 0755 "$(find vhs_extract -type f -name vhs | head -n1)" /usr/local/bin/vhs
+          gh release download "$TTYD_VERSION" --repo tsl0922/ttyd --pattern 'ttyd.x86_64' --output ttyd
+          echo "${TTYD_SHA256}  ttyd" | sha256sum -c -
           sudo install -m 0755 ttyd /usr/local/bin/ttyd
-          rm -f ttyd
+          rm -rf vhs.tar.gz vhs_extract ttyd
 
       - name: Record demo GIF
         run: ./scripts/demo/record.sh
