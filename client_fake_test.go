@@ -25,6 +25,7 @@ import (
 // explicit context-capture field when the need arises.
 type FakeClient struct {
 	FetchGoalsFunc                  func() ([]Goal, error)
+	FetchArchivedGoalsFunc          func() ([]Goal, error)
 	FetchUserTimezoneFunc           func() (string, error)
 	APIRequestFunc                  func(method, path string, params url.Values) (int, []byte, error)
 	FetchGoalFunc                   func(goalSlug string) (*Goal, error)
@@ -51,6 +52,13 @@ func (c *FakeClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 		return nil, errFakeNotConfigured
 	}
 	return c.FetchGoalsFunc()
+}
+
+func (c *FakeClient) FetchArchivedGoals(ctx context.Context) ([]Goal, error) {
+	if c.FetchArchivedGoalsFunc == nil {
+		return nil, errFakeNotConfigured
+	}
+	return c.FetchArchivedGoalsFunc()
 }
 
 func (c *FakeClient) FetchUserTimezone(ctx context.Context) (string, error) {

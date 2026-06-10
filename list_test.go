@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -63,6 +67,100 @@ func TestFormatListRate(t *testing.T) {
 // float64Ptr is a helper function to create a pointer to a float64
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+// TestRunListCommand exercises the testable core of `buzz list`, covering the
+// active/archived split, sorting, the empty case, and fetch errors.
+func TestRunListCommand(t *testing.T) {
+	t.Run("lists active goals sorted by slug", func(t *testing.T) {
+		client := &FakeClient{
+			FetchGoalsFunc: func() ([]Goal, error) {
+				return []Goal{
+					{Slug: "zebra", Title: "Z Goal", Gunits: "reps", Rate: float64Ptr(2), Runits: "d", Pledge: 5},
+					{Slug: "apple", Title: "A Goal", Gunits: "pages", Pledge: 0},
+				}, nil
+			},
+			// Leaving FetchArchivedGoalsFunc nil ensures the active path never
+			// touches the archived endpoint.
+		}
+
+		var out bytes.Buffer
+		code := runListCommand(context.Background(), client, false, &out)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		got := out.String()
+		if !strings.Contains(got, "Total goals: 2") {
+			t.Errorf("expected active-goals header, got:\n%s", got)
+		}
+		if i, j := strings.Index(got, "apple"), strings.Index(got, "zebra"); i == -1 || j == -1 || i > j {
+			t.Errorf("expected goals sorted by slug (apple before zebra), got:\n%s", got)
+		}
+	})
+
+	t.Run("lists archived goals", func(t *testing.T) {
+		client := &FakeClient{
+			FetchArchivedGoalsFunc: func() ([]Goal, error) {
+				return []Goal{{Slug: "olddiet", Title: "Old Diet", Gunits: "lbs", Pledge: 30}}, nil
+			},
+		}
+
+		var out bytes.Buffer
+		code := runListCommand(context.Background(), client, true, &out)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		got := out.String()
+		if !strings.Contains(got, "Total archived goals: 1") {
+			t.Errorf("expected archived-goals header, got:\n%s", got)
+		}
+		if !strings.Contains(got, "olddiet") {
+			t.Errorf("expected archived goal slug in output, got:\n%s", got)
+		}
+	})
+
+	t.Run("empty active goals", func(t *testing.T) {
+		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return nil, nil }}
+
+		var out bytes.Buffer
+		code := runListCommand(context.Background(), client, false, &out)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		if got := out.String(); !strings.Contains(got, "No goals found.") {
+			t.Errorf("expected empty-active message, got:\n%s", got)
+		}
+	})
+
+	t.Run("empty archived goals", func(t *testing.T) {
+		client := &FakeClient{FetchArchivedGoalsFunc: func() ([]Goal, error) { return nil, nil }}
+
+		var out bytes.Buffer
+		code := runListCommand(context.Background(), client, true, &out)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		if got := out.String(); !strings.Contains(got, "No archived goals found.") {
+			t.Errorf("expected empty-archived message, got:\n%s", got)
+		}
+	})
+
+	t.Run("fetch error returns exit code 1", func(t *testing.T) {
+		client := &FakeClient{
+			FetchArchivedGoalsFunc: func() ([]Goal, error) {
+				return nil, errors.New("boom")
+			},
+		}
+
+		var out bytes.Buffer
+		code := runListCommand(context.Background(), client, true, &out)
+		if code != 1 {
+			t.Fatalf("expected exit code 1, got %d", code)
+		}
+		if got := out.String(); !strings.Contains(got, "Failed to fetch archived goals") {
+			t.Errorf("expected fetch-error message, got:\n%s", got)
+		}
+	})
 }
 
 // TestGetDisplayUnits tests the getDisplayUnits function

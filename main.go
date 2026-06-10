@@ -27,6 +27,7 @@ func printHelp() {
 	fmt.Println("  buzz next --watch                 Watch mode - continuously refresh every 5 minutes")
 	fmt.Println("  buzz next -w                      Watch mode (shorthand)")
 	fmt.Println("  buzz list                         List all goals with slug, title, units, rate, and stakes")
+	fmt.Println("  buzz list --archived              List archived goals instead of active ones")
 	fmt.Println("  buzz all                          Output all goals")
 	fmt.Println("  buzz today                        Output all goals due today")
 	fmt.Println("  buzz tomorrow                     Output all goals due tomorrow")

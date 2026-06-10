@@ -2,12 +2,34 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 )
 
-// handleListCommand outputs a summary list of all goals with slug, title, rate, and stakes
+// handleListCommand outputs a summary list of goals with slug, title, units,
+// rate, and stakes. With --archived it lists archived goals instead of active
+// ones.
 func handleListCommand() {
+	listFlags := flag.NewFlagSet("list", flag.ContinueOnError)
+	archived := listFlags.Bool("archived", false, "List archived goals instead of active ones")
+	if err := listFlags.Parse(os.Args[2:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println("Usage: buzz list [--archived]")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(os.Stderr, "Usage: buzz list [--archived]")
+		os.Exit(2)
+	}
+	if args := listFlags.Args(); len(args) > 0 {
+		fmt.Fprintf(os.Stderr, "Unknown arguments: %v\n", args)
+		fmt.Fprintln(os.Stderr, "Usage: buzz list [--archived]")
+		os.Exit(2)
+	}
+
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz auth login' to authenticate.")
@@ -21,25 +43,41 @@ func handleListCommand() {
 	}
 
 	client := NewHTTPClient(config)
+	code := runListCommand(context.Background(), client, *archived, os.Stdout)
+	if code == 0 {
+		// Check for updates and display message if available
+		fmt.Print(getUpdateMessage())
+	}
+	os.Exit(code)
+}
 
-	// Fetch goals
-	goals, err := client.FetchGoals(context.Background())
+// runListCommand is the testable core of `buzz list`. It fetches the requested
+// set of goals (active, or archived when archived is true), renders them as a
+// table to out, and returns the process exit code.
+func runListCommand(ctx context.Context, client Client, archived bool, out io.Writer) int {
+	noun := "goals"
+	fetch := client.FetchGoals
+	if archived {
+		noun = "archived goals"
+		fetch = client.FetchArchivedGoals
+	}
+
+	goals, err := fetch(ctx)
 	if err != nil {
-		fmt.Printf("Error: Failed to fetch goals: %s\n", redactError(err))
-		os.Exit(1)
+		fmt.Fprintf(out, "Error: Failed to fetch %s: %s\n", noun, redactError(err))
+		return 1
 	}
 
 	// Sort goals alphabetically by slug for easy scanning
 	SortGoalsBySlug(goals)
 
-	// If no goals, exit
 	if len(goals) == 0 {
-		fmt.Println("No goals found.")
-		return
+		fmt.Fprintf(out, "No %s found.\n", noun)
+		return 0
 	}
 
 	// Print summary header
-	fmt.Printf("Total goals: %d\n\n", len(goals))
+	fmt.Fprintf(out, "Total %s: %d\n\n", noun, len(goals))
 
 	table := Table{
 		ShowHeader: true,
@@ -56,10 +94,9 @@ func handleListCommand() {
 			{Header: "Stakes", Cell: func(g Goal) string { return fmt.Sprintf("$%.2f", g.Pledge) }},
 		},
 	}
-	fmt.Print(table.Render(goals))
+	fmt.Fprint(out, table.Render(goals))
 
-	// Check for updates and display message if available
-	fmt.Print(getUpdateMessage())
+	return 0
 }
 
 // getDisplayUnits returns the display value for goal units, using "-" if empty
