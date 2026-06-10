@@ -8,9 +8,10 @@
 //
 // It implements just the endpoints buzz hits for the demo:
 //
-//	GET /api/v1/users/{user}.json                 → account (timezone)
-//	GET /api/v1/users/{user}/goals.json           → goal list (TUI dashboard, buzz list)
-//	GET /api/v1/users/{user}/goals/{slug}.json    → one goal w/ datapoints (buzz view)
+//	GET  /api/v1/users/{user}.json                          → account (timezone)
+//	GET  /api/v1/users/{user}/goals.json                    → goal list (TUI dashboard, buzz list, buzz today)
+//	GET  /api/v1/users/{user}/goals/{slug}.json             → one goal w/ datapoints (buzz view)
+//	POST /api/v1/users/{user}/goals/{slug}/datapoints.json  → acknowledge a datapoint (buzz add)
 package main
 
 import (
@@ -83,6 +84,18 @@ func handle(w http.ResponseWriter, r *http.Request, user string, now time.Time) 
 	switch {
 	case path == prefix+".json":
 		writeJSON(w, map[string]any{"username": user, "timezone": "America/New_York"})
+
+	case r.Method == http.MethodPost && strings.HasPrefix(path, prefix+"/goals/") && strings.HasSuffix(path, "/datapoints.json"):
+		// Acknowledge a new datapoint without persisting it. `buzz add` runs
+		// last in the demo, so nothing else needs to reflect the change — this
+		// keeps the mock stateless.
+		writeJSON(w, map[string]any{
+			"id":        "demo-new",
+			"timestamp": now.Unix(),
+			"daystamp":  now.Format("20060102"),
+			"value":     1.0,
+			"comment":   "logged via buzz",
+		})
 
 	case path == prefix+"/goals.json":
 		list := make([]map[string]any, 0, len(demoGoals))
