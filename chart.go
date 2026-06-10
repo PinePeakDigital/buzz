@@ -23,11 +23,12 @@ const (
 	maxChartWidth = 80
 )
 
-// renderGoalChart renders an ASCII chart of a goal's recent progress: the
-// goal's datapoints (blue) against its bright red line (red), over the graph
-// window the Beeminder API reports (tmin..tmax), falling back to the last 30
-// days. It returns "" when there is nothing chartable (no datapoints, or none
-// inside the window).
+// renderGoalChart renders an ASCII chart of a goal's progress: the goal's
+// datapoints (blue) against its bright red line (red), over the goal's graph
+// window — the user-set tmin/tmax axis limits where present, otherwise the
+// goal's full history (initday..now). See chartTimeframe and defaultTimeframe
+// for the exact window resolution. It returns "" when there is nothing
+// chartable (no datapoints, or none inside the window).
 func renderGoalChart(goal Goal, width int) string {
 	if len(goal.Datapoints) == 0 {
 		return ""

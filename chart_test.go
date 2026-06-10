@@ -452,17 +452,89 @@ func TestRenderGoalChartStaleGoalStillCharts(t *testing.T) {
 func TestChartTimeframeDefaultsStartToInitday(t *testing.T) {
 	// With no user-set tmin/tmax, the window defaults to the goal's start
 	// (initday) through now, charting the whole goal — matching Beeminder's
-	// default of showing all data.
-	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.Local)
-	initday := time.Date(2024, 1, 15, 0, 0, 0, 0, time.Local)
+	// default of showing all data. initday carries a midday (deadline-aligned)
+	// instant, which must be floored to the start of its local day.
+	now := time.Date(2026, 6, 10, 23, 0, 0, 0, time.Local)
+	initday := time.Date(2024, 1, 15, 16, 30, 0, 0, time.Local)
 	goal := Goal{Slug: "wholehistory", Initday: initday.Unix()}
 
 	start, end := chartTimeframe(goal, now)
-	if !start.Equal(initday) {
-		t.Errorf("start = %s, want goal start (initday) %s", start, initday)
+	wantStart := time.Date(2024, 1, 15, 0, 0, 0, 0, time.Local) // floored to local midnight
+	if !start.Equal(wantStart) {
+		t.Errorf("start = %s, want goal-start day floored to local midnight %s", start, wantStart)
 	}
 	if !end.Equal(now) {
 		t.Errorf("end = %s, want now %s", end, now)
+	}
+}
+
+func TestRenderGoalChartIncludesSameDayDatapointBeforeInitdayInstant(t *testing.T) {
+	// A brand-new goal whose initday instant is midday and whose only datapoint
+	// was logged earlier the same day: flooring initday to the start of the day
+	// must keep that datapoint inside the window so the goal still charts.
+	day := time.Date(2026, 6, 10, 0, 0, 0, 0, time.Local)
+	initday := day.Add(16 * time.Hour) // midday-ish initday instant
+	dp := day.Add(6 * time.Hour)       // logged earlier the same day
+	now := day.Add(20 * time.Hour)
+	goal := Goal{
+		Slug:       "newgoal",
+		Yaw:        1,
+		Kyoom:      true,
+		Initday:    initday.Unix(),
+		Datapoints: []Datapoint{{Timestamp: dp.Unix(), Value: 1.0}},
+	}
+
+	start, _ := chartTimeframe(goal, now)
+	if dp.Before(start) {
+		t.Fatalf("datapoint %s fell before window start %s", dp, start)
+	}
+	if chart := renderGoalChart(goal, 100); chart == "" {
+		t.Error("expected a chart for a same-day datapoint logged before the initday instant")
+	}
+}
+
+func TestChartTimeframeWidensEndForFutureDatapoint(t *testing.T) {
+	// A datapoint timestamped after now (e.g. a scheduled/future-dated point)
+	// would otherwise sit past the default end (now); the end widens to include
+	// it.
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.Local)
+	future := now.AddDate(0, 0, 3)
+	goal := Goal{
+		Slug:       "future",
+		Initday:    now.AddDate(0, 0, -10).Unix(),
+		Datapoints: []Datapoint{{Timestamp: future.Unix(), Value: 1.0}},
+	}
+
+	_, end := chartTimeframe(goal, now)
+	if end.Before(future) {
+		t.Errorf("end = %s, want >= future datapoint %s", end, future)
+	}
+}
+
+func TestLastDatapointTime(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Empty: ok is false.
+	if _, ok := lastDatapointTime(Goal{}); ok {
+		t.Error("expected ok=false for a goal with no datapoints")
+	}
+
+	// Single datapoint.
+	if got, ok := lastDatapointTime(Goal{Datapoints: []Datapoint{
+		{Timestamp: base.Unix(), Value: 1},
+	}}); !ok || !got.Equal(base) {
+		t.Errorf("single: got %s ok=%v, want %s true", got, ok, base)
+	}
+
+	// Unsorted: must return the maximum timestamp, not the last element.
+	want := base.AddDate(0, 0, 100)
+	got, ok := lastDatapointTime(Goal{Datapoints: []Datapoint{
+		{Timestamp: want.Unix(), Value: 1},
+		{Timestamp: base.Unix(), Value: 2},
+		{Timestamp: base.AddDate(0, 0, 50).Unix(), Value: 3},
+	}})
+	if !ok || !got.Equal(want) {
+		t.Errorf("unsorted: got %s ok=%v, want %s true", got, ok, want)
 	}
 }
 
