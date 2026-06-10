@@ -150,8 +150,8 @@ func TestRunListCommand(t *testing.T) {
 			// touches the archived endpoint.
 		}
 
-		var out bytes.Buffer
-		code := runListCommand(context.Background(), client, false, &out)
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -162,6 +162,9 @@ func TestRunListCommand(t *testing.T) {
 		if i, j := strings.Index(got, "apple"), strings.Index(got, "zebra"); i == -1 || j == -1 || i > j {
 			t.Errorf("expected goals sorted by slug (apple before zebra), got:\n%s", got)
 		}
+		if errOut.Len() != 0 {
+			t.Errorf("expected nothing on stderr, got: %q", errOut.String())
+		}
 	})
 
 	t.Run("lists archived goals", func(t *testing.T) {
@@ -171,8 +174,8 @@ func TestRunListCommand(t *testing.T) {
 			},
 		}
 
-		var out bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out)
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, true, &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -183,13 +186,16 @@ func TestRunListCommand(t *testing.T) {
 		if !strings.Contains(got, "olddiet") {
 			t.Errorf("expected archived goal slug in output, got:\n%s", got)
 		}
+		if errOut.Len() != 0 {
+			t.Errorf("expected nothing on stderr, got: %q", errOut.String())
+		}
 	})
 
 	t.Run("empty active goals", func(t *testing.T) {
 		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return nil, nil }}
 
-		var out bytes.Buffer
-		code := runListCommand(context.Background(), client, false, &out)
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -201,8 +207,8 @@ func TestRunListCommand(t *testing.T) {
 	t.Run("empty archived goals", func(t *testing.T) {
 		client := &FakeClient{FetchArchivedGoalsFunc: func() ([]Goal, error) { return nil, nil }}
 
-		var out bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out)
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, true, &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -218,13 +224,17 @@ func TestRunListCommand(t *testing.T) {
 			},
 		}
 
-		var out bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out)
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, true, &out, &errOut)
 		if code != 1 {
 			t.Fatalf("expected exit code 1, got %d", code)
 		}
-		if got := out.String(); !strings.Contains(got, "Failed to fetch archived goals") {
-			t.Errorf("expected fetch-error message, got:\n%s", got)
+		// The fetch error goes to stderr, keeping stdout clean for piping.
+		if got := errOut.String(); !strings.Contains(got, "Failed to fetch archived goals") {
+			t.Errorf("expected fetch-error message on stderr, got:\n%s", got)
+		}
+		if out.Len() != 0 {
+			t.Errorf("expected nothing on stdout for fetch error, got: %q", out.String())
 		}
 	})
 }

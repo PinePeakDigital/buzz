@@ -34,7 +34,7 @@ func handleListCommand() {
 	}
 
 	client := NewHTTPClient(config)
-	code = runListCommand(context.Background(), client, archived, os.Stdout)
+	code = runListCommand(context.Background(), client, archived, os.Stdout, os.Stderr)
 	if code == 0 {
 		// Check for updates and display message if available
 		fmt.Print(getUpdateMessage())
@@ -72,9 +72,11 @@ func parseListArgs(args []string, out, errOut io.Writer) (archived bool, exitCod
 }
 
 // runListCommand is the testable core of `buzz list`. It fetches the requested
-// set of goals (active, or archived when archived is true), renders them as a
-// table to out, and returns the process exit code.
-func runListCommand(ctx context.Context, client Client, archived bool, out io.Writer) int {
+// set of goals (active, or archived when archived is true), renders the table
+// to out, writes any fetch error to errOut, and returns the process exit code.
+// Splitting stdout (out) from stderr (errOut) keeps the table pipeable and
+// matches the other command cores (e.g. runCreateCommand).
+func runListCommand(ctx context.Context, client Client, archived bool, out, errOut io.Writer) int {
 	noun := "goals"
 	fetch := client.FetchGoals
 	if archived {
@@ -84,7 +86,7 @@ func runListCommand(ctx context.Context, client Client, archived bool, out io.Wr
 
 	goals, err := fetch(ctx)
 	if err != nil {
-		fmt.Fprintf(out, "Error: Failed to fetch %s: %s\n", noun, redactError(err))
+		fmt.Fprintf(errOut, "Error: Failed to fetch %s: %s\n", noun, redactError(err))
 		return 1
 	}
 
