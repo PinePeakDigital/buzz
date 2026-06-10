@@ -3,10 +3,11 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
+    "sync:demo": "node -e \"require('fs').copyFileSync('../scripts/demo/demo.gif','public/demo.gif')\"",
+    "dev": "pnpm run sync:demo && astro dev",
+    "start": "pnpm run sync:demo && astro dev",
+    "build": "pnpm run sync:demo && astro build",
+    "preview": "pnpm run sync:demo && astro preview",
     "astro": "astro"
   },
   "dependencies": {
