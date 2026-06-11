@@ -676,7 +676,7 @@ func TestProcessDatapointsMidDayWindowStartAndNoDaystamp(t *testing.T) {
 	goal := Goal{
 		Kyoom: true,
 		Datapoints: []Datapoint{
-			{Timestamp: day0.Add(14 * time.Hour).Unix(), Value: 5}, // no Daystamp → day 0
+			{Timestamp: day0.Add(14 * time.Hour).Unix(), Value: 5},                 // no Daystamp → day 0
 			{Timestamp: day0.AddDate(0, 0, 1).Add(9 * time.Hour).Unix(), Value: 3}, // day 1
 		},
 	}
