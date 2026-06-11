@@ -25,3 +25,32 @@ terminology.
 - **Busy / in-flight** — a form is awaiting a Beeminder API response
   (`datapoint.submitting`, `createGoal.creating`). A *flag on the form*, not a
   mode; the screen looks the same, just locked against re-submission.
+
+## Bright red line vocabulary
+
+The **bright red line** is a goal's commitment line — the value Beeminder
+expects you to stay on the right side of. "Road" and "the yellow brick road"
+are Beeminder's *deprecated* names for it: use **bright red line** in all
+user-facing text, and reserve "road" / `roadall` for the raw API field. It is
+read two ways — its value at a moment, and its slope at a moment — by the module
+that owns both (see #317 and
+[ADR-0003](./docs/adr/0003-bright-red-line-parsing-failure-policy.md)).
+
+- **`roadall`** — the API field encoding the bright red line: `[][]*float64`
+  rows of `[t, v, r]`, the first an anchor (t, v set; r nil), each later row
+  with *exactly one* of v/r null. (Observed shape: the API doc claims a final
+  all-set `[goaldate, goalval, rate]` row, but real goals don't emit one — the
+  validator stays strict and treats an all-set row as an anomaly to surface;
+  see ADR-0003.)
+- **Segment** — one piece of the bright red line between two boundaries, with
+  known start/end time, start/end value, and a **slope**. Parsing `roadall`
+  materialises a list of segments **all-or-nothing**: an *absent* `roadall`
+  (length < 2) is a benign "not populated" state, but a *malformed* one yields
+  no line and is surfaced loudly (it signals a parser or upstream bug).
+- **Slope** — how fast the bright red line moves, in gunits/day, at a given
+  moment: the slope of the segment containing it. Distinct from `g.Rate`, which
+  is the rate at the *end* of the graph, not at any specific moment.
+- **Value at time** — the bright red line's value at a moment: interpolated
+  within its span, extrapolated backward before the start, held flat past the
+  end. Value is defined for all t; slope only *within* the span (outside it,
+  callers fall back to `g.Rate`).
