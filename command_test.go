@@ -139,6 +139,22 @@ func TestParseAddArgs(t *testing.T) {
 			t.Errorf("done=%v code=%d err=%q", done, code, errb.String())
 		}
 	})
+
+	t.Run("flag after positionals warns and is absorbed into comment", func(t *testing.T) {
+		var errb bytes.Buffer
+		// A --daystamp after the positional args is not parsed as a flag; it
+		// warns and is treated as part of the comment.
+		req, code, done := parseAddArgs([]string{"goal", "42", "--daystamp=20240115"}, noStdin, &bytes.Buffer{}, &errb)
+		if done {
+			t.Fatalf("unexpected done (code=%d)", code)
+		}
+		if !strings.Contains(errb.String(), "appears after positional arguments") {
+			t.Errorf("expected misplaced-flag warning, stderr=%q", errb.String())
+		}
+		if req.daystamp != "" || req.comment != "--daystamp=20240115" {
+			t.Errorf("flag should be absorbed into comment, got daystamp=%q comment=%q", req.daystamp, req.comment)
+		}
+	})
 }
 
 func TestRunAddCommand(t *testing.T) {
@@ -266,6 +282,17 @@ func TestRunDeadlineCommand(t *testing.T) {
 		var out, errb bytes.Buffer
 		code := runDeadlineCommand(deadlineRequest{goalSlug: "g", offset: 54000}, strings.NewReader("y\n"), client, &out, &errb)
 		if code != 1 || !strings.Contains(errb.String(), "Failed to fetch goal") {
+			t.Errorf("code=%d err=%q", code, errb.String())
+		}
+	})
+
+	t.Run("update error", func(t *testing.T) {
+		client := &FakeClient{
+			UpdateGoalDeadlineFunc: func(string, int) (*Goal, error) { return nil, errors.New("boom") },
+		}
+		var out, errb bytes.Buffer
+		code := runDeadlineCommand(deadlineRequest{goalSlug: "g", offset: 54000, skipConfirm: true}, strings.NewReader(""), client, &out, &errb)
+		if code != 1 || !strings.Contains(errb.String(), "Failed to update deadline") {
 			t.Errorf("code=%d err=%q", code, errb.String())
 		}
 	})
