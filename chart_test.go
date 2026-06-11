@@ -661,29 +661,33 @@ func TestProcessDatapointsNonCumulative(t *testing.T) {
 	}
 }
 
-func TestDatapointSeriesInterpolation(t *testing.T) {
+func TestDatapointSeriesStep(t *testing.T) {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 10)
 
-	// Endpoints at the first/last columns; interior columns linearly interpolated.
+	// Step-after: the first value is held flat across the gap and the line jumps
+	// to the second value only at its column — never a linear ramp between them.
+	// Matches Beeminder's steppy line, which is not interpolated.
 	got := datapointSeries([]timedValue{
 		{timestamp: start.Unix(), value: 0},
 		{timestamp: end.Unix(), value: 100},
-	}, start, end, 11, false)
+	}, start, end, 11)
 	if len(got) != 11 {
 		t.Fatalf("expected 11 columns, got %d", len(got))
 	}
 	if got[0] != 0 || got[10] != 100 {
 		t.Errorf("endpoints: got[0]=%v got[10]=%v, want 0 and 100", got[0], got[10])
 	}
-	if got[5] < 49.9 || got[5] > 50.1 {
-		t.Errorf("midpoint interpolation: got[5]=%v, want ~50", got[5])
+	for i := 1; i < 10; i++ {
+		if got[i] != 0 {
+			t.Errorf("step hold: col %d = %v, want 0 (held until the jump, not interpolated)", i, got[i])
+		}
 	}
 
 	// A single datapoint fills the whole row with its value (no gaps, no NaN).
 	single := datapointSeries([]timedValue{
 		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 7},
-	}, start, end, 11, false)
+	}, start, end, 11)
 	for i, v := range single {
 		if v != 7 {
 			t.Errorf("single datapoint flat-fill: col %d = %v, want 7", i, v)
@@ -691,11 +695,11 @@ func TestDatapointSeriesInterpolation(t *testing.T) {
 	}
 }
 
-// TestDatapointSeriesCumulativeSteps guards the cumulative-goal fix: a kyoom
-// goal's line must step (hold the previous total, then jump at the datapoint),
-// not draw a diagonal ramp between points. Reproduces the integrations-goal case
-// where a value-0 anchor and a same-window value-1 point produced a misleading
-// diagonal instead of Beeminder's vertical riser.
+// TestDatapointSeriesCumulativeSteps guards the original integrations-goal case:
+// a kyoom goal's line must step (hold the previous total, then jump at the
+// datapoint), not draw a diagonal ramp between points — Beeminder's vertical
+// riser. Stepping is universal (see TestDatapointSeriesStep), but a running
+// total exercises it on accumulated values.
 func TestDatapointSeriesCumulativeSteps(t *testing.T) {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 10)
@@ -706,7 +710,7 @@ func TestDatapointSeriesCumulativeSteps(t *testing.T) {
 	got := datapointSeries([]timedValue{
 		{timestamp: start.Unix(), value: 0},
 		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 1},
-	}, start, end, 11, true)
+	}, start, end, 11)
 	if len(got) != 11 {
 		t.Fatalf("expected 11 columns, got %d", len(got))
 	}
