@@ -1,101 +1,119 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
 
+const deadlineUsage = `Usage: buzz deadline [--yes|-y] <goalslug> <time>
+  <time> can be:
+    - 12-hour format: "3:00 PM", "11:30 AM"
+    - 24-hour format: "15:00", "23:30"`
+
+// deadlineRequest is a parsed, validated `buzz deadline` invocation.
+type deadlineRequest struct {
+	goalSlug    string
+	offset      int // seconds from midnight
+	skipConfirm bool
+}
+
 // handleDeadlineCommand changes the daily deadline for a goal. The wall-clock
 // time parsing and seconds-from-midnight conversion live in timestr.go.
 func handleDeadlineCommand() {
-	// Usage: buzz deadline [--yes] <goalslug> <time>
+	req, code, done := parseDeadlineArgs(os.Args[2:], os.Stdout, os.Stderr)
+	if done {
+		os.Exit(code)
+	}
+
+	client, ok := loadClient(os.Stderr)
+	if !ok {
+		os.Exit(1)
+	}
+
+	code = runDeadlineCommand(req, os.Stdin, client, os.Stdout, os.Stderr)
+	if code == 0 {
+		fmt.Print(getUpdateMessage())
+	}
+	os.Exit(code)
+}
+
+// parseDeadlineArgs parses and validates `buzz deadline` arguments, returning
+// the request, a process exit code, and done=true when the caller should stop
+// (help shown, or a parse/validation error). It touches no config or network,
+// so --help and bad input are handled without authentication.
+func parseDeadlineArgs(args []string, stdout, stderr io.Writer) (deadlineRequest, int, bool) {
 	deadlineFlags := flag.NewFlagSet("deadline", flag.ContinueOnError)
+	// Silence the flag package's own output; we print our own usage.
+	deadlineFlags.SetOutput(io.Discard)
 	yes := deadlineFlags.Bool("yes", false, "Skip confirmation prompt")
 	yesShort := deadlineFlags.Bool("y", false, "Skip confirmation prompt (shorthand)")
-	if err := deadlineFlags.Parse(os.Args[2:]); err != nil {
+	if err := deadlineFlags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes|-y] <goalslug> <time>")
-			fmt.Fprintln(os.Stderr, "  <time> can be:")
-			fmt.Fprintln(os.Stderr, "    - 12-hour format: \"3:00 PM\", \"11:30 AM\"")
-			fmt.Fprintln(os.Stderr, "    - 24-hour format: \"15:00\", \"23:30\"")
-			return
+			fmt.Fprintln(stdout, deadlineUsage)
+			return deadlineRequest{}, 0, true
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
-		fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes|-y] <goalslug> <time>")
-		os.Exit(2)
+		fmt.Fprintf(stderr, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(stderr, deadlineUsage)
+		return deadlineRequest{}, 2, true
 	}
 
-	args := deadlineFlags.Args()
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Error: Missing required arguments")
-		fmt.Fprintln(os.Stderr, "Usage: buzz deadline [--yes|-y] <goalslug> <time>")
-		fmt.Fprintln(os.Stderr, "  <time> can be:")
-		fmt.Fprintln(os.Stderr, "    - 12-hour format: \"3:00 PM\", \"11:30 AM\"")
-		fmt.Fprintln(os.Stderr, "    - 24-hour format: \"15:00\", \"23:30\"")
-		os.Exit(1)
+	rest := deadlineFlags.Args()
+	if len(rest) < 2 {
+		fmt.Fprintln(stderr, "Error: Missing required arguments")
+		fmt.Fprintln(stderr, deadlineUsage)
+		return deadlineRequest{}, 1, true
 	}
 
-	skipConfirm := *yes || *yesShort
-	goalSlug := args[0]
-	timeStr := strings.Join(args[1:], " ")
-
-	offset, err := parseTimeToDeadlineOffset(timeStr)
+	offset, err := parseTimeToDeadlineOffset(strings.Join(rest[1:], " "))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error: %s\n", err)
+		return deadlineRequest{}, 1, true
 	}
 
-	if !ConfigExists() {
-		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz auth login' to authenticate.")
-		os.Exit(1)
-	}
+	return deadlineRequest{
+		goalSlug:    rest[0],
+		offset:      offset,
+		skipConfirm: *yes || *yesShort,
+	}, 0, false
+}
 
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
-
-	if !skipConfirm {
+// runDeadlineCommand applies the deadline change, prompting for confirmation on
+// stdin unless skipConfirm is set, and returns the process exit code.
+func runDeadlineCommand(req deadlineRequest, stdin io.Reader, client Client, stdout, stderr io.Writer) int {
+	if !req.skipConfirm {
 		// Fetch the current goal only when we actually need to render the
-		// confirmation prompt — with --yes set, the pre-fetch is just an
-		// extra API call that can fail before UpdateGoalDeadline gets a
-		// chance to run.
-		currentGoal, err := client.FetchGoal(context.Background(), goalSlug)
+		// confirmation prompt — with --yes set, the pre-fetch is just an extra
+		// API call that can fail before UpdateGoalDeadline gets a chance to run.
+		currentGoal, err := client.FetchGoal(context.Background(), req.goalSlug)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error: Failed to fetch goal: %s\n", redactError(err))
+			return 1
 		}
-		newTime := formatDueTime(offset)
-		currentTime := formatDueTime(currentGoal.Deadline)
-		fmt.Printf("Change deadline for %s from %s to %s? [y/N] ", goalSlug, currentTime, newTime)
-		var response string
-		if _, err := fmt.Scanln(&response); err != nil {
-			// EOF or read error in non-interactive contexts — treat as
-			// "no" so we never change a deadline without explicit consent.
-			fmt.Println("Cancelled.")
-			return
-		}
-		response = strings.TrimSpace(strings.ToLower(response))
+		fmt.Fprintf(stdout, "Change deadline for %s from %s to %s? [y/N] ",
+			req.goalSlug, formatDueTime(currentGoal.Deadline), formatDueTime(req.offset))
+
+		// EOF or empty input is treated as "no" so we never change a deadline
+		// without explicit consent.
+		line, _ := bufio.NewReader(stdin).ReadString('\n')
+		response := strings.TrimSpace(strings.ToLower(line))
 		if response != "y" && response != "yes" {
-			fmt.Println("Cancelled.")
-			return
+			fmt.Fprintln(stdout, "Cancelled.")
+			return 0
 		}
 	}
 
-	goal, err := client.UpdateGoalDeadline(context.Background(), goalSlug, offset)
+	goal, err := client.UpdateGoalDeadline(context.Background(), req.goalSlug, req.offset)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to update deadline: %s\n", redactError(err))
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error: Failed to update deadline: %s\n", redactError(err))
+		return 1
 	}
 
-	fmt.Printf("Updated deadline for %s to %s\n", goal.Slug, formatDueTime(goal.Deadline))
-
-	fmt.Print(getUpdateMessage())
+	fmt.Fprintf(stdout, "Updated deadline for %s to %s\n", goal.Slug, formatDueTime(goal.Deadline))
+	return 0
 }
