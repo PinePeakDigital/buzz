@@ -15,6 +15,12 @@ func pipedStdin(v string) func() (string, error) {
 	return func() (string, error) { return v, nil }
 }
 
+// errReader is an io.Reader that always fails with a non-EOF error, for
+// exercising read-error handling in the confirmation prompt.
+type errReader struct{ err error }
+
+func (e errReader) Read([]byte) (int, error) { return 0, e.err }
+
 func TestRunRefreshCommand(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -294,6 +300,34 @@ func TestRunDeadlineCommand(t *testing.T) {
 		code := runDeadlineCommand(deadlineRequest{goalSlug: "g", offset: 54000, skipConfirm: true}, strings.NewReader(""), client, &out, &errb)
 		if code != 1 || !strings.Contains(errb.String(), "Failed to update deadline") {
 			t.Errorf("code=%d err=%q", code, errb.String())
+		}
+	})
+
+	t.Run("piped y without trailing newline confirms", func(t *testing.T) {
+		updateCalled := false
+		client := &FakeClient{
+			FetchGoalFunc:          func(s string) (*Goal, error) { return &Goal{Slug: s}, nil },
+			UpdateGoalDeadlineFunc: func(s string, d int) (*Goal, error) { updateCalled = true; return &Goal{Slug: s, Deadline: d}, nil },
+		}
+		var out, errb bytes.Buffer
+		// "y" with no newline → ReadString returns ("y", io.EOF); EOF content is
+		// still honored, so this confirms (matching the old Scanln behavior).
+		code := runDeadlineCommand(deadlineRequest{goalSlug: "g", offset: 54000}, strings.NewReader("y"), client, &out, &errb)
+		if code != 0 || !updateCalled || !strings.Contains(out.String(), "Updated deadline") {
+			t.Errorf("code=%d updateCalled=%v out=%q", code, updateCalled, out.String())
+		}
+	})
+
+	t.Run("read error cancels without updating", func(t *testing.T) {
+		updateCalled := false
+		client := &FakeClient{
+			FetchGoalFunc:          func(s string) (*Goal, error) { return &Goal{Slug: s}, nil },
+			UpdateGoalDeadlineFunc: func(string, int) (*Goal, error) { updateCalled = true; return &Goal{}, nil },
+		}
+		var out, errb bytes.Buffer
+		code := runDeadlineCommand(deadlineRequest{goalSlug: "g", offset: 54000}, errReader{err: errors.New("disk gone")}, client, &out, &errb)
+		if code != 0 || updateCalled || !strings.Contains(out.String(), "Cancelled") {
+			t.Errorf("code=%d updateCalled=%v out=%q", code, updateCalled, out.String())
 		}
 	})
 }

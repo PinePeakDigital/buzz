@@ -98,9 +98,16 @@ func runDeadlineCommand(req deadlineRequest, stdin io.Reader, client Client, std
 		fmt.Fprintf(stdout, "Change deadline for %s from %s to %s? [y/N] ",
 			req.goalSlug, formatDueTime(currentGoal.Deadline), formatDueTime(req.offset))
 
-		// EOF or empty input is treated as "no" so we never change a deadline
-		// without explicit consent.
-		line, _ := bufio.NewReader(stdin).ReadString('\n')
+		// A genuine read error cancels — we never change a deadline without
+		// explicit consent. io.EOF is normal for piped input, so its content is
+		// still evaluated: `printf y` with no trailing newline confirms (as the
+		// previous fmt.Scanln did), while empty input falls through to the
+		// y/yes check below and cancels.
+		line, err := bufio.NewReader(stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			fmt.Fprintln(stdout, "Cancelled.")
+			return 0
+		}
 		response := strings.TrimSpace(strings.ToLower(line))
 		if response != "y" && response != "yes" {
 			fmt.Fprintln(stdout, "Cancelled.")

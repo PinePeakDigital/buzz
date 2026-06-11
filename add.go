@@ -65,6 +65,7 @@ func parseAddArgs(args []string, readStdin func() (string, error), stdout, stder
 			return addRequest{}, 0, true
 		}
 		fmt.Fprintf(stderr, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(stderr, addUsage)
 		return addRequest{}, 1, true
 	}
 
