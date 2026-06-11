@@ -261,7 +261,11 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 		return nil
 	}
 	if goal.Kyoom {
-		processed = append([]timedValue{{timestamp: startTime.Unix(), value: carry}}, processed...)
+		// Anchor at the start of the window's day (not the raw startTime instant),
+		// so it sorts at-or-before every day point — which sit at local midnight.
+		// A mid-day startTime would otherwise place the anchor after the first
+		// day point, breaking datapointSeries' ascending-order assumption.
+		processed = append([]timedValue{{timestamp: startDay.Unix(), value: carry}}, processed...)
 	}
 	return processed
 }

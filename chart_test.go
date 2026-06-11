@@ -662,6 +662,44 @@ func TestProcessDatapointsNonCumulative(t *testing.T) {
 	}
 }
 
+func TestProcessDatapointsMidDayWindowStartAndNoDaystamp(t *testing.T) {
+	// Two subtle paths at once: a window that starts mid-day (as stale goals do,
+	// anchored at the last datapoint's timestamp), and datapoints carrying no
+	// Daystamp (so the day is derived from the timestamp). The day whose midnight
+	// precedes the mid-day startTime must still count as in-window, and the kyoom
+	// anchor must sort at-or-before the first day point.
+	loc := time.UTC
+	day0 := time.Date(2024, 5, 10, 0, 0, 0, 0, loc)
+	start := day0.Add(12 * time.Hour) // window starts at noon on day 0
+	end := day0.AddDate(0, 0, 2)
+
+	goal := Goal{
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: day0.Add(14 * time.Hour).Unix(), Value: 5}, // no Daystamp → day 0
+			{Timestamp: day0.AddDate(0, 0, 1).Add(9 * time.Hour).Unix(), Value: 3}, // day 1
+		},
+	}
+	got := processDatapoints(goal, start, end)
+
+	// anchor (carry 0) + day0 cumulative 5 + day1 cumulative 8.
+	want := []float64{0, 5, 8}
+	if len(got) != len(want) {
+		t.Fatalf("got %d points, want %d (%v)", len(got), len(want), got)
+	}
+	for i, w := range want {
+		if got[i].value != w {
+			t.Errorf("value[%d] = %v, want %v", i, got[i].value, w)
+		}
+	}
+	// The series must stay sorted ascending by time for datapointSeries.
+	for i := 1; i < len(got); i++ {
+		if got[i].timestamp < got[i-1].timestamp {
+			t.Errorf("processed not ascending at %d: %d < %d", i, got[i].timestamp, got[i-1].timestamp)
+		}
+	}
+}
+
 func TestProcessDatapointsAggregatesSameDay(t *testing.T) {
 	// The crux of the aggday work: multiple datapoints on one day collapse to a
 	// single plotted point per day, using the goal's aggday.

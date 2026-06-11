@@ -46,6 +46,24 @@ func TestAggregateDayMethods(t *testing.T) {
 		}
 	}
 
+	// median with an odd count returns the true middle of the sorted input
+	// (inputs need not be pre-sorted).
+	if got := aggregateDay(Goal{}, "median", []float64{5, 1, 3}); got != 3 {
+		t.Errorf("median odd-count: got %v, want 3", got)
+	}
+
+	// trimmean drops the lowest/highest trim-fraction before averaging. With <10
+	// values floor(0.1*n)=0, so it degenerates to the plain mean...
+	if got := aggregateDay(Goal{}, "trimmean", vals); math.Abs(got-2.5) > 1e-9 {
+		t.Errorf("trimmean small list (no trim): got %v, want 2.5", got)
+	}
+	// ...and with >=10 values the single lowest and highest are dropped: trimming
+	// 1 and 100 from {1,2,3,4,5,6,7,8,9,100} leaves {2..9}, mean 5.5.
+	big := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 100}
+	if got := aggregateDay(Goal{}, "trimmean", big); math.Abs(got-5.5) > 1e-9 {
+		t.Errorf("trimmean trimming extremes: got %v, want 5.5", got)
+	}
+
 	// nonzero / countflat / muflat ignore zeros.
 	withZeros := []float64{0, 0, 4}
 	if got := aggregateDay(Goal{}, "nonzero", withZeros); got != 1 {
