@@ -546,10 +546,8 @@ func handleScrollUp(m model) (tea.Model, tea.Cmd) {
 func handleScrollDown(m model) (tea.Model, tea.Cmd) {
 	if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
-		cols := calculateColumns(m.appModel.width)
-		totalRows := (len(displayGoals) + cols - 1) / cols
-		maxVisibleRows := max(1, (m.appModel.height-4)/4) // Rough estimate of rows that fit
-		if m.appModel.scrollRow < totalRows-maxVisibleRows {
+		layout := gridLayout(m.appModel.width, m.appModel.height, len(displayGoals))
+		if m.appModel.scrollRow < layout.totalRows-layout.visibleRows {
 			m.appModel.scrollRow++
 		}
 	}
@@ -600,18 +598,14 @@ func handleMouseClick(m model, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Calculate which goal was clicked based on coordinates
-	// Header is 2 lines (title + empty line), so content starts at line 2 (0-indexed)
-	headerHeight := 2
-	clickRow := msg.Y - headerHeight
-
-	// Each grid cell is 4 lines high (3 lines content + 1 line spacing)
-	cellHeight := 4
+	// Calculate which goal was clicked based on coordinates. The header offset
+	// and cell height come from the shared grid geometry (gridlayout.go).
+	clickRow := msg.Y - gridHeaderRows
 	if clickRow < 0 {
 		// Clicked on header area
 		return m, nil
 	}
-	gridRow := clickRow / cellHeight
+	gridRow := clickRow / gridCellHeight
 
 	// Calculate column based on terminal width
 	cols := calculateColumns(m.appModel.width)

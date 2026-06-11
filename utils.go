@@ -54,24 +54,6 @@ func redactError(err error) string {
 	return redactAuthToken(err.Error())
 }
 
-// calculateColumns determines the optimal number of columns based on terminal width
-func calculateColumns(width int) int {
-	// Each cell needs approximately:
-	// - 16 chars for content (inner width)
-	// - 2 chars for left/right borders
-	// - 2 chars for horizontal padding
-	// Total: ~20 chars per cell
-	const minCellWidth = 20
-	const minCols = 1
-
-	if width < minCellWidth {
-		return minCols
-	}
-
-	cols := width / minCellWidth
-	return max(minCols, cols)
-}
-
 // truncateString truncates a string to maxLen characters
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -252,17 +234,9 @@ func ensureRowVisible(selectedRow, firstRow, visibleRows, totalRows int) int {
 // updateScrollForCursor adjusts scrollRow to keep the cursor visible after navigation
 // This function should be called after cursor changes from arrow key navigation
 func updateScrollForCursor(m *model, displayLen int) {
-	cols := calculateColumns(m.appModel.width)
-	if cols < 1 {
-		cols = 1
-	}
-	totalRows := (displayLen + cols - 1) / cols
-	visibleRows := max(1, (m.appModel.height-4)/4) // Must match grid.go calculation
-	selRow := 0
-	if cols > 0 {
-		selRow = m.appModel.cursor / cols
-	}
-	m.appModel.scrollRow = ensureRowVisible(selRow, m.appModel.scrollRow, visibleRows, totalRows)
+	layout := gridLayout(m.appModel.width, m.appModel.height, displayLen)
+	selRow := m.appModel.cursor / layout.cols
+	m.appModel.scrollRow = ensureRowVisible(selRow, m.appModel.scrollRow, layout.visibleRows, layout.totalRows)
 }
 
 // readValueFromStdin reads a value from stdin if it's being piped (non-interactive input)
