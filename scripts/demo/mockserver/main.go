@@ -172,11 +172,14 @@ func goalJSON(g demoGoal, now time.Time, withData bool) map[string]any {
 // sets exactly one of value/rate.
 //
 // Cumulative goals anchor at 0 and rise at the goal's rate, so the summed
-// datapoint staircase climbs alongside the line. Non-cumulative goals use a
-// gentle value-to-value line in a positive band around their typical daily level
-// (rather than the headline rate, which over a two-week window would send the
-// line far off-scale and leave the plot mostly empty), so the datapoints and the
-// line stay visible together.
+// datapoint staircase climbs alongside the line.
+//
+// The demo's non-cumulative goals are all Do Less (yaw -1), where the safe side
+// is *below* the bright red line. So their road is a flat horizontal cap sitting
+// a few units above the datapoints' typical level — the data oscillates safely
+// under it and never crosses, which reads as an on-track goal. (An inclined road
+// the data dipped across looked like uncaught derails, since the chart doesn't
+// draw the derail region.)
 func roadall(g demoGoal, initday, startOfToday time.Time) [][]any {
 	end := startOfToday.AddDate(0, 0, 7)
 	if g.kyoom {
@@ -185,14 +188,12 @@ func roadall(g demoGoal, initday, startOfToday time.Time) [][]any {
 			{float64(end.Unix()), nil, g.Rate},
 		}
 	}
-	startV := float64(g.lvl)
-	endV := startV * 0.6
-	if endV < 1 {
-		endV = 1
-	}
+	// Flat cap above the data. Datapoints range over lvl±2 (see datapoints), so a
+	// cap at lvl+3 keeps the line clear of the highest point with visible headroom.
+	capLine := float64(g.lvl) + 3
 	return [][]any{
-		{float64(initday.Unix()), startV, nil},
-		{float64(end.Unix()), endV, nil},
+		{float64(initday.Unix()), capLine, nil},
+		{float64(end.Unix()), capLine, nil},
 	}
 }
 
