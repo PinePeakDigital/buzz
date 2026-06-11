@@ -27,13 +27,11 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 	}
 	s += "\n\n"
 
-	// Calculate grid dimensions based on terminal width
-	cols := calculateColumns(width)
-	totalRows := (len(goals) + cols - 1) / cols
-
-	// Calculate visible rows based on terminal height
-	// Each cell is roughly 4 lines high (3 lines content + 1 line spacing)
-	maxVisibleRows := max(1, (height-4)/4) // -4 for header and footer
+	// Grid geometry (columns, total rows, visible rows) for this size.
+	layout := gridLayout(width, height, len(goals))
+	cols := layout.cols
+	totalRows := layout.totalRows
+	maxVisibleRows := layout.visibleRows
 
 	// Calculate which rows to display
 	startRow := scrollRow
@@ -79,9 +77,9 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 // RenderFooter renders the footer with scroll and refresh information
 func RenderFooter(goals []Goal, width, height, scrollRow int, refreshActive bool) string {
 	// The footer with scroll information
-	footerCols := calculateColumns(width)
-	footerTotalRows := (len(goals) + footerCols - 1) / footerCols
-	footerMaxVisibleRows := max(1, (height-4)/4)
+	layout := gridLayout(width, height, len(goals))
+	footerTotalRows := layout.totalRows
+	footerMaxVisibleRows := layout.visibleRows
 
 	scrollInfo := ""
 	if footerTotalRows > footerMaxVisibleRows {
