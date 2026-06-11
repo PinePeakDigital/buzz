@@ -219,7 +219,20 @@ type timedValue struct {
 // For non-cumulative goals each in-window day's aggregate is plotted directly.
 func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 	loc := startTime.Location()
-	days := bucketByDay(goal.Datapoints, loc)
+
+	// Drop datapoints after the window end (including future-dated ones) before
+	// bucketing. This matches Beeminder — which filters data to "now" (asof)
+	// before aggregating — and stops a day's aggregate from absorbing same-day
+	// points logged after endTime when the window ends mid-day.
+	endUnix := endTime.Unix()
+	inRange := make([]Datapoint, 0, len(goal.Datapoints))
+	for _, dp := range goal.Datapoints {
+		if dp.Timestamp <= endUnix {
+			inRange = append(inRange, dp)
+		}
+	}
+
+	days := bucketByDay(inRange, loc)
 	if len(days) == 0 {
 		return nil
 	}

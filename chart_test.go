@@ -700,6 +700,37 @@ func TestProcessDatapointsMidDayWindowStartAndNoDaystamp(t *testing.T) {
 	}
 }
 
+func TestProcessDatapointsExcludesPointsAfterWindowEnd(t *testing.T) {
+	// A datapoint logged later the same day, after a mid-day endTime, must not
+	// leak into that day's aggregate (it's effectively in the future relative to
+	// the charted window). Mirrors Beeminder filtering data to "now" before
+	// aggregating.
+	loc := time.UTC
+	day := time.Date(2024, 7, 1, 0, 0, 0, 0, loc)
+	start := day
+	end := day.Add(15 * time.Hour) // window ends at 3pm
+
+	goal := Goal{
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: day.Add(10 * time.Hour).Unix(), Daystamp: "20240701", Value: 5},  // before end → counts
+			{Timestamp: day.Add(20 * time.Hour).Unix(), Daystamp: "20240701", Value: 99}, // after end → excluded
+		},
+	}
+	got := processDatapoints(goal, start, end)
+
+	// anchor 0 + the day's aggregate of just the 5 (the 99 is excluded), not 104.
+	want := []float64{0, 5}
+	if len(got) != len(want) {
+		t.Fatalf("got %d points, want %d (%v)", len(got), len(want), got)
+	}
+	for i, w := range want {
+		if got[i].value != w {
+			t.Errorf("value[%d] = %v, want %v (point after endTime must be excluded)", i, got[i].value, w)
+		}
+	}
+}
+
 func TestProcessDatapointsAggregatesSameDay(t *testing.T) {
 	// The crux of the aggday work: multiple datapoints on one day collapse to a
 	// single plotted point per day, using the goal's aggday.
