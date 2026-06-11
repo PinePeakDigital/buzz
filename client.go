@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -105,50 +106,81 @@ func (c *HTTPClient) doRequest(ctx context.Context, method, url string, body io.
 	return resp, nil
 }
 
+// formContentType is the body content type for Beeminder's form-encoded writes.
+const formContentType = "application/x-www-form-urlencoded"
+
+// apiStatusError is returned for a non-200 Beeminder response. It preserves the
+// status code (and trimmed body, when the server sent one) so callers can both
+// surface a useful message and branch on the code — e.g. FetchGoal turns a 404
+// into "goal not found". Its message keeps the "API returned status N" form the
+// per-method code produced before this helper existed.
+type apiStatusError struct {
+	status int
+	body   string
+}
+
+func (e *apiStatusError) Error() string {
+	if e.body != "" {
+		return fmt.Sprintf("API returned status %d: %s", e.status, e.body)
+	}
+	return fmt.Sprintf("API returned status %d", e.status)
+}
+
+// send runs an authenticated request and, on a 200 OK, returns the live
+// response for the caller to stream — the caller owns resp.Body and must close
+// it. It centralises the status-check that every typed method shared: a
+// transport failure is wrapped with failMsg, and a non-200 becomes an
+// *apiStatusError carrying the code and (best-effort) the response body, after
+// which send closes the body itself. Returning the un-read 200 body lets
+// callers decode straight from the stream rather than buffering large payloads
+// (e.g. goal details with datapoints) in memory.
+//
+// URL construction stays in the calling method — it is the one genuinely
+// per-endpoint piece, and keeping the exact request strings (auth-token
+// placement, query params, slug escaping) means this helper changes no request
+// actually sent to Beeminder.
+func (c *HTTPClient) send(ctx context.Context, method, url, failMsg string, body io.Reader, contentType string) (*http.Response, error) {
+	resp, err := c.doRequest(ctx, method, url, body, contentType)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", failMsg, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		errBody, _ := io.ReadAll(resp.Body)
+		return nil, &apiStatusError{status: resp.StatusCode, body: strings.TrimSpace(string(errBody))}
+	}
+	return resp, nil
+}
+
+// doJSON is send plus a streaming JSON decode of the success body into T. Go
+// methods can't take type parameters, so this is a package-level function
+// taking the client; most Client methods are a single call to it. failMsg
+// attributes both transport and decode failures to the calling endpoint.
+func doJSON[T any](ctx context.Context, c *HTTPClient, method, url, failMsg string, body io.Reader, contentType string) (T, error) {
+	var out T
+	resp, err := c.send(ctx, method, url, failMsg, body, contentType)
+	if err != nil {
+		return out, err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return out, fmt.Errorf("%s: failed to decode response: %w", failMsg, err)
+	}
+	return out, nil
+}
+
 // FetchGoals fetches the user's goals from Beeminder API.
 func (c *HTTPClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals.json?auth_token=%s",
 		c.baseURL(), c.config.Username, c.config.AuthToken)
-
-	resp, err := c.doRequest(ctx, http.MethodGet, url, nil, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goals: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var goals []Goal
-	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
-		return nil, fmt.Errorf("failed to decode goals: %w", err)
-	}
-
-	return goals, nil
+	return doJSON[[]Goal](ctx, c, http.MethodGet, url, "failed to fetch goals", nil, "")
 }
 
 // FetchArchivedGoals fetches the user's archived goals from the Beeminder API.
 func (c *HTTPClient) FetchArchivedGoals(ctx context.Context) ([]Goal, error) {
 	url := fmt.Sprintf("%s/api/v1/users/%s/goals/archived.json?auth_token=%s",
 		c.baseURL(), c.config.Username, c.config.AuthToken)
-
-	resp, err := c.doRequest(ctx, http.MethodGet, url, nil, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch archived goals: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var goals []Goal
-	if err := json.NewDecoder(resp.Body).Decode(&goals); err != nil {
-		return nil, fmt.Errorf("failed to decode archived goals: %w", err)
-	}
-
-	return goals, nil
+	return doJSON[[]Goal](ctx, c, http.MethodGet, url, "failed to fetch archived goals", nil, "")
 }
 
 // FetchUserTimezone fetches the IANA timezone configured on the user's
@@ -157,24 +189,12 @@ func (c *HTTPClient) FetchArchivedGoals(ctx context.Context) ([]Goal, error) {
 func (c *HTTPClient) FetchUserTimezone(ctx context.Context) (string, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s.json?auth_token=%s",
 		c.baseURL(), c.config.Username, c.config.AuthToken)
-
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch user: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var result struct {
+	result, err := doJSON[struct {
 		Timezone string `json:"timezone"`
+	}](ctx, c, http.MethodGet, apiURL, "failed to fetch user", nil, "")
+	if err != nil {
+		return "", err
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode user: %w", err)
-	}
-
 	return result.Timezone, nil
 }
 
@@ -233,29 +253,15 @@ func (c *HTTPClient) APIRequest(ctx context.Context, method, path string, params
 func (c *HTTPClient) GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&skinny=true",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
-
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
-	if err != nil {
-		return 0, fmt.Errorf("failed to fetch goal details: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var result struct {
+	result, err := doJSON[struct {
 		LastDatapoint *Datapoint `json:"last_datapoint"`
+	}](ctx, c, http.MethodGet, apiURL, "failed to fetch goal details", nil, "")
+	if err != nil {
+		return 0, err
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("failed to decode goal details: %w", err)
-	}
-
 	if result.LastDatapoint == nil {
 		return 0, nil
 	}
-
 	return result.LastDatapoint.Value, nil
 }
 
@@ -287,24 +293,9 @@ func (c *HTTPClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, 
 		data.Set("requestid", requestid)
 	}
 
-	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
+	dp, err := doJSON[Datapoint](ctx, c, http.MethodPost, apiURL, "failed to create datapoint", strings.NewReader(data.Encode()), formContentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create datapoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to read create-datapoint response: %w", readErr)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var dp Datapoint
-	if err := json.Unmarshal(body, &dp); err != nil {
-		return nil, fmt.Errorf("failed to decode created datapoint: %w", err)
+		return nil, err
 	}
 	return &dp, nil
 }
@@ -322,23 +313,9 @@ func (c *HTTPClient) CreateCharge(ctx context.Context, amount float64, note stri
 		data.Set("dryrun", "true")
 	}
 
-	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
+	ch, err := doJSON[Charge](ctx, c, http.MethodPost, apiURL, "failed to create charge", strings.NewReader(data.Encode()), formContentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create charge: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
-		}
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var ch Charge
-	if err := json.NewDecoder(resp.Body).Decode(&ch); err != nil {
-		return nil, fmt.Errorf("failed to decode charge: %w", err)
+		return nil, err
 	}
 	return &ch, nil
 }
@@ -349,24 +326,9 @@ func (c *HTTPClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, err
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/uncleme.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(""), "application/x-www-form-urlencoded")
+	goal, err := doJSON[Goal](ctx, c, http.MethodPost, apiURL, "failed to call uncle", strings.NewReader(""), formContentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call uncle: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", readErr)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var goal Goal
-	if err := json.Unmarshal(body, &goal); err != nil {
-		return nil, fmt.Errorf("failed to decode goal: %w", err)
+		return nil, err
 	}
 	return &goal, nil
 }
@@ -383,24 +345,9 @@ func (c *HTTPClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet i
 	data.Set("auth_token", c.config.AuthToken)
 	data.Set("ratchet", fmt.Sprintf("%d", ratchet))
 
-	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
+	goal, err := doJSON[Goal](ctx, c, http.MethodPost, apiURL, "failed to ratchet goal", strings.NewReader(data.Encode()), formContentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to ratchet goal: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", readErr)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var goal Goal
-	if err := json.Unmarshal(body, &goal); err != nil {
-		return nil, fmt.Errorf("failed to decode goal: %w", err)
+		return nil, err
 	}
 	return &goal, nil
 }
@@ -410,25 +357,14 @@ func (c *HTTPClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, err
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
+	goal, err := doJSON[Goal](ctx, c, http.MethodGet, apiURL, "failed to fetch goal", nil, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goal: %w", err)
+		var se *apiStatusError
+		if errors.As(err, &se) && se.status == http.StatusNotFound {
+			return nil, fmt.Errorf("goal not found: %s", goalSlug)
+		}
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("goal not found: %s", goalSlug)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var goal Goal
-	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
-		return nil, fmt.Errorf("failed to decode goal: %w", err)
-	}
-
 	return &goal, nil
 }
 
@@ -437,21 +373,10 @@ func (c *HTTPClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug strin
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s.json?auth_token=%s&datapoints=true",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
 
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
+	goal, err := doJSON[Goal](ctx, c, http.MethodGet, apiURL, "failed to fetch goal details", nil, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goal details: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var goal Goal
-	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
-		return nil, fmt.Errorf("failed to decode goal details: %w", err)
-	}
-
 	return &goal, nil
 }
 
@@ -514,26 +439,21 @@ func (c *HTTPClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, incl
 		apiURL += "&datapoints=true"
 	}
 
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
+	resp, err := c.send(ctx, http.MethodGet, apiURL, "failed to fetch goal", nil, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goal: %w", err)
+		var se *apiStatusError
+		if errors.As(err, &se) && se.status == http.StatusNotFound {
+			return nil, fmt.Errorf("goal not found: %s", goalSlug)
+		}
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("goal not found: %s", goalSlug)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to fetch goal: failed to read response: %w", err)
 	}
-
-	return json.RawMessage(body), nil
+	return json.RawMessage(raw), nil
 }
 
 // CreateGoal creates a new goal for the user.
@@ -552,21 +472,10 @@ func (c *HTTPClient) CreateGoal(ctx context.Context, slug, title, goalType, guni
 	data.Set("goalval", goalval)
 	data.Set("rate", rate)
 
-	resp, err := c.doRequest(ctx, http.MethodPost, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
+	goal, err := doJSON[Goal](ctx, c, http.MethodPost, apiURL, "failed to create goal", strings.NewReader(data.Encode()), formContentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create goal: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var goal Goal
-	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
-		return nil, fmt.Errorf("failed to decode created goal: %w", err)
-	}
-
 	return &goal, nil
 }
 
@@ -582,25 +491,10 @@ func (c *HTTPClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, de
 	data.Set("auth_token", c.config.AuthToken)
 	data.Set("deadline", fmt.Sprintf("%d", deadline))
 
-	resp, err := c.doRequest(ctx, http.MethodPut, apiURL, strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
+	goal, err := doJSON[Goal](ctx, c, http.MethodPut, apiURL, "failed to update goal deadline", strings.NewReader(data.Encode()), formContentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update goal deadline: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return nil, fmt.Errorf("API returned status %d (failed to read body: %w)", resp.StatusCode, readErr)
-		}
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var goal Goal
-	if err := json.NewDecoder(resp.Body).Decode(&goal); err != nil {
-		return nil, fmt.Errorf("failed to decode updated goal: %w", err)
-	}
-
 	return &goal, nil
 }
 
@@ -609,21 +503,5 @@ func (c *HTTPClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, de
 func (c *HTTPClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, error) {
 	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/refresh_graph.json?auth_token=%s",
 		c.baseURL(), c.config.Username, url.PathEscape(goalSlug), c.config.AuthToken)
-
-	resp, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, "")
-	if err != nil {
-		return false, fmt.Errorf("failed to refresh goal: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var result bool
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return false, fmt.Errorf("failed to decode refresh result: %w", err)
-	}
-
-	return result, nil
+	return doJSON[bool](ctx, c, http.MethodGet, apiURL, "failed to refresh goal", nil, "")
 }
