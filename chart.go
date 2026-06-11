@@ -268,9 +268,18 @@ func processCumulative(goal Goal, startTime, endTime time.Time) []timedValue {
 
 // datapointSeries maps processed datapoints onto chartWidth evenly-spaced
 // columns and fills the gaps: each datapoint lands in the column matching its
-// position in the timeframe, columns before the first / after the last hold
-// that endpoint's value, and interior gaps are linearly interpolated so the
-// plotted line is continuous.
+// position in the timeframe, and columns before the first / after the last hold
+// that endpoint's value.
+//
+// Interior gaps are filled with a step-after staircase: each datapoint's value
+// is held across the gap until the next datapoint's column, where the line jumps.
+// This matches Beeminder's "steppy" line, the default connecting line for nearly
+// every goal type — see beebrain's bgraph.js (the line is hold-then-jump, and its
+// only alternative, `nosteppy`, is hardcoded off) and the per-type `steppy =>
+// true` defaults in beeminder's goal_type.rb. It is NOT a per-goal-type choice:
+// Beeminder never draws a diagonal connect-the-dots data line. (Cumulative goals
+// carry a running total, so their staircase climbs; non-cumulative goals hold a
+// raw value flat between points — both step.)
 func datapointSeries(processed []timedValue, startTime, endTime time.Time, chartWidth int) []float64 {
 	values := make([]float64, chartWidth)
 	hasDatapoint := make([]bool, chartWidth)
@@ -319,13 +328,10 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 		if !hasDatapoint[i] {
 			continue
 		}
-		if i > prevDP+1 {
-			startVal := values[prevDP]
-			endVal := values[i]
-			for j := prevDP + 1; j < i; j++ {
-				ratio := float64(j-prevDP) / float64(i-prevDP)
-				values[j] = startVal + ratio*(endVal-startVal)
-			}
+		// Hold the previous datapoint's value across the gap; the jump to this
+		// datapoint's value lands at column i.
+		for j := prevDP + 1; j < i; j++ {
+			values[j] = values[prevDP]
 		}
 		prevDP = i
 	}
