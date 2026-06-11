@@ -172,11 +172,14 @@ func goalJSON(g demoGoal, now time.Time, withData bool) map[string]any {
 // sets exactly one of value/rate.
 //
 // Cumulative goals anchor at 0 and rise at the goal's rate, so the summed
-// datapoint staircase climbs alongside the line. Non-cumulative goals use a
-// gentle value-to-value line in a positive band around their typical daily level
-// (rather than the headline rate, which over a two-week window would send the
-// line far off-scale and leave the plot mostly empty), so the datapoints and the
-// line stay visible together.
+// datapoint staircase climbs alongside the line.
+//
+// The demo's non-cumulative goals are all Do Less (yaw -1), where the safe side
+// is *below* the bright red line. So their road is a flat horizontal cap sitting
+// a few units above the datapoints' typical level — the data oscillates safely
+// under it and never crosses, which reads as an on-track goal. (An inclined road
+// the data dipped across looked like uncaught derails, since the chart doesn't
+// draw the derail region.)
 func roadall(g demoGoal, initday, startOfToday time.Time) [][]any {
 	end := startOfToday.AddDate(0, 0, 7)
 	if g.kyoom {
@@ -185,14 +188,13 @@ func roadall(g demoGoal, initday, startOfToday time.Time) [][]any {
 			{float64(end.Unix()), nil, g.Rate},
 		}
 	}
-	startV := float64(g.lvl)
-	endV := startV * 0.6
-	if endV < 1 {
-		endV = 1
-	}
+	// Flat cap above the data. Datapoints peak around lvl+1 (see datapoints'
+	// wave, which spans lvl-2..lvl+1), so a cap at lvl+3 keeps the line clear of
+	// the highest point with visible headroom.
+	capLine := float64(g.lvl) + 3
 	return [][]any{
-		{float64(initday.Unix()), startV, nil},
-		{float64(end.Unix()), endV, nil},
+		{float64(initday.Unix()), capLine, nil},
+		{float64(end.Unix()), capLine, nil},
 	}
 }
 
@@ -224,10 +226,14 @@ func datapoints(g demoGoal, now time.Time) []map[string]any {
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	initday := startOfToday.AddDate(0, 0, -chartWindowDays)
 
-	// Day-to-day texture. The kyoom pattern's zeros produce flat segments in the
-	// cumulative staircase; the last day is non-zero so the latest value reads
-	// cleanly. The non-kyoom wave nudges values around the goal's level.
-	kyoomMult := []float64{1, 1, 0, 2, 1, 0, 1, 2, 1, 0, 1, 1, 2}
+	// Day-to-day texture. The cumulative goals are all Do More (yaw +1), where the
+	// safe side is *above* the bright red line (which rises at the goal's rate).
+	// Each day's multiplier averages above 1, and the running sum stays above the
+	// day index throughout, so the summed staircase rides above the road with a
+	// growing safety buffer — an on-track Do More goal — while the varied steps
+	// and a zero day keep the staircase shape. The non-kyoom wave nudges values
+	// around the goal's level.
+	kyoomMult := []float64{2, 1, 2, 1, 2, 0, 2, 1, 2, 1, 2, 1, 2}
 	wave := []float64{0, 1, -1, 0, 1, -2, 1, 0, -1, 1, 0, 1, -1}
 
 	out := make([]map[string]any, 0, chartWindowDays-1)
