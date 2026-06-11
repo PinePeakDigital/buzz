@@ -44,15 +44,26 @@ type demoGoal struct {
 	timey  bool
 	// base is the running total at the start of the forecast.
 	base int
+	// kyoom marks a cumulative goal: the progress chart sums its datapoints into
+	// a rising staircase (and exercises the step-rendering path). lvl is the
+	// typical per-day metric value for non-cumulative goals, used to scale their
+	// chart's datapoints and bright red line so the plot stays readable.
+	kyoom bool
+	lvl   int
 }
+
+// chartWindowDays is how far back the goals' progress charts reach: initday and
+// the datapoint history both span this many days before today, so `buzz review`
+// shows a fully-populated chart.
+const chartWindowDays = 14
 
 // demoGoals is the cast of fictional goals shown in the demo.
 var demoGoals = []demoGoal{
-	{Slug: "read", Title: "Read every day", GoalType: "hustler", Gunits: "pages", Runits: "d", Limsum: "+10 within 1 day", Rate: 10, Pledge: 5, Safebuf: 0, Yaw: 1, Dir: 1, perDay: 10, base: 1200},
-	{Slug: "meditate", Title: "Daily meditation", GoalType: "hustler", Gunits: "minutes", Runits: "d", Limsum: "+00:20:00 within 1 day", Rate: 20, Pledge: 10, Safebuf: 1, Yaw: 1, Dir: 1, perDay: 20, timey: true, base: 3000},
-	{Slug: "inbox", Title: "Inbox zero", GoalType: "inboxer", Gunits: "emails", Runits: "d", Limsum: "-3 within 2 days", Rate: -3, Pledge: 5, Safebuf: 3, Yaw: -1, Dir: -1, perDay: 3, base: 40},
-	{Slug: "pushups", Title: "Push-ups", GoalType: "hustler", Gunits: "pushups", Runits: "w", Limsum: "+50 within 5 days", Rate: 50, Pledge: 30, Safebuf: 7, Yaw: 1, Dir: 1, perDay: 7, base: 900},
-	{Slug: "screen", Title: "Limit screen time", GoalType: "drinker", Gunits: "hours", Runits: "d", Limsum: "+0 within 1 day", Rate: 2, Pledge: 90, Safebuf: 2, Yaw: -1, Dir: 1, perDay: 2, base: 14},
+	{Slug: "read", Title: "Read every day", GoalType: "hustler", Gunits: "pages", Runits: "d", Limsum: "+10 within 1 day", Rate: 10, Pledge: 5, Safebuf: 0, Yaw: 1, Dir: 1, perDay: 10, base: 1200, kyoom: true},
+	{Slug: "meditate", Title: "Daily meditation", GoalType: "hustler", Gunits: "minutes", Runits: "d", Limsum: "+00:20:00 within 1 day", Rate: 20, Pledge: 10, Safebuf: 1, Yaw: 1, Dir: 1, perDay: 20, timey: true, base: 3000, kyoom: true},
+	{Slug: "inbox", Title: "Inbox zero", GoalType: "inboxer", Gunits: "emails", Runits: "d", Limsum: "-3 within 2 days", Rate: -3, Pledge: 5, Safebuf: 3, Yaw: -1, Dir: -1, perDay: 3, base: 40, lvl: 6},
+	{Slug: "pushups", Title: "Push-ups", GoalType: "hustler", Gunits: "pushups", Runits: "w", Limsum: "+50 within 5 days", Rate: 50, Pledge: 30, Safebuf: 7, Yaw: 1, Dir: 1, perDay: 7, base: 900, kyoom: true},
+	{Slug: "screen", Title: "Limit screen time", GoalType: "drinker", Gunits: "hours", Runits: "d", Limsum: "+0 within 1 day", Rate: 2, Pledge: 90, Safebuf: 2, Yaw: -1, Dir: 1, perDay: 2, base: 14, lvl: 2},
 }
 
 func main() {
@@ -143,9 +154,46 @@ func goalJSON(g demoGoal, now time.Time, withData bool) map[string]any {
 		"dueby":     dueby(g, startOfToday),
 	}
 	if withData {
+		// The progress chart (buzz review) needs the goal's history, start date,
+		// cumulative flag, and bright red line. These ride on the single-goal
+		// detail response, mirroring the real API.
+		initday := startOfToday.AddDate(0, 0, -chartWindowDays)
 		out["datapoints"] = datapoints(g, now)
+		out["kyoom"] = g.kyoom
+		out["initday"] = initday.Unix()
+		out["roadall"] = roadall(g, initday, startOfToday)
 	}
 	return out
+}
+
+// roadall builds a two-row bright red line running from the goal's start to a
+// week past today. Row 0 anchors the road (t, v set); row 1 is the second
+// segment endpoint, matching Beeminder's roadall encoding where a non-anchor row
+// sets exactly one of value/rate.
+//
+// Cumulative goals anchor at 0 and rise at the goal's rate, so the summed
+// datapoint staircase climbs alongside the line. Non-cumulative goals use a
+// gentle value-to-value line in a positive band around their typical daily level
+// (rather than the headline rate, which over a two-week window would send the
+// line far off-scale and leave the plot mostly empty), so the datapoints and the
+// line stay visible together.
+func roadall(g demoGoal, initday, startOfToday time.Time) [][]any {
+	end := startOfToday.AddDate(0, 0, 7)
+	if g.kyoom {
+		return [][]any{
+			{float64(initday.Unix()), 0.0, nil},
+			{float64(end.Unix()), nil, g.Rate},
+		}
+	}
+	startV := float64(g.lvl)
+	endV := startV * 0.6
+	if endV < 1 {
+		endV = 1
+	}
+	return [][]any{
+		{float64(initday.Unix()), startV, nil},
+		{float64(end.Unix()), endV, nil},
+	}
 }
 
 // dueby builds a seven-day forecast (today..+6) with running totals, formatted
@@ -168,16 +216,37 @@ func dueby(g demoGoal, startOfToday time.Time) map[string]any {
 	return out
 }
 
-// datapoints builds the three most recent days of entries.
+// datapoints builds a chartWindowDays-long daily history ending yesterday, so
+// the progress chart has shape. Cumulative goals get an uneven per-day stream
+// (with a couple of zero days) that the chart sums into a staircase; non-
+// cumulative goals get values oscillating around their typical daily level.
 func datapoints(g demoGoal, now time.Time) []map[string]any {
-	out := make([]map[string]any, 0, 3)
-	for i := 3; i >= 1; i-- {
-		day := now.AddDate(0, 0, -i)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	initday := startOfToday.AddDate(0, 0, -chartWindowDays)
+
+	// Day-to-day texture. The kyoom pattern's zeros produce flat segments in the
+	// cumulative staircase; the last day is non-zero so the latest value reads
+	// cleanly. The non-kyoom wave nudges values around the goal's level.
+	kyoomMult := []float64{1, 1, 0, 2, 1, 0, 1, 2, 1, 0, 1, 1, 2}
+	wave := []float64{0, 1, -1, 0, 1, -2, 1, 0, -1, 1, 0, 1, -1}
+
+	out := make([]map[string]any, 0, chartWindowDays-1)
+	for i := 1; i < chartWindowDays; i++ {
+		day := initday.AddDate(0, 0, i)
+		var value float64
+		if g.kyoom {
+			value = float64(g.perDay) * kyoomMult[(i-1)%len(kyoomMult)]
+		} else {
+			value = float64(g.lvl) + wave[(i-1)%len(wave)]
+			if value < 0 {
+				value = 0
+			}
+		}
 		out = append(out, map[string]any{
 			"id":        fmt.Sprintf("%s-%d", g.Slug, i),
 			"timestamp": day.Unix(),
 			"daystamp":  day.Format("20060102"),
-			"value":     float64(g.perDay),
+			"value":     value,
 			"comment":   "logged via buzz",
 		})
 	}

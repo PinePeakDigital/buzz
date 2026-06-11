@@ -9,7 +9,9 @@ Require buzz
 Set Shell bash
 Set FontSize 16
 Set Width 1100
-Set Height 720
+# Tall enough that `buzz review`'s goal details + progress chart fit on screen
+# without the chart (rendered at the bottom) being clipped in the alt-screen TUI.
+Set Height 1000
 Set Padding 20
 Set Theme "Dracula"
 
@@ -59,6 +61,23 @@ Sleep 700ms
 Type@60ms "buzz today"
 Enter
 Sleep 2.5s
+
+Type "clear"
+Enter
+Sleep 700ms
+
+# --- Interactive review with progress chart (TUI) ---
+# Walks goals one at a time, each with a progress chart of its datapoints
+# (blue) against the bright red line (red). Goals are ordered alphabetically,
+# so this opens on `inbox`; pressing Right advances to `meditate`, a cumulative
+# goal whose chart is a rising staircase.
+Type@60ms "buzz review"
+Enter
+Sleep 3.5s
+Right
+Sleep 3s
+Type "q"
+Sleep 1s
 
 Type "clear"
 Enter
