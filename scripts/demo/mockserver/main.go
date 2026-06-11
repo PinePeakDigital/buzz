@@ -226,10 +226,14 @@ func datapoints(g demoGoal, now time.Time) []map[string]any {
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	initday := startOfToday.AddDate(0, 0, -chartWindowDays)
 
-	// Day-to-day texture. The kyoom pattern's zeros produce flat segments in the
-	// cumulative staircase; the last day is non-zero so the latest value reads
-	// cleanly. The non-kyoom wave nudges values around the goal's level.
-	kyoomMult := []float64{1, 1, 0, 2, 1, 0, 1, 2, 1, 0, 1, 1, 2}
+	// Day-to-day texture. The cumulative goals are all Do More (yaw +1), where the
+	// safe side is *above* the bright red line (which rises at the goal's rate).
+	// Each day's multiplier averages above 1, and the running sum stays above the
+	// day index throughout, so the summed staircase rides above the road with a
+	// growing safety buffer — an on-track Do More goal — while the varied steps
+	// and a zero day keep the staircase shape. The non-kyoom wave nudges values
+	// around the goal's level.
+	kyoomMult := []float64{2, 1, 2, 1, 2, 0, 2, 1, 2, 1, 2, 1, 2}
 	wave := []float64{0, 1, -1, 0, 1, -2, 1, 0, -1, 1, 0, 1, -1}
 
 	out := make([]map[string]any, 0, chartWindowDays-1)
