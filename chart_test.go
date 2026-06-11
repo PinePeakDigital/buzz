@@ -580,25 +580,25 @@ func TestRenderGoalChartHonorsTminForStaleGoal(t *testing.T) {
 	}
 }
 
-func TestProcessCumulativeNoInWindowDatapointsReturnsNil(t *testing.T) {
-	// Invariant: when no datapoints fall inside the window, processCumulative
-	// returns nil even though earlier datapoints push the running total above
-	// zero — a lone carry-over anchor must never draw a dataless flat line.
+func TestProcessDatapointsCumulativeNoInWindowReturnsNil(t *testing.T) {
+	// Invariant: when no day falls inside the window, a cumulative goal yields nil
+	// even though earlier datapoints push the running total above zero — a lone
+	// carry-over anchor must never draw a dataless flat line.
 	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 30)
 	goal := Goal{
 		Kyoom: true,
 		Datapoints: []Datapoint{
-			{Timestamp: start.AddDate(0, 0, -10).Unix(), Value: 5.0},
-			{Timestamp: start.AddDate(0, 0, -5).Unix(), Value: 7.0},
+			{Timestamp: start.AddDate(0, 0, -10).Unix(), Daystamp: "20240522", Value: 5.0},
+			{Timestamp: start.AddDate(0, 0, -5).Unix(), Daystamp: "20240527", Value: 7.0},
 		},
 	}
-	if got := processCumulative(goal, start, end); got != nil {
+	if got := processDatapoints(goal, start, end); got != nil {
 		t.Errorf("expected nil when no datapoints fall in the window, got %v", got)
 	}
 }
 
-func TestProcessCumulativeValues(t *testing.T) {
+func TestProcessDatapointsCumulativeValues(t *testing.T) {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 2)
 
@@ -613,24 +613,24 @@ func TestProcessCumulativeValues(t *testing.T) {
 		}
 	}
 
-	// Two datapoints inside the window, nothing before it: the anchor carries 0,
-	// then the running total reaches 5, then 8.
-	check("in-window", processCumulative(Goal{
+	// Two datapoints inside the window (one per day), nothing before it: the
+	// anchor carries 0, then the running total reaches 5, then 8.
+	check("in-window", processDatapoints(Goal{
 		Kyoom: true,
 		Datapoints: []Datapoint{
-			{Timestamp: start.Unix(), Value: 5},
-			{Timestamp: start.AddDate(0, 0, 1).Unix(), Value: 3},
+			{Timestamp: start.Unix(), Daystamp: "20240101", Value: 5},
+			{Timestamp: start.AddDate(0, 0, 1).Unix(), Daystamp: "20240102", Value: 3},
 		},
 	}, start, end), []float64{0, 5, 8})
 
 	// A datapoint before the window feeds the carry-over anchor (10) but isn't
 	// itself plotted; in-window points continue the running total: 15, then 18.
-	check("carry-over", processCumulative(Goal{
+	check("carry-over", processDatapoints(Goal{
 		Kyoom: true,
 		Datapoints: []Datapoint{
-			{Timestamp: start.AddDate(0, 0, -1).Unix(), Value: 10},
-			{Timestamp: start.Unix(), Value: 5},
-			{Timestamp: start.AddDate(0, 0, 1).Unix(), Value: 3},
+			{Timestamp: start.AddDate(0, 0, -1).Unix(), Daystamp: "20231231", Value: 10},
+			{Timestamp: start.Unix(), Daystamp: "20240101", Value: 5},
+			{Timestamp: start.AddDate(0, 0, 1).Unix(), Daystamp: "20240102", Value: 3},
 		},
 	}, start, end), []float64{10, 15, 18})
 }
@@ -639,25 +639,76 @@ func TestProcessDatapointsNonCumulative(t *testing.T) {
 	start := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 5)
 
-	// Non-cumulative goal: only in-window points, sorted ascending, raw values.
+	// Non-cumulative goal: only in-window days, ascending, the day's aggregate
+	// (default aggday "last" → the single value).
 	goal := Goal{
 		Datapoints: []Datapoint{
-			{Timestamp: start.AddDate(0, 0, 3).Unix(), Value: 30},  // in window, later
-			{Timestamp: start.AddDate(0, 0, -2).Unix(), Value: 99}, // before window → excluded
-			{Timestamp: start.AddDate(0, 0, 1).Unix(), Value: 10},  // in window, earlier
-			{Timestamp: end.AddDate(0, 0, 2).Unix(), Value: 88},    // after window → excluded
+			{Timestamp: start.AddDate(0, 0, 3).Unix(), Daystamp: "20240113", Value: 30},  // in window, later
+			{Timestamp: start.AddDate(0, 0, -2).Unix(), Daystamp: "20240108", Value: 99}, // before window → excluded
+			{Timestamp: start.AddDate(0, 0, 1).Unix(), Daystamp: "20240111", Value: 10},  // in window, earlier
+			{Timestamp: end.AddDate(0, 0, 2).Unix(), Daystamp: "20240117", Value: 88},    // after window → excluded
 		},
 	}
 
 	got := processDatapoints(goal, start, end)
 	if len(got) != 2 {
-		t.Fatalf("expected 2 in-window datapoints, got %d", len(got))
+		t.Fatalf("expected 2 in-window days, got %d", len(got))
 	}
 	if got[0].timestamp >= got[1].timestamp {
-		t.Error("expected datapoints sorted ascending by timestamp")
+		t.Error("expected days sorted ascending by time")
 	}
 	if got[0].value != 10 || got[1].value != 30 {
-		t.Errorf("expected raw (un-summed) values [10 30], got [%v %v]", got[0].value, got[1].value)
+		t.Errorf("expected per-day (un-summed) values [10 30], got [%v %v]", got[0].value, got[1].value)
+	}
+}
+
+func TestProcessDatapointsAggregatesSameDay(t *testing.T) {
+	// The crux of the aggday work: multiple datapoints on one day collapse to a
+	// single plotted point per day, using the goal's aggday.
+	start := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 3)
+	noon := func(d int) int64 {
+		return time.Date(2024, 3, 1+d, 12, 0, 0, 0, time.UTC).Unix()
+	}
+
+	// A cumulative goal whose default aggday is "sum": two same-day points sum
+	// within the day, then accumulate across days.
+	kyoom := processDatapoints(Goal{
+		Kyoom: true,
+		Datapoints: []Datapoint{
+			{Timestamp: noon(0), Daystamp: "20240301", Value: 1},
+			{Timestamp: noon(0) + 60, Daystamp: "20240301", Value: 2}, // same day → sums to 3
+			{Timestamp: noon(1), Daystamp: "20240302", Value: 4},      // running 3 → 7
+		},
+	}, start, end)
+	// anchor 0, day1 cumulative 3, day2 cumulative 7
+	wantK := []float64{0, 3, 7}
+	if len(kyoom) != len(wantK) {
+		t.Fatalf("kyoom: got %d points, want %d (%v)", len(kyoom), len(wantK), kyoom)
+	}
+	for i, w := range wantK {
+		if kyoom[i].value != w {
+			t.Errorf("kyoom value[%d] = %v, want %v", i, kyoom[i].value, w)
+		}
+	}
+	// Both day-1 points must collapse to one column (the day boundary), not two.
+	if kyoom[1].timestamp != kyoom[0].timestamp {
+		// anchor and day1 both sit at the window start (2024-03-01).
+		t.Errorf("expected the day-1 point at the window-start day boundary, got %d vs anchor %d", kyoom[1].timestamp, kyoom[0].timestamp)
+	}
+
+	// A non-cumulative goal with an explicit aggday="max": the day's value is the
+	// largest datapoint, with no accumulation.
+	maxGoal := processDatapoints(Goal{
+		Aggday: "max",
+		Datapoints: []Datapoint{
+			{Timestamp: noon(0), Daystamp: "20240301", Value: 1},
+			{Timestamp: noon(0) + 60, Daystamp: "20240301", Value: 9},
+			{Timestamp: noon(0) + 120, Daystamp: "20240301", Value: 4},
+		},
+	}, start, end)
+	if len(maxGoal) != 1 || maxGoal[0].value != 9 {
+		t.Errorf("aggday=max: want a single day valued 9, got %v", maxGoal)
 	}
 }
 
