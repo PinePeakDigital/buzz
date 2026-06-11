@@ -50,7 +50,7 @@ func renderGoalChart(goal Goal, width int) string {
 	}
 
 	roadValues := getRoadValuesForTimeframe(goal, startTime, endTime, chartWidth)
-	datapointValues := datapointSeries(processed, startTime, endTime, chartWidth)
+	datapointValues := datapointSeries(processed, startTime, endTime, chartWidth, goal.Kyoom)
 
 	var chart strings.Builder
 	chart.WriteString("\n")
@@ -268,10 +268,17 @@ func processCumulative(goal Goal, startTime, endTime time.Time) []timedValue {
 
 // datapointSeries maps processed datapoints onto chartWidth evenly-spaced
 // columns and fills the gaps: each datapoint lands in the column matching its
-// position in the timeframe, columns before the first / after the last hold
-// that endpoint's value, and interior gaps are linearly interpolated so the
-// plotted line is continuous.
-func datapointSeries(processed []timedValue, startTime, endTime time.Time, chartWidth int) []float64 {
+// position in the timeframe, and columns before the first / after the last hold
+// that endpoint's value.
+//
+// Interior gaps are filled according to the goal type. A cumulative (kyoom)
+// goal's running total only changes when data is logged, so its line is a step
+// function — flat between datapoints, jumping at each one — matching Beeminder's
+// staircase. Interpolating it linearly would draw a misleading diagonal ramp
+// across the gap (e.g. between a value-0 anchor and a same-day value-1 point).
+// Non-cumulative goals connect the dots linearly, matching Beeminder's data line
+// for rate/value goals.
+func datapointSeries(processed []timedValue, startTime, endTime time.Time, chartWidth int, cumulative bool) []float64 {
 	values := make([]float64, chartWidth)
 	hasDatapoint := make([]bool, chartWidth)
 	duration := endTime.Sub(startTime).Seconds()
@@ -323,8 +330,13 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 			startVal := values[prevDP]
 			endVal := values[i]
 			for j := prevDP + 1; j < i; j++ {
-				ratio := float64(j-prevDP) / float64(i-prevDP)
-				values[j] = startVal + ratio*(endVal-startVal)
+				if cumulative {
+					// Step: hold the previous total; the jump lands at column i.
+					values[j] = startVal
+				} else {
+					ratio := float64(j-prevDP) / float64(i-prevDP)
+					values[j] = startVal + ratio*(endVal-startVal)
+				}
 			}
 		}
 		prevDP = i
