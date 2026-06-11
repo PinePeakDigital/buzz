@@ -188,8 +188,9 @@ func roadall(g demoGoal, initday, startOfToday time.Time) [][]any {
 			{float64(end.Unix()), nil, g.Rate},
 		}
 	}
-	// Flat cap above the data. Datapoints range over lvl±2 (see datapoints), so a
-	// cap at lvl+3 keeps the line clear of the highest point with visible headroom.
+	// Flat cap above the data. Datapoints peak around lvl+1 (see datapoints'
+	// wave, which spans lvl-2..lvl+1), so a cap at lvl+3 keeps the line clear of
+	// the highest point with visible headroom.
 	capLine := float64(g.lvl) + 3
 	return [][]any{
 		{float64(initday.Unix()), capLine, nil},
