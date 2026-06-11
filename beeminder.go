@@ -29,6 +29,7 @@ type Goal struct {
 	Yaw         int                   `json:"yaw"`        // Good side of the bright red line (+1 = above, -1 = below)
 	Dir         int                   `json:"dir"`        // Direction the bright red line is sloping (+1 = up, -1 = down)
 	Kyoom       bool                  `json:"kyoom"`      // Whether the goal is cumulative (datapoints auto-sum into a running total)
+	Aggday      string                `json:"aggday"`     // How same-day datapoints combine into one daily value (sum, last, min, max, …); "" means Beeminder's default (sum for kyoom, last otherwise)
 	Tmin        string                `json:"tmin"`       // User-set earliest date shown on the goal's graph (YYYY-MM-DD); null/"" unless explicitly set
 	Tmax        string                `json:"tmax"`       // User-set latest date shown on the goal's graph (YYYY-MM-DD); null/"" unless set and still in the future (Beeminder nulls it once past)
 	Initday     int64                 `json:"initday"`    // Goal start: Unix timestamp (seconds) of the date the bright red line begins. Used as the default chart start so the whole goal is shown.

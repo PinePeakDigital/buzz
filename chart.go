@@ -202,68 +202,140 @@ type timedValue struct {
 // processDatapoints reduces a goal's datapoints to the series to plot within
 // [startTime, endTime], sorted by time.
 //
-// For cumulative (kyoom) goals the plotted value is the running total, so the
-// sum is accumulated across ALL datapoints (including those before the window)
-// and a synthetic anchor is prepended at startTime carrying the total reached
-// just before the window — otherwise the in-window line would start from zero
-// instead of where the goal actually stood.
+// Datapoints are first aggregated per calendar day using the goal's aggday
+// method (see aggregateDay), producing one value per day positioned at that
+// day's boundary — matching Beeminder, which plots one aggregated point per day
+// rather than one per datapoint. This is why two datapoints on the same day
+// share a column (e.g. a same-day "0 then 1" reads as a single riser at the
+// start of the day, not a within-day ramp).
+//
+// For cumulative (kyoom) goals the plotted value is then the running total of
+// the daily aggregates, accumulated across ALL days (including those before the
+// window); a synthetic anchor is prepended at startTime carrying the total
+// reached just before the window, so the in-window line begins where the goal
+// actually stood rather than at zero. It returns nil when no day falls inside
+// the window (so a pure carry-over never draws a dataless line).
+//
+// For non-cumulative goals each in-window day's aggregate is plotted directly.
 func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
-	if goal.Kyoom {
-		return processCumulative(goal, startTime, endTime)
-	}
+	loc := startTime.Location()
 
-	var processed []timedValue
+	// Drop datapoints after the window end (including future-dated ones) before
+	// bucketing. This matches Beeminder — which filters data to "now" (asof)
+	// before aggregating — and stops a day's aggregate from absorbing same-day
+	// points logged after endTime when the window ends mid-day.
+	endUnix := endTime.Unix()
+	inRange := make([]Datapoint, 0, len(goal.Datapoints))
 	for _, dp := range goal.Datapoints {
-		dpTime := time.Unix(dp.Timestamp, 0)
-		if !dpTime.Before(startTime) && !dpTime.After(endTime) {
-			processed = append(processed, timedValue{timestamp: dp.Timestamp, value: dp.Value})
+		if dp.Timestamp <= endUnix {
+			inRange = append(inRange, dp)
 		}
 	}
-	sort.Slice(processed, func(i, j int) bool {
-		return processed[i].timestamp < processed[j].timestamp
-	})
+
+	days := bucketByDay(inRange, loc)
+	if len(days) == 0 {
+		return nil
+	}
+	aggday := resolveAggday(goal)
+
+	// Days are compared against the start of startTime's calendar day, not the
+	// startTime instant itself: when the window begins mid-day (e.g. a stale
+	// goal whose window starts at its last datapoint's timestamp), that day's
+	// midnight-anchored aggregate would otherwise fall just before the window
+	// and be dropped.
+	startDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, loc)
+
+	var processed []timedValue
+	running := 0.0 // cumulative total of daily aggregates (kyoom only)
+	carry := 0.0   // running total reached just before the window (kyoom only)
+	inWindow := false
+
+	for _, d := range days {
+		if d.day.After(endTime) {
+			continue // future day: not plotted, and doesn't affect the in-window line
+		}
+		ad := aggregateDay(goal, aggday, d.values)
+		switch {
+		case goal.Kyoom:
+			running += ad
+			if d.day.Before(startDay) {
+				carry = running
+			} else {
+				processed = append(processed, timedValue{timestamp: d.day.Unix(), value: running})
+				inWindow = true
+			}
+		case !d.day.Before(startDay):
+			processed = append(processed, timedValue{timestamp: d.day.Unix(), value: ad})
+			inWindow = true
+		}
+	}
+
+	if !inWindow {
+		return nil
+	}
+	if goal.Kyoom {
+		// Anchor at the start of the window's day (not the raw startTime instant),
+		// so it sorts at-or-before every day point — which sit at local midnight.
+		// A mid-day startTime would otherwise place the anchor after the first
+		// day point, breaking datapointSeries' ascending-order assumption.
+		processed = append([]timedValue{{timestamp: startDay.Unix(), value: carry}}, processed...)
+	}
 	return processed
 }
 
-// processCumulative builds the in-window plot series for a cumulative (kyoom)
-// goal: it sums every datapoint in chronological order so each in-window point
-// carries the running total, prepends a synthetic anchor at the window start
-// holding the total reached just before it, and returns nil when no datapoints
-// fall inside the window (so a pure carry-over never draws a dataless line).
-func processCumulative(goal Goal, startTime, endTime time.Time) []timedValue {
-	sorted := make([]Datapoint, len(goal.Datapoints))
-	copy(sorted, goal.Datapoints)
-	sort.Slice(sorted, func(i, j int) bool {
+// dayBucket is one calendar day's worth of datapoint values, in ascending
+// timestamp order, tagged with the day's start instant (local midnight).
+type dayBucket struct {
+	day    time.Time
+	values []float64
+}
+
+// bucketByDay groups datapoints into calendar days, ascending. Each day's
+// values stay in datapoint (ascending-timestamp) order so order-sensitive
+// aggdays (first/last) pick the right ends.
+//
+// The day is taken from the datapoint's Beeminder daystamp when present (it
+// already accounts for the goal's deadline), otherwise from the timestamp. Both
+// are resolved in loc — the same zone the chart window uses — so day boundaries
+// line up with the window and x-axis.
+func bucketByDay(datapoints []Datapoint, loc *time.Location) []dayBucket {
+	sorted := append([]Datapoint(nil), datapoints...)
+	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].Timestamp < sorted[j].Timestamp
 	})
 
-	sum := 0.0
-	startSum := 0.0
-	var processed []timedValue
+	index := make(map[string]int)
+	var buckets []dayBucket
 	for _, dp := range sorted {
-		dpTime := time.Unix(dp.Timestamp, 0)
-		switch {
-		case dpTime.Before(startTime):
-			sum += dp.Value
-			startSum = sum
-		case !dpTime.After(endTime):
-			sum += dp.Value
-			processed = append(processed, timedValue{timestamp: dp.Timestamp, value: sum})
+		day := dayStart(dp, loc)
+		key := day.Format("2006-01-02")
+		if i, ok := index[key]; ok {
+			buckets[i].values = append(buckets[i].values, dp.Value)
+		} else {
+			index[key] = len(buckets)
+			buckets = append(buckets, dayBucket{day: day, values: []float64{dp.Value}})
 		}
-		// Datapoints after endTime are ignored.
 	}
 
-	// No datapoints inside the window means nothing to chart — even if earlier
-	// datapoints pushed the running total above zero. (renderGoalChart's
-	// contract is to return empty when none fall inside the window; a lone
-	// carry-over anchor would otherwise draw a flat, dataless line.)
-	if len(processed) == 0 {
-		return nil
-	}
+	// Buckets are first-seen in ascending-timestamp order, which is already
+	// ascending-day order; sort defensively in case daystamps and timestamps
+	// disagree near a boundary.
+	sort.SliceStable(buckets, func(i, j int) bool {
+		return buckets[i].day.Before(buckets[j].day)
+	})
+	return buckets
+}
 
-	// Prepend an anchor at the window start carrying the running total so far,
-	// so the line begins where the goal actually stood rather than at zero.
-	return append([]timedValue{{timestamp: startTime.Unix(), value: startSum}}, processed...)
+// dayStart returns the local-midnight instant of the datapoint's day, preferring
+// its daystamp (YYYYMMDD) and falling back to its timestamp.
+func dayStart(dp Datapoint, loc *time.Location) time.Time {
+	if len(dp.Daystamp) == 8 {
+		if t, err := time.ParseInLocation("20060102", dp.Daystamp, loc); err == nil {
+			return t
+		}
+	}
+	t := time.Unix(dp.Timestamp, 0).In(loc)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
 }
 
 // datapointSeries maps processed datapoints onto chartWidth evenly-spaced
