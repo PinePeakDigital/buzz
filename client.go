@@ -126,41 +126,45 @@ func (e *apiStatusError) Error() string {
 	return fmt.Sprintf("API returned status %d", e.status)
 }
 
-// execute runs an authenticated request and returns the response body on a 200
-// OK. It centralises the read-body + status-check that every typed method
-// shared: a transport failure is wrapped with failMsg, and a non-200 becomes an
-// *apiStatusError carrying the code (and body, when present). URL construction
-// stays in the calling method — it is the one genuinely per-endpoint piece, and
-// keeping the exact request strings (auth-token placement, query params, slug
-// escaping) means this helper changes no request actually sent to Beeminder.
-func (c *HTTPClient) execute(ctx context.Context, method, url, failMsg string, body io.Reader, contentType string) ([]byte, error) {
+// send runs an authenticated request and, on a 200 OK, returns the live
+// response for the caller to stream — the caller owns resp.Body and must close
+// it. It centralises the status-check that every typed method shared: a
+// transport failure is wrapped with failMsg, and a non-200 becomes an
+// *apiStatusError carrying the code and (best-effort) the response body, after
+// which send closes the body itself. Returning the un-read 200 body lets
+// callers decode straight from the stream rather than buffering large payloads
+// (e.g. goal details with datapoints) in memory.
+//
+// URL construction stays in the calling method — it is the one genuinely
+// per-endpoint piece, and keeping the exact request strings (auth-token
+// placement, query params, slug escaping) means this helper changes no request
+// actually sent to Beeminder.
+func (c *HTTPClient) send(ctx context.Context, method, url, failMsg string, body io.Reader, contentType string) (*http.Response, error) {
 	resp, err := c.doRequest(ctx, method, url, body, contentType)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", failMsg, err)
 	}
-	defer resp.Body.Close()
-
-	respBody, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", readErr)
-	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, &apiStatusError{status: resp.StatusCode, body: strings.TrimSpace(string(respBody))}
+		defer resp.Body.Close()
+		errBody, _ := io.ReadAll(resp.Body)
+		return nil, &apiStatusError{status: resp.StatusCode, body: strings.TrimSpace(string(errBody))}
 	}
-	return respBody, nil
+	return resp, nil
 }
 
-// doJSON is execute plus a JSON decode of the success body into T. Go methods
-// can't take type parameters, so this is a package-level function taking the
-// client; most Client methods are a single call to it.
+// doJSON is send plus a streaming JSON decode of the success body into T. Go
+// methods can't take type parameters, so this is a package-level function
+// taking the client; most Client methods are a single call to it. failMsg
+// attributes both transport and decode failures to the calling endpoint.
 func doJSON[T any](ctx context.Context, c *HTTPClient, method, url, failMsg string, body io.Reader, contentType string) (T, error) {
 	var out T
-	respBody, err := c.execute(ctx, method, url, failMsg, body, contentType)
+	resp, err := c.send(ctx, method, url, failMsg, body, contentType)
 	if err != nil {
 		return out, err
 	}
-	if err := json.Unmarshal(respBody, &out); err != nil {
-		return out, fmt.Errorf("failed to decode response: %w", err)
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return out, fmt.Errorf("%s: failed to decode response: %w", failMsg, err)
 	}
 	return out, nil
 }
@@ -435,7 +439,7 @@ func (c *HTTPClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, incl
 		apiURL += "&datapoints=true"
 	}
 
-	body, err := c.execute(ctx, http.MethodGet, apiURL, "failed to fetch goal", nil, "")
+	resp, err := c.send(ctx, http.MethodGet, apiURL, "failed to fetch goal", nil, "")
 	if err != nil {
 		var se *apiStatusError
 		if errors.As(err, &se) && se.status == http.StatusNotFound {
@@ -443,7 +447,13 @@ func (c *HTTPClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, incl
 		}
 		return nil, err
 	}
-	return json.RawMessage(body), nil
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch goal: failed to read response: %w", err)
+	}
+	return json.RawMessage(raw), nil
 }
 
 // CreateGoal creates a new goal for the user.
