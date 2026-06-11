@@ -5,160 +5,177 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// printAddUsageAndExit prints the usage for buzz add command and exits with code 1
-func printAddUsageAndExit(errorMsg string) {
-	fmt.Println("Error: " + errorMsg)
-	fmt.Println("Usage: buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]")
-	fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
-	fmt.Println("")
-	fmt.Println("Note: Flags must come BEFORE positional arguments.")
-	fmt.Println("      Example: buzz add --daystamp=20240115 goalslug value comment")
-	fmt.Println("      The --daystamp flag accepts dates in YYYYMMDD format.")
-	os.Exit(1)
+const addUsage = `Usage: buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]
+       echo "<value>" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]
+
+Note: Flags must come BEFORE positional arguments.
+      Example: buzz add --daystamp=20240115 goalslug value comment
+      The --daystamp flag accepts dates in YYYYMMDD format.`
+
+// addRequest is a fully-parsed, validated `buzz add` invocation, ready to send.
+type addRequest struct {
+	goalSlug  string
+	value     string // already converted to a decimal-hours string when a time
+	comment   string
+	daystamp  string // YYYYMMDD, or "" to use the current timestamp
+	requestid string
 }
 
-// handleAddCommand adds a datapoint to a goal without opening the TUI
+// handleAddCommand adds a datapoint to a goal without opening the TUI.
 func handleAddCommand() {
-	// Parse flags for the add command
+	req, code, done := parseAddArgs(os.Args[2:], readValueFromStdin, os.Stdout, os.Stderr)
+	if done {
+		os.Exit(code)
+	}
+
+	client, ok := loadClient(os.Stderr)
+	if !ok {
+		os.Exit(1)
+	}
+
+	code = runAddCommand(req, client, os.Stdout, os.Stderr)
+	if code == 0 {
+		fmt.Print(getUpdateMessage())
+	}
+	os.Exit(code)
+}
+
+// parseAddArgs parses and validates `buzz add` arguments, returning the resolved
+// request, a process exit code, and done=true when the caller should stop (help
+// shown, or a parse/validation error). readStdin is called lazily to read a
+// piped value only once the positional args warrant it, so `--help` and bad
+// input are reported without consuming stdin or requiring authentication.
+func parseAddArgs(args []string, readStdin func() (string, error), stdout, stderr io.Writer) (addRequest, int, bool) {
 	addFlags := flag.NewFlagSet("add", flag.ContinueOnError)
+	// Silence the flag package's own output; we print our own richer usage on
+	// both --help and parse errors.
+	addFlags.SetOutput(io.Discard)
 	requestid := addFlags.String("requestid", "", "Request ID for idempotency")
 	daystamp := addFlags.String("daystamp", "", "Date for the datapoint in YYYYMMDD format")
-	if err := addFlags.Parse(os.Args[2:]); err != nil {
+	if err := addFlags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Println("Usage: buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> <value> [comment]")
-			fmt.Println("       echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
-			fmt.Println("")
-			fmt.Println("Note: Flags must come BEFORE positional arguments.")
-			fmt.Println("      The --daystamp flag accepts dates in YYYYMMDD format.")
-			return
+			fmt.Fprintln(stdout, addUsage)
+			return addRequest{}, 0, true
 		}
-		fmt.Fprintf(os.Stderr, "Error parsing flags: %s\n", redactError(err))
-		printAddUsageAndExit("Invalid flags")
+		fmt.Fprintf(stderr, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(stderr, addUsage)
+		return addRequest{}, 1, true
 	}
 
-	// Get remaining positional arguments after flag parsing
-	args := addFlags.Args()
+	positional := addFlags.Args()
 
-	// Detect if known flags appear after positional arguments and warn the user
-	if misplacedFlag := detectMisplacedFlag(args); misplacedFlag != "" {
-		fmt.Fprintf(os.Stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", misplacedFlag)
-		fmt.Fprintf(os.Stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
-		fmt.Fprintf(os.Stderr, "Correct usage: buzz add [--requestid=ID] [--daystamp=DATE] goalslug value comment\n")
-		fmt.Fprintln(os.Stderr, "")
+	// Detect if known flags appear after positional arguments and warn the user.
+	if misplacedFlag := detectMisplacedFlag(positional); misplacedFlag != "" {
+		fmt.Fprintf(stderr, "Warning: Flag '%s' appears after positional arguments and will be treated as part of the comment.\n", misplacedFlag)
+		fmt.Fprintf(stderr, "Flags must come BEFORE positional arguments to be recognized.\n")
+		fmt.Fprintf(stderr, "Correct usage: buzz add [--requestid=ID] [--daystamp=DATE] goalslug value comment\n")
+		fmt.Fprintln(stderr, "")
 	}
 
-	// Check arguments: buzz add <goalslug> <value> [comment]
-	// Value can also be piped via stdin: echo "123" | buzz add mygoal [comment]
-	if len(args) < 1 {
-		printAddUsageAndExit("Missing required arguments")
+	if len(positional) < 1 {
+		fmt.Fprintln(stderr, "Error: Missing required arguments")
+		fmt.Fprintln(stderr, addUsage)
+		return addRequest{}, 1, true
 	}
 
-	goalSlug := args[0]
+	goalSlug := positional[0]
 	var value string
-	var commentStartIndex int // Index where optional comment starts in args
+	var commentStartIndex int // index where the optional comment starts
 
-	// Try to read value from stdin first (for piped input)
-	stdinValue, err := readValueFromStdin()
+	// Try to read a value from stdin first (for piped input).
+	stdinValue, err := readStdin()
 	if err == nil && stdinValue != "" {
 		// Reject the ambiguous case where a value is piped AND a positional
-		// value is supplied — the previous behaviour silently took stdin and
-		// reinterpreted the positional as part of the comment, which could
-		// submit a different datapoint than the user intended for a write
-		// operation like `buzz add`.
-		if len(args) >= 2 {
-			printAddUsageAndExit("Provide value either via stdin or as a positional argument, not both")
+		// value is supplied — silently taking stdin could submit a different
+		// datapoint than the user intended for a write operation.
+		if len(positional) >= 2 {
+			fmt.Fprintln(stderr, "Error: Provide value either via stdin or as a positional argument, not both")
+			fmt.Fprintln(stderr, addUsage)
+			return addRequest{}, 1, true
 		}
-		// Value provided via stdin
 		value = stdinValue
-		commentStartIndex = 1 // Comment starts at index 1 when value is piped
-	} else if len(args) >= 2 {
-		// Value provided as argument
-		value = args[1]
-		commentStartIndex = 2 // Comment starts at index 2
+		commentStartIndex = 1
+	} else if len(positional) >= 2 {
+		value = positional[1]
+		commentStartIndex = 2
 	} else {
-		printAddUsageAndExit("Missing required value argument")
+		fmt.Fprintln(stderr, "Error: Missing required value argument")
+		fmt.Fprintln(stderr, addUsage)
+		return addRequest{}, 1, true
 	}
 
-	// Optional comment - default to "Added via buzz" if not provided
+	// Optional comment — default when not provided.
 	comment := "Added via buzz"
-	if len(args) >= commentStartIndex+1 {
-		comment = strings.Join(args[commentStartIndex:], " ")
+	if len(positional) >= commentStartIndex+1 {
+		comment = strings.Join(positional[commentStartIndex:], " ")
 	}
 
-	// Load config
-	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz auth login' to authenticate.")
-		os.Exit(1)
-	}
-
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
-
-	// Parse and validate daystamp if provided
+	// Validate the daystamp format (YYYYMMDD) if provided.
 	var daystampForAPI string
 	if *daystamp != "" {
-		// Validate date format (YYYYMMDD)
-		_, err := time.Parse("20060102", *daystamp)
-		if err != nil {
-			fmt.Printf("Error: Invalid date format for --daystamp: %s (expected YYYYMMDD)\n", *daystamp)
-			os.Exit(1)
+		if _, err := time.Parse("20060102", *daystamp); err != nil {
+			fmt.Fprintf(stderr, "Error: Invalid date format for --daystamp: %s (expected YYYYMMDD)\n", *daystamp)
+			return addRequest{}, 1, true
 		}
 		daystampForAPI = *daystamp
 	}
 
-	// Use current time as timestamp (only used if daystamp is not provided)
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-
-	// Convert time format to decimal hours if needed
+	// Convert a time-format value (e.g. "1:30:00") to decimal hours.
 	if isTimeFormat(value) {
 		decimalValue, ok := timeToDecimalHours(value)
 		if !ok {
-			fmt.Printf("Error: Invalid time format: %s\n", value)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error: Invalid time format: %s\n", value)
+			return addRequest{}, 1, true
 		}
 		value = fmt.Sprintf("%.6g", decimalValue)
 	}
 
-	// Validate value is a number
+	// Validate the value is a number.
 	if _, err := strconv.ParseFloat(value, 64); err != nil {
-		fmt.Printf("Error: Value must be a valid number, got: %s\n", value)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error: Value must be a valid number, got: %s\n", value)
+		return addRequest{}, 1, true
 	}
 
-	// Create the datapoint
-	_, err = client.CreateDatapointWithDaystamp(context.Background(), goalSlug, timestamp, daystampForAPI, value, comment, *requestid)
-	if err != nil {
-		fmt.Printf("Error: Failed to add datapoint: %s\n", redactError(err))
-		os.Exit(1)
+	return addRequest{
+		goalSlug:  goalSlug,
+		value:     value,
+		comment:   comment,
+		daystamp:  daystampForAPI,
+		requestid: *requestid,
+	}, 0, false
+}
+
+// runAddCommand submits the datapoint for an already-validated request and
+// returns the process exit code.
+func runAddCommand(req addRequest, client Client, stdout, stderr io.Writer) int {
+	// Use the current time as timestamp (only used when daystamp is empty).
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+	if _, err := client.CreateDatapointWithDaystamp(context.Background(), req.goalSlug, timestamp, req.daystamp, req.value, req.comment, req.requestid); err != nil {
+		fmt.Fprintf(stderr, "Error: Failed to add datapoint: %s\n", redactError(err))
+		return 1
 	}
 
-	successMsg := fmt.Sprintf("Successfully added datapoint to %s: value=%s, comment=\"%s\"", goalSlug, value, comment)
-	if *daystamp != "" {
-		successMsg += fmt.Sprintf(", daystamp=%s", *daystamp)
+	successMsg := fmt.Sprintf("Successfully added datapoint to %s: value=%s, comment=\"%s\"", req.goalSlug, req.value, req.comment)
+	if req.daystamp != "" {
+		successMsg += fmt.Sprintf(", daystamp=%s", req.daystamp)
 	}
-	if *requestid != "" {
-		successMsg += fmt.Sprintf(", requestid=\"%s\"", *requestid)
+	if req.requestid != "" {
+		successMsg += fmt.Sprintf(", requestid=\"%s\"", req.requestid)
 	}
-	fmt.Println(successMsg)
+	fmt.Fprintln(stdout, successMsg)
 
 	// Signal any running TUI instances to refresh so they pick up the new
-	// datapoint.
+	// datapoint. Don't fail the command if flag creation fails.
 	if err := createRefreshFlag(); err != nil {
-		// Don't fail the command if flag creation fails
-		fmt.Fprintf(os.Stderr, "Warning: Could not create refresh flag: %s\n", redactError(err))
+		fmt.Fprintf(stderr, "Warning: Could not create refresh flag: %s\n", redactError(err))
 	}
-
-	// Check for updates and display message if available
-	fmt.Print(getUpdateMessage())
+	return 0
 }
