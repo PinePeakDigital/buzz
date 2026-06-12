@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -712,6 +713,114 @@ func TestGoalByEndOfTomorrowAtPairsBareminAndLosedate(t *testing.T) {
 			t.Errorf("losedate = %d, want %d (unchanged, stays overdue)", view.losedate, overdue)
 		}
 	})
+}
+
+// TestGoalByEndOfTomorrowAtFlagsMalformedRoad pins #325: a goal whose roadall is
+// malformed is flagged (roadMalformed → a "(!) " prefix on the displayed baremin),
+// while a valid road and an absent road ("not populated", benign) are not. The
+// flag is independent of the due-today bump gate.
+func TestGoalByEndOfTomorrowAtFlagsMalformedRoad(t *testing.T) {
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	t0 := float64(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC).Unix())
+	t1 := float64(time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC).Unix())
+
+	malformedRoad := [][]*float64{
+		roadallRow(t0, fptr(0), nil),
+		roadallRow(t1, fptr(5), fptr(1)), // both value and rate set → malformed
+	}
+	validRoad := [][]*float64{
+		roadallRow(t0, fptr(0), nil),
+		roadallRow(t1, fptr(5), nil), // value row
+	}
+
+	t.Run("malformed road sets the flag and marks the baremin", func(t *testing.T) {
+		g := Goal{Baremin: "+1 today", Roadall: malformedRoad, Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if !view.roadMalformed {
+			t.Error("expected roadMalformed = true for a malformed roadall")
+		}
+		if got := view.markedBaremin(); got != "(!) +1" {
+			t.Errorf("markedBaremin = %q, want %q", got, "(!) +1")
+		}
+	})
+
+	t.Run("valid road is not flagged", func(t *testing.T) {
+		g := Goal{Baremin: "+1 today", Roadall: validRoad, Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.roadMalformed {
+			t.Error("expected roadMalformed = false for a valid roadall")
+		}
+		if got := view.markedBaremin(); got != "+1" {
+			t.Errorf("markedBaremin = %q, want %q (no marker)", got, "+1")
+		}
+	})
+
+	t.Run("absent road is benign, not flagged", func(t *testing.T) {
+		// No roadall at all → parseRoad returns (nil, nil): "not populated", not
+		// malformed. The issue explicitly keeps this distinct from the error case.
+		g := Goal{Baremin: "+1 today"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.roadMalformed {
+			t.Error("expected roadMalformed = false for an absent roadall")
+		}
+		if got := view.markedBaremin(); got != "+1" {
+			t.Errorf("markedBaremin = %q, want %q (no marker)", got, "+1")
+		}
+	})
+
+	t.Run("malformed road on a bumped (due-later-today) goal", func(t *testing.T) {
+		// The gate-independence case that matters most: a due-later-today goal is
+		// bumped, and the bump silently falls back to g.Rate because the road
+		// won't parse. The marker warns that the bumped figure is a fallback.
+		// (Pins the roadMalformed flag on the bumped return branch, which is a
+		// separate struct literal from the not-bumped one.)
+		todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix() // later today → bumped
+		g := Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: fptr(1), Runits: "d", Roadall: malformedRoad}
+		view := goalByEndOfTomorrowAt(g, now)
+		if !view.roadMalformed {
+			t.Error("expected roadMalformed = true on the bumped branch")
+		}
+		// Malformed road → slopePerDayAt falls back to g.Rate (1/day): +1 → +2.
+		if got := view.markedBaremin(); got != "(!) +2" {
+			t.Errorf("markedBaremin = %q, want %q (bumped via g.Rate fallback)", got, "(!) +2")
+		}
+	})
+}
+
+// TestTomorrowMalformedLegend keeps the footnote and the cell marker in sync:
+// the legend must reference the same "(!)" the marked baremin uses and name the
+// bright red line, so a user seeing "(!)" can connect it to its explanation.
+func TestTomorrowMalformedLegend(t *testing.T) {
+	marked := tomorrowView{roadMalformed: true, baremin: "+2"}.markedBaremin()
+	marker := strings.TrimSuffix(marked, "+2") // "(!) "
+	if strings.TrimSpace(marker) == "" {
+		t.Fatalf("expected a non-empty marker prefix, got %q", marked)
+	}
+	if !strings.Contains(tomorrowMalformedLegend, strings.TrimSpace(marker)) {
+		t.Errorf("legend %q should reference the marker %q", tomorrowMalformedLegend, strings.TrimSpace(marker))
+	}
+	if !strings.Contains(tomorrowMalformedLegend, "bright red line") {
+		t.Errorf("legend should name the bright red line, got %q", tomorrowMalformedLegend)
+	}
+}
+
+// TestTomorrowLegendGating pins the visibility rule the footnote ships: it
+// appears only when at least one displayed goal carries the "(!)" marker, and
+// is suppressed otherwise (so a clean tomorrow view stays uncluttered).
+func TestTomorrowLegendGating(t *testing.T) {
+	viewOf := func(g Goal) tomorrowView {
+		return tomorrowView{roadMalformed: g.Slug == "bad"}
+	}
+
+	if got := tomorrowLegend([]Goal{{Slug: "ok"}, {Slug: "bad"}}, viewOf); got != tomorrowMalformedLegend {
+		t.Errorf("expected the legend when a shown goal is flagged, got %q", got)
+	}
+	if got := tomorrowLegend([]Goal{{Slug: "ok"}, {Slug: "ok2"}}, viewOf); got != "" {
+		t.Errorf("expected no legend when no goal is flagged, got %q", got)
+	}
+	if got := tomorrowLegend(nil, viewOf); got != "" {
+		t.Errorf("expected no legend for an empty goal list, got %q", got)
+	}
 }
 
 // TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
