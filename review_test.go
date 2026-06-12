@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestSortGoalsBySlug(t *testing.T) {
@@ -1419,5 +1420,198 @@ func TestFormatGoalDetailsIncludesForecastBeforeDatapoints(t *testing.T) {
 	}
 	if fi > di {
 		t.Errorf("expected forecast (at %d) before recent datapoints (at %d):\n%s", fi, di, out)
+	}
+}
+
+// TestReviewModelShortTerminalScroll verifies that on a terminal too short to
+// fit a goal, the content is paged into a scrollable viewport (so the top stays
+// reachable) rather than overflowing the alt screen and scrolling off.
+func TestReviewModelShortTerminalScroll(t *testing.T) {
+	goals := []Goal{
+		{
+			Slug:     "tallgoal",
+			Title:    "A goal with enough detail to overflow a short terminal",
+			Safebuf:  5,
+			Pledge:   10.0,
+			Losedate: 1234567890,
+			Limsum:   "+1 in 2 days",
+		},
+	}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+
+	// Simulate a short terminal: full content is many lines, window is tiny.
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 6})
+	m = updated.(reviewModel)
+
+	if !m.ready {
+		t.Fatal("expected viewport to be ready after WindowSizeMsg")
+	}
+
+	// The goal's content must exceed the pane height — otherwise this test
+	// isn't exercising scrolling at all.
+	if m.viewport.TotalLineCount() <= m.viewport.Height {
+		t.Fatalf("expected content (%d lines) to overflow pane (%d rows)",
+			m.viewport.TotalLineCount(), m.viewport.Height)
+	}
+
+	// We start pinned at the top, with more below.
+	if !m.viewport.AtTop() {
+		t.Error("expected viewport to start at the top")
+	}
+	if m.viewport.AtBottom() {
+		t.Error("expected more content below the fold on a short terminal")
+	}
+
+	// Scrolling down reveals lower content and leaves the top.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(reviewModel)
+	if m.viewport.AtTop() {
+		t.Error("expected viewport to move off the top after scrolling down")
+	}
+
+	// The help bar advertises scroll keys and a position indicator.
+	help := m.helpView()
+	if !strings.Contains(help, "Scroll:") {
+		t.Errorf("expected help to mention scrolling, got: %s", help)
+	}
+	if !strings.Contains(help, "%") {
+		t.Errorf("expected help to show a scroll position, got: %s", help)
+	}
+}
+
+// TestReviewModelNavigationResetsScroll verifies that moving to another goal
+// jumps the scroll pane back to the top instead of stranding the user mid-goal.
+func TestReviewModelNavigationResetsScroll(t *testing.T) {
+	goals := []Goal{
+		{Slug: "goal1", Title: "First goal with plenty of detail to scroll", Limsum: "+1 in 2 days"},
+		{Slug: "goal2", Title: "Second goal with plenty of detail to scroll", Limsum: "+2 in 3 days"},
+	}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 6})
+	m = updated.(reviewModel)
+
+	// Scroll down within the first goal.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(reviewModel)
+	if m.viewport.AtTop() {
+		t.Fatal("precondition: expected to have scrolled off the top")
+	}
+
+	// Navigate to the next goal; the pane should reset to the top.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(reviewModel)
+	if m.current != 1 {
+		t.Fatalf("expected to advance to goal index 1, got %d", m.current)
+	}
+	if !m.viewport.AtTop() {
+		t.Error("expected scroll pane to reset to the top on goal navigation")
+	}
+}
+
+// TestReviewModelResizeReusesViewport verifies a later WindowSizeMsg resizes the
+// existing scroll pane (rather than recreating it) and re-flows its dimensions.
+func TestReviewModelResizeReusesViewport(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A goal to scroll", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 6})
+	m = updated.(reviewModel)
+	if !m.ready {
+		t.Fatal("expected viewport ready after first WindowSizeMsg")
+	}
+
+	// Grow the terminal; the pane should track the new size.
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	m = updated.(reviewModel)
+
+	if !m.ready {
+		t.Fatal("expected viewport to stay ready after resize")
+	}
+	if m.viewport.Width != 100 {
+		t.Errorf("expected viewport width 100 after resize, got %d", m.viewport.Width)
+	}
+	wantHeight := 20 - lipgloss.Height(m.helpView())
+	if m.viewport.Height != wantHeight {
+		t.Errorf("expected viewport height %d after resize, got %d", wantHeight, m.viewport.Height)
+	}
+}
+
+// TestReviewModelDetailsArrivalReflows verifies that when a goal's datapoints
+// arrive, the scroll pane re-flows to include the now-renderable chart/datapoints
+// instead of stranding the user on the pre-fetch content.
+func TestReviewModelDetailsArrivalReflows(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A goal", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(reviewModel)
+
+	before := m.viewport.TotalLineCount()
+
+	// Details (datapoints) arrive for the on-screen goal.
+	updated, _ = m.Update(goalDetailsMsg{
+		slug: "g",
+		goal: &Goal{
+			Slug:       "g",
+			Datapoints: []Datapoint{{Daystamp: "20260609", Value: 1, Comment: "first"}},
+		},
+	})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading to clear once details arrived")
+	}
+	after := m.viewport.TotalLineCount()
+	if after <= before {
+		t.Errorf("expected pane content to grow when datapoints arrive (before=%d, after=%d)", before, after)
+	}
+	if !strings.Contains(m.viewport.View()+m.contentView(), "first") {
+		t.Error("expected the newly-arrived datapoint comment to render in the pane")
+	}
+}
+
+// TestReviewModelDetailsErrorReflows verifies that a failed details fetch for the
+// on-screen goal surfaces its error in the pane (not just in model state).
+func TestReviewModelDetailsErrorReflows(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A goal", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(reviewModel)
+
+	updated, _ = m.Update(goalDetailsMsg{slug: "g", err: fmt.Errorf("boom")})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("expected loading to clear after a failed fetch")
+	}
+	if !strings.Contains(m.viewport.View(), "Failed to load goal details") {
+		t.Errorf("expected the fetch error to render in the scroll pane, got:\n%s", m.viewport.View())
+	}
+}
+
+// TestReviewModelNoScrollIndicatorWhenContentFits verifies the help bar omits the
+// scroll-position indicator when the goal fits the terminal (nothing to scroll).
+func TestReviewModelNoScrollIndicatorWhenContentFits(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A short goal", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+	// A very tall terminal: the goal content fits with room to spare.
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 200})
+	m = updated.(reviewModel)
+
+	if !m.viewport.AtTop() || !m.viewport.AtBottom() {
+		t.Fatal("precondition: expected content to fully fit the pane")
+	}
+	if strings.Contains(m.helpView(), "%") {
+		t.Errorf("expected no scroll indicator when content fits, got: %s", m.helpView())
 	}
 }

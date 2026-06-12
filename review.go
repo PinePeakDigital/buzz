@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -59,7 +60,7 @@ func handleReviewCommand() {
 	// Launch the interactive review TUI
 	model := initialReviewModel(goals, config)
 	model.ctx = ctx
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 		os.Exit(1)
@@ -74,10 +75,12 @@ type reviewModel struct {
 	loading  bool                // a detail fetch for the current goal is in flight
 	ctx      context.Context     // cancelled when the TUI exits; cancels in-flight fetches
 	config   *Config
-	current  int    // current goal index
-	width    int    // terminal width
-	height   int    // terminal height
-	err      string // error message to display
+	current  int            // current goal index
+	width    int            // terminal width
+	height   int            // terminal height
+	err      string         // error message to display
+	viewport viewport.Model // scrollable pane for the goal content (keeps tall goals reachable on short terminals)
+	ready    bool           // viewport has been sized by a WindowSizeMsg
 }
 
 // initialReviewModel creates a new review model. The first goal's details fetch
@@ -151,6 +154,20 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Reserve the bottom rows for the pinned help bar; the rest is the
+		// scrollable content pane so tall goals stay reachable on short
+		// terminals (the content used to overflow the alt screen and the top
+		// scrolled off with no way to reach it).
+		helpHeight := lipgloss.Height(m.helpView())
+		contentHeight := max(1, msg.Height-helpHeight)
+		if !m.ready {
+			m.viewport = viewport.New(msg.Width, contentHeight)
+			m.ready = true
+		} else {
+			m.viewport.Width = msg.Width
+			m.viewport.Height = contentHeight
+		}
+		m.refreshContent()
 		return m, nil
 
 	case goalDetailsMsg:
@@ -163,6 +180,10 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if isCurrent {
 				m.loading = false
 				m.err = fmt.Sprintf("Failed to load goal details: %s", redactError(msg.err))
+				// Re-flow so the error replaces the "Loading…" line in the pane;
+				// both are rendered inside contentView, which the viewport only
+				// re-reads on refresh.
+				m.refreshContent()
 			}
 			return m, nil
 		}
@@ -170,6 +191,9 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if isCurrent {
 			m.loading = false
 			m.err = ""
+			// Datapoints/chart just arrived for the goal on screen; re-flow the
+			// content pane so they appear (keeping the current scroll position).
+			m.refreshContent()
 		}
 		return m, nil
 
@@ -184,7 +208,11 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.current++
 			}
 			m.err = ""
-			return m, m.ensureDetails()
+			cmd := m.ensureDetails()
+			// New goal: re-flow and jump back to the top of the pane.
+			m.refreshContent()
+			m.viewport.GotoTop()
+			return m, cmd
 
 		case "left", "h", "p", "k":
 			// Previous goal
@@ -192,7 +220,10 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.current--
 			}
 			m.err = ""
-			return m, m.ensureDetails()
+			cmd := m.ensureDetails()
+			m.refreshContent()
+			m.viewport.GotoTop()
+			return m, cmd
 
 		case "o", "enter":
 			// Open current goal in browser
@@ -203,17 +234,52 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.err = "" // Clear any previous error
 				}
+				m.refreshContent()
 			}
 			return m, nil
 		}
 	}
 
-	return m, nil
+	// Anything else (↑/↓, PgUp/PgDn, Home/End, mouse wheel, …) scrolls the
+	// content pane. Goal-navigation and action keys returned above, so they
+	// never reach the viewport.
+	if !m.ready {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
+}
+
+// refreshContent re-renders the goal content into the scroll pane. No-op until
+// the viewport has been sized (e.g. before the first WindowSizeMsg, or in tests
+// that call View directly), where View falls back to rendering content inline.
+func (m *reviewModel) refreshContent() {
+	if m.ready {
+		m.viewport.SetContent(m.contentView())
+	}
 }
 
 func (m reviewModel) View() string {
 	if len(m.goals) == 0 {
 		return "No goals to review.\n\nPress q to quit."
+	}
+
+	// Once sized by a WindowSizeMsg, render the content through the scroll pane
+	// so tall goals stay reachable. Before that (and in tests that call View
+	// directly) fall back to rendering the full content inline, unscrolled.
+	if m.ready {
+		return m.viewport.View() + "\n" + m.helpView()
+	}
+	return m.contentView() + "\n" + m.helpView()
+}
+
+// contentView renders the scrollable portion of the review screen: the goal
+// title, details, chart, loading indicator, and any error. The help bar is
+// rendered separately (helpView) and pinned below the scroll pane.
+func (m reviewModel) contentView() string {
+	if len(m.goals) == 0 {
+		return ""
 	}
 
 	// Start from the bulk summary goal, then merge in only the fields the
@@ -299,15 +365,22 @@ func (m reviewModel) View() string {
 		view += errorStyle.Render(fmt.Sprintf("⚠ %s", m.err)) + "\n"
 	}
 
-	// Help section
+	return view
+}
+
+// helpView renders the key hints pinned below the scroll pane. When the content
+// overflows the pane, it also shows a scroll position so the user knows there's
+// more above or below.
+func (m reviewModel) helpView() string {
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
 		Padding(1, 2)
 
-	help := "Navigation: ← → (or h l, or j k, or p n)  |  Open in browser: o or Enter  |  Quit: q or Esc"
-	view += helpStyle.Render(help)
-
-	return view
+	help := "Navigation: ← → (or h l, or j k, or p n)  |  Scroll: ↑ ↓ PgUp PgDn  |  Open in browser: o or Enter  |  Quit: q or Esc"
+	if m.ready && (!m.viewport.AtTop() || !m.viewport.AtBottom()) {
+		help += fmt.Sprintf("  |  %3.0f%%", m.viewport.ScrollPercent()*100)
+	}
+	return helpStyle.Render(help)
 }
 
 // openBrowser opens the goal page in the default browser
