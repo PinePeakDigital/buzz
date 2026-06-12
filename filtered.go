@@ -14,7 +14,8 @@ import (
 // Filtered list views: `buzz all`, `buzz today`, `buzz tomorrow`, `buzz due`,
 // `buzz less`. They share an orchestration helper (load → filter → sort →
 // render via the goaltable.Table) and a small family of filter predicates +
-// tomorrow-view baremin bumping helpers.
+// the tomorrow-view projection (goalByEndOfTomorrowAt), which bumps both
+// baremin and losedate together for due-today goals.
 
 // isDoLessFilter returns true if the goal is a do-less type goal
 func isDoLessFilter(g Goal) bool {
@@ -43,9 +44,24 @@ func handleTodayCommand() {
 // bumped baremin is what's needed by *tomorrow's* deadline, not today's.
 func handleTomorrowCommand() {
 	now := time.Now()
+	// Memoize the vended pair per goal: losedateFor is called O(n log n) times
+	// while sorting and again per deadline column, and each goalByEndOfTomorrowAt
+	// runs the relatively expensive bumpedBaremin projection (string parsing +
+	// roadall slope lookup). Caching by slug computes it once per goal. Both
+	// columns still derive from the same pair, so the bumped baremin and bumped
+	// losedate can't disagree (see goalByEndOfTomorrowAt).
+	views := make(map[string]tomorrowView)
+	viewFor := func(g Goal) tomorrowView {
+		if v, ok := views[g.Slug]; ok {
+			return v
+		}
+		v := goalByEndOfTomorrowAt(g, now)
+		views[g.Slug] = v
+		return v
+	}
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
-	bareminFor := func(g Goal) string { return bareminByEndOfTomorrowAt(g, now) }
-	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+	bareminFor := func(g Goal) string { return viewFor(g).baremin }
+	losedateFor := func(g Goal) int64 { return viewFor(g).losedate }
 	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor)
 }
 
@@ -178,17 +194,48 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	fmt.Print(getUpdateMessage())
 }
 
-// Tomorrow-view baremin bumping helpers. They project a goal's "what's needed
+// tomorrowView is the pair a goal shows in the "due tomorrow" view: the baremin
+// string and the losedate timestamp. The two are vended together so they always
+// reflect the same horizon — a bumped amount never appears beside an un-bumped
+// deadline, or vice-versa.
+type tomorrowView struct {
+	baremin  string
+	losedate int64
+}
+
+// goalByEndOfTomorrowAt vends the baremin and losedate a goal should show in the
+// "due tomorrow" view, projected to tomorrow's deadline. The due-today gate and
+// `now` are evaluated once here, so the two fields can't disagree — the
+// coupling the caller previously had to enforce by wiring two closures
+// identically now holds by construction.
+//
+// A goal due *later today* is bumped: its baremin gains one day's worth of rate
+// (so the amount reflects what's required to avoid a beemergency tomorrow) and
+// its losedate advances one calendar day. A goal not due later today — overdue
+// (losedate already past) or already due tomorrow-or-later — is left as-is:
+// baremin reflects what the API reports for tomorrow's deadline already, and
+// keeping the real losedate preserves the OVERDUE indicator. See bumpedBaremin
+// for the baremin projection and dueLaterTodayAt for the gate.
+func goalByEndOfTomorrowAt(g Goal, now time.Time) tomorrowView {
+	if !dueLaterTodayAt(g, now) {
+		return tomorrowView{baremin: stripTimeWindowSuffix(g.Baremin), losedate: g.Losedate}
+	}
+	// Advance the deadline by one calendar day in the caller's local zone so the
+	// displayed wall-clock deadline stays correct across DST transitions.
+	losedate := time.Unix(g.Losedate, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
+	return tomorrowView{baremin: bumpedBaremin(g, now), losedate: losedate}
+}
+
+// Tomorrow-view baremin bumping. bumpedBaremin projects a goal's "what's needed
 // by tomorrow's deadline" baremin string from the API's "what's needed by
 // today's deadline" string, by adding one day's worth of rate. Beeminder's
 // `dueby` map already carries pre-rounded per-daystamp deltas; we use that
 // when available and fall back to local arithmetic otherwise.
 
-// bareminByEndOfTomorrowAt returns the baremin string to display for a goal in
-// the "due tomorrow" view. For goals already due tomorrow, the goal's existing
-// Baremin string is returned (it already reflects what's needed by tomorrow's
-// deadline). For goals due today, one day's worth of rate is added so the
-// displayed amount reflects what's required to avoid a beemergency tomorrow.
+// bumpedBaremin returns the bumped baremin string for a goal due later today,
+// adding one day's worth of rate so the displayed amount reflects what's
+// required to avoid a beemergency tomorrow. It assumes the due-today gate has
+// already passed (goalByEndOfTomorrowAt is the only caller).
 //
 // The per-day slope is taken from the bright-line segment containing `now`
 // (via roadall) rather than from g.Rate, because g.Rate reports the goal's
@@ -205,10 +252,7 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 // string never carries that qualifier (e.g. " in 1 day", " within 1 day",
 // " today") — every row in the tomorrow view shares the same horizon, so
 // the suffix is just noise.
-func bareminByEndOfTomorrowAt(g Goal, now time.Time) string {
-	if !dueLaterTodayAt(g, now) {
-		return stripTimeWindowSuffix(g.Baremin)
-	}
+func bumpedBaremin(g Goal, now time.Time) string {
 	if bumped, ok := bareminFromDueby(g, now); ok {
 		return stripTimeWindowSuffix(bumped)
 	}
@@ -306,18 +350,4 @@ func todayDaystampFor(g Goal, now time.Time) string {
 func tomorrowDaystampFor(g Goal, now time.Time) string {
 	today, _ := time.ParseInLocation("20060102", todayDaystampFor(g, now), now.Location())
 	return today.AddDate(0, 0, 1).Format("20060102")
-}
-
-// losedateByEndOfTomorrowAt returns the deadline timestamp to display for a
-// goal in the tomorrow view. For goals due later today (whose baremin we're
-// bumping by one day's rate), advance the deadline by one calendar day in
-// the caller's local zone so the displayed wall-clock deadline stays correct
-// across DST transitions. Overdue goals (losedate already in the past) keep
-// their own losedate so the OVERDUE indicator remains visible — bumping them
-// would silently hide the fact that they've already derailed.
-func losedateByEndOfTomorrowAt(g Goal, now time.Time) int64 {
-	if !dueLaterTodayAt(g, now) {
-		return g.Losedate
-	}
-	return time.Unix(g.Losedate, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
 }

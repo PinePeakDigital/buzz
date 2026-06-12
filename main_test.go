@@ -249,10 +249,10 @@ func TestRatePerDay(t *testing.T) {
 	}
 }
 
-// TestBareminByEndOfTomorrowAt verifies that due-today goals get their baremin
+// TestGoalByEndOfTomorrowAtBaremin verifies that due-today goals get their baremin
 // bumped by one day's worth of rate, while goals due tomorrow (or later) are
 // returned unchanged.
-func TestBareminByEndOfTomorrowAt(t *testing.T) {
+func TestGoalByEndOfTomorrowAtBaremin(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
 	todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
@@ -504,9 +504,9 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := bareminByEndOfTomorrowAt(tt.goal, now)
+			got := goalByEndOfTomorrowAt(tt.goal, now).baremin
 			if got != tt.expected {
-				t.Errorf("bareminByEndOfTomorrowAt = %q, want %q", got, tt.expected)
+				t.Errorf("goalByEndOfTomorrowAt().baremin = %q, want %q", got, tt.expected)
 			}
 		})
 	}
@@ -572,11 +572,11 @@ func piecewiseRoadall(startT int64, startV float64, segments ...float64) [][]*fl
 	return rows
 }
 
-// TestLosedateByEndOfTomorrowAt verifies that due-today goals get their
+// TestGoalByEndOfTomorrowAtLosedate verifies that due-today goals get their
 // displayed deadline advanced by one calendar day in the tomorrow view (in
 // the caller's local zone, so DST transitions stay aligned), while goals
 // already due tomorrow or later keep their own losedate.
-func TestLosedateByEndOfTomorrowAt(t *testing.T) {
+func TestGoalByEndOfTomorrowAtLosedate(t *testing.T) {
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
 	todayDeadline := time.Date(2025, 1, 15, 17, 59, 0, 0, time.UTC).Unix()
 	tomorrowDeadline := time.Date(2025, 1, 16, 17, 59, 0, 0, time.UTC).Unix()
@@ -626,9 +626,9 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := losedateByEndOfTomorrowAt(tt.goal, now)
+			got := goalByEndOfTomorrowAt(tt.goal, now).losedate
 			if got != tt.expected {
-				t.Errorf("losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+				t.Errorf("goalByEndOfTomorrowAt().losedate = %d, want %d (diff %d seconds)",
 					got, tt.expected, got-tt.expected)
 			}
 		})
@@ -646,10 +646,10 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 		// 5:59 PM the day before spring-forward (2025-03-09).
 		losedate := time.Date(2025, 3, 8, 17, 59, 0, 0, ny)
 		nowDST := time.Date(2025, 3, 8, 14, 0, 0, 0, ny)
-		got := losedateByEndOfTomorrowAt(Goal{Losedate: losedate.Unix()}, nowDST)
+		got := goalByEndOfTomorrowAt(Goal{Losedate: losedate.Unix()}, nowDST).losedate
 		want := time.Date(2025, 3, 9, 17, 59, 0, 0, ny).Unix()
 		if got != want {
-			t.Errorf("DST losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+			t.Errorf("DST goalByEndOfTomorrowAt().losedate = %d, want %d (diff %d seconds)",
 				got, want, got-want)
 		}
 		// Sanity: a naive +86400 would land at the wrong wall-clock hour
@@ -660,13 +660,67 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 	})
 }
 
+// TestGoalByEndOfTomorrowAtPairsBareminAndLosedate pins the invariant the whole
+// refactor exists to guarantee: baremin and losedate are vended from a single
+// due-today gate evaluation, so they move together. Either both reflect the
+// one-day bump (due-later-today) or neither does (due tomorrow-or-later, or
+// overdue). Reading both fields off one call makes a re-split of the gate —
+// bumping one field but not the other — fail here.
+func TestGoalByEndOfTomorrowAtPairsBareminAndLosedate(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
+	tomorrowDeadline := time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC).Unix()
+	overdue := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix() // before now
+
+	// Due later today: BOTH fields bump. Baremin +1 → +2, losedate advances one
+	// calendar day in the local zone.
+	t.Run("due later today bumps both", func(t *testing.T) {
+		g := Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		wantLosedate := time.Unix(todayDeadline, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
+		if view.baremin != "+2" {
+			t.Errorf("baremin = %q, want %q", view.baremin, "+2")
+		}
+		if view.losedate != wantLosedate {
+			t.Errorf("losedate = %d, want %d (advanced one day)", view.losedate, wantLosedate)
+		}
+	})
+
+	// Due tomorrow already: NEITHER field bumps. Baremin only loses its window
+	// suffix; losedate is unchanged.
+	t.Run("due tomorrow bumps neither", func(t *testing.T) {
+		g := Goal{Losedate: tomorrowDeadline, Baremin: "+3 in 1 day", Rate: f(1), Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.baremin != "+3" {
+			t.Errorf("baremin = %q, want %q (suffix stripped, not bumped)", view.baremin, "+3")
+		}
+		if view.losedate != tomorrowDeadline {
+			t.Errorf("losedate = %d, want %d (unchanged)", view.losedate, tomorrowDeadline)
+		}
+	})
+
+	// Overdue: NEITHER field bumps. The losedate stays in the past so the
+	// OVERDUE indicator survives; baremin only loses its window suffix.
+	t.Run("overdue bumps neither", func(t *testing.T) {
+		g := Goal{Losedate: overdue, Baremin: "+1 today", Rate: f(1), Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.baremin != "+1" {
+			t.Errorf("baremin = %q, want %q (suffix stripped, not bumped)", view.baremin, "+1")
+		}
+		if view.losedate != overdue {
+			t.Errorf("losedate = %d, want %d (unchanged, stays overdue)", view.losedate, overdue)
+		}
+	})
+}
+
 // TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
 // order the user actually sees in the deadline column. The tomorrow view
 // bumps due-today losedates by one calendar day, which can flip the relative
 // order of goals if we don't resort using the same losedateFor projection.
 func TestSortGoalsByDisplayedLosedate(t *testing.T) {
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
-	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+	losedateFor := func(g Goal) int64 { return goalByEndOfTomorrowAt(g, now).losedate }
 
 	// Goal A: due today at 11 PM → displays as tomorrow 11 PM
 	// Goal B: due tomorrow at 9 AM → displays as tomorrow 9 AM (earlier)
@@ -690,7 +744,7 @@ func TestSortGoalsByDisplayedLosedate(t *testing.T) {
 }
 
 // TestParseTimeValue verifies the colon-separated time parser used by
-// bareminByEndOfTomorrowAt for HH:MM and HH:MM:SS baremin values.
+// bumpedBaremin for HH:MM and HH:MM:SS baremin values.
 func TestParseTimeValue(t *testing.T) {
 	tests := []struct {
 		name            string
