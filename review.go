@@ -380,8 +380,14 @@ func (m reviewModel) helpView() string {
 		Padding(1, 2)
 
 	help := "Navigation: ← → (or h l, or j k, or p n)  |  Scroll: ↑ ↓ PgUp PgDn  |  Open in browser: o or Enter  |  Quit: q or Esc"
+	// Reserve the indicator's slot whether or not the percentage is shown, so the
+	// help bar keeps a constant width as the user moves between goals that do and
+	// don't overflow (a varying width could shift terminal wrapping on narrow
+	// widths). %3.0f%% is always 4 chars, so the slot is a fixed "  |  100%" wide.
 	if m.ready && (!m.viewport.AtTop() || !m.viewport.AtBottom()) {
 		help += fmt.Sprintf("  |  %3.0f%%", m.viewport.ScrollPercent()*100)
+	} else {
+		help += strings.Repeat(" ", len("  |  100%"))
 	}
 	return helpStyle.Render(help)
 }

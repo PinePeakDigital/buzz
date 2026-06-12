@@ -1525,8 +1525,21 @@ func TestReviewModelResizeReusesViewport(t *testing.T) {
 		t.Fatal("expected viewport ready after first WindowSizeMsg")
 	}
 
-	// Grow the terminal; the pane should track the new size.
-	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	// Scroll off the top before resizing. A reused viewport preserves this
+	// offset across the resize; a freshly-recreated one would reset it to 0 —
+	// so asserting the offset survives is what actually pins "reuse".
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(reviewModel)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(reviewModel)
+	scrolledOffset := m.viewport.YOffset
+	if scrolledOffset == 0 {
+		t.Fatal("precondition: expected to have scrolled off the top before resize")
+	}
+
+	// Resize to another size where the content still overflows the pane (so the
+	// preserved offset isn't clamped away); the pane should track the new size.
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 9})
 	m = updated.(reviewModel)
 
 	if !m.ready {
@@ -1535,9 +1548,13 @@ func TestReviewModelResizeReusesViewport(t *testing.T) {
 	if m.viewport.Width != 100 {
 		t.Errorf("expected viewport width 100 after resize, got %d", m.viewport.Width)
 	}
-	wantHeight := 20 - lipgloss.Height(m.helpView())
+	wantHeight := 9 - lipgloss.Height(m.helpView())
 	if m.viewport.Height != wantHeight {
 		t.Errorf("expected viewport height %d after resize, got %d", wantHeight, m.viewport.Height)
+	}
+	if m.viewport.YOffset != scrolledOffset {
+		t.Errorf("expected resize to preserve scroll offset %d (viewport reused, not recreated), got %d",
+			scrolledOffset, m.viewport.YOffset)
 	}
 }
 
@@ -1594,6 +1611,11 @@ func TestReviewModelDetailsErrorReflows(t *testing.T) {
 	}
 	if !strings.Contains(m.viewport.View(), "Failed to load goal details") {
 		t.Errorf("expected the fetch error to render in the scroll pane, got:\n%s", m.viewport.View())
+	}
+	// The error must *replace* the loading line, not sit alongside a stale one —
+	// that re-flow is the regression this test guards.
+	if strings.Contains(m.viewport.View(), "Loading datapoints…") {
+		t.Errorf("expected the stale loading line to be gone once the fetch failed, got:\n%s", m.viewport.View())
 	}
 }
 
