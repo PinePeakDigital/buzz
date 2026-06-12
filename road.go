@@ -63,14 +63,20 @@ func parseRoad(roadall [][]*float64, runits string) (road, error) {
 			return nil, fmt.Errorf("road row %d: must set exactly one of value or rate", i)
 		}
 		curT := *cur[0]
+		// Times must strictly increase: an equal or earlier boundary would
+		// produce a zero- or negative-duration segment, after which valueAt /
+		// slopePerDayAt pick the wrong branch. Per ADR-0003 that's a malformed
+		// road, surfaced rather than silently materialised.
+		if curT <= prevT {
+			return nil, fmt.Errorf("road row %d: time must be greater than the previous row time", i)
+		}
 
 		var curV, slopePerDay float64
 		if cur[1] != nil {
-			// Value row: slope derived from the materialised endpoints.
+			// Value row: slope derived from the materialised endpoints. curT >
+			// prevT is guaranteed above, so the divisor is always positive.
 			curV = *cur[1]
-			if curT != prevT {
-				slopePerDay = (curV - prevV) / (curT - prevT) * 86400.0
-			}
+			slopePerDay = (curV - prevV) / (curT - prevT) * 86400.0
 		} else {
 			// Rate row: the slope is the row's rate (in gunits/day); the end
 			// value is materialised from it so a following value-or-rate row

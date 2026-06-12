@@ -76,6 +76,14 @@ func TestParseRoadMalformed(t *testing.T) {
 			roadallRow(roadUnix(0), fptr(0), nil),
 			roadallRow(roadUnix(10), nil, fptr(1)),
 		}},
+		{"non-increasing time (equal to previous)", "d", [][]*float64{
+			roadallRow(roadUnix(0), fptr(0), nil),
+			roadallRow(roadUnix(0), fptr(5), nil),
+		}},
+		{"non-increasing time (earlier than previous)", "d", [][]*float64{
+			roadallRow(roadUnix(10), fptr(0), nil),
+			roadallRow(roadUnix(5), nil, fptr(1)),
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -95,7 +103,8 @@ func TestRoadValueAt(t *testing.T) {
 	if got := r.valueAt(roadDay(5)); got < 4.9 || got > 5.1 {
 		t.Errorf("valueAt(day 5) = %f, want ~5", got)
 	}
-	// Before the anchor: extrapolate backward along the first segment (-1/day).
+	// Before the anchor: extrapolate backward along the first segment (slope
+	// +1/day); the value goes negative only because the time delta is negative.
 	if got := r.valueAt(roadDay(-5)); got < -5.1 || got > -4.9 {
 		t.Errorf("valueAt(day -5) = %f, want ~-5", got)
 	}
@@ -106,7 +115,10 @@ func TestRoadValueAt(t *testing.T) {
 }
 
 func TestRoadValuesForTimeframe(t *testing.T) {
-	r, _ := parseRoad(validRoad(), "d")
+	r, err := parseRoad(validRoad(), "d")
+	if err != nil || len(r) == 0 {
+		t.Fatalf("validRoad parse: err=%v len=%d", err, len(r))
+	}
 
 	values := roadValuesForTimeframe(r, roadDay(0), roadDay(10), 11)
 	if len(values) != 11 {
