@@ -41,6 +41,20 @@ func renderGoalChart(goal Goal, width int) string {
 		return ""
 	}
 
+	// Parse the bright red line once. A malformed roadall is surfaced loudly
+	// (it almost certainly signals a parser or upstream bug); an absent one is
+	// reported as "not populated" rather than silently drawn as a flat line at
+	// zero. See docs/adr/0003-bright-red-line-parsing-failure-policy.md.
+	brightLine, err := parseRoad(goal.Roadall, goal.Runits)
+	if err != nil {
+		return "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Padding(0, 2).
+			Render(fmt.Sprintf("⚠ Couldn't render the bright red line: %s", err)) + "\n"
+	}
+	if len(brightLine) == 0 {
+		return "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Padding(0, 2).
+			Render("The bright red line wasn't populated for this goal.") + "\n"
+	}
+
 	chartWidth := width - 10 // leave room for padding and axis labels
 	if chartWidth < minChartWidth {
 		chartWidth = minChartWidth
@@ -49,7 +63,7 @@ func renderGoalChart(goal Goal, width int) string {
 		chartWidth = maxChartWidth
 	}
 
-	roadValues := getRoadValuesForTimeframe(goal, startTime, endTime, chartWidth)
+	roadValues := roadValuesForTimeframe(brightLine, startTime, endTime, chartWidth)
 	datapointValues := datapointSeries(processed, startTime, endTime, chartWidth)
 
 	var chart strings.Builder
@@ -505,129 +519,19 @@ func renderXAxis(start, end time.Time, gutter, chartWidth int) string {
 	return strings.TrimRight(string(tickRow), " ") + "\n" + strings.TrimRight(string(labelRow), " ")
 }
 
-// getRoadValuesForTimeframe samples the bright red line at numPoints evenly
+// roadValuesForTimeframe samples a parsed bright red line at numPoints evenly
 // distributed instants across [startTime, endTime] — one per chart column.
-func getRoadValuesForTimeframe(goal Goal, startTime, endTime time.Time, numPoints int) []float64 {
+func roadValuesForTimeframe(r road, startTime, endTime time.Time, numPoints int) []float64 {
 	values := make([]float64, numPoints)
-	if len(goal.Roadall) == 0 {
-		return values
-	}
 	if numPoints == 1 {
-		values[0] = getRoadValueAtTime(goal, startTime)
+		values[0] = r.valueAt(startTime)
 		return values
 	}
 
 	duration := endTime.Sub(startTime)
 	for i := 0; i < numPoints; i++ {
 		t := startTime.Add(time.Duration(float64(duration) * float64(i) / float64(numPoints-1)))
-		values[i] = getRoadValueAtTime(goal, t)
+		values[i] = r.valueAt(t)
 	}
 	return values
-}
-
-// getRoadValueAtTime interpolates the bright red line's value at time t.
-//
-// Beeminder's roadall is a piecewise schedule: the first row is the anchor
-// (t, v set, r nil), and each subsequent row has exactly one of v/r null —
-// either the value at that t, or the rate (per runits) used to get there. To
-// interpolate we walk forward, materialising each row's value from the prior
-// anchor and the row's rate when the row's own value is missing.
-func getRoadValueAtTime(goal Goal, t time.Time) float64 {
-	if len(goal.Roadall) < 2 {
-		return 0
-	}
-
-	target := float64(t.Unix())
-
-	// Resolve the anchor (row 0): must have t and v set.
-	first := goal.Roadall[0]
-	if len(first) < 3 || first[0] == nil || first[1] == nil {
-		return 0
-	}
-	prevT := *first[0]
-	prevV := *first[1]
-
-	// Before the road starts: extrapolate backwards along the first segment's
-	// slope so the chart can still draw a value.
-	if target < prevT {
-		slope, ok := segmentSlopePerSecond(goal, 1, prevT, prevV)
-		if !ok {
-			return prevV
-		}
-		return prevV + slope*(target-prevT)
-	}
-
-	for i := 1; i < len(goal.Roadall); i++ {
-		cur := goal.Roadall[i]
-		if len(cur) < 3 || cur[0] == nil {
-			return prevV
-		}
-		curT := *cur[0]
-
-		// Per the Beeminder spec a non-anchor row has exactly one of v/r set.
-		// Both nil or both set is ambiguous — bail at the prior anchor rather
-		// than guess an interpretation (matches slope.go's validation).
-		if (cur[1] == nil) == (cur[2] == nil) {
-			return prevV
-		}
-
-		var curV float64
-		switch {
-		case cur[1] != nil:
-			curV = *cur[1]
-		case cur[2] != nil:
-			// ratePerDay passes unknown runits through unchanged, so a
-			// per-week rate would be misread as per-day. Bail rather than
-			// draw a dimensionally-wrong road.
-			if !isKnownRunits(goal.Runits) {
-				return prevV
-			}
-			rps := ratePerDay(*cur[2], goal.Runits) / 86400.0
-			curV = prevV + rps*(curT-prevT)
-		}
-
-		if target <= curT {
-			if curT == prevT {
-				return curV
-			}
-			frac := (target - prevT) / (curT - prevT)
-			return prevV + frac*(curV-prevV)
-		}
-
-		prevT = curT
-		prevV = curV
-	}
-
-	// Past the end of the road: hold the last materialised value.
-	return prevV
-}
-
-// segmentSlopePerSecond returns the slope (gunits/second) of the roadall
-// segment ending at index i, given the prior anchor (prevT, prevV). Used to
-// extrapolate before the start of the road. ok is false when the segment is
-// missing, malformed, ambiguous, or expressed in runits we can't translate.
-func segmentSlopePerSecond(goal Goal, i int, prevT, prevV float64) (float64, bool) {
-	if i >= len(goal.Roadall) {
-		return 0, false
-	}
-	cur := goal.Roadall[i]
-	if len(cur) < 3 || cur[0] == nil {
-		return 0, false
-	}
-	// Ambiguous rows (both v/r nil or both set) are malformed per the spec —
-	// bail rather than pick an interpretation. Mirrors getRoadValueAtTime.
-	if (cur[1] == nil) == (cur[2] == nil) {
-		return 0, false
-	}
-	if cur[2] != nil {
-		if !isKnownRunits(goal.Runits) {
-			return 0, false
-		}
-		return ratePerDay(*cur[2], goal.Runits) / 86400.0, true
-	}
-	dt := *cur[0] - prevT
-	if dt == 0 {
-		return 0, false
-	}
-	return (*cur[1] - prevV) / dt, true
 }
