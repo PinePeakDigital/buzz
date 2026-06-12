@@ -81,9 +81,8 @@ func parseRoad(roadall [][]*float64, runits string) (road, error) {
 				// Vertical step: the line jumps from prevV to curV instantaneously.
 				// The segment has zero duration, so a Δvalue/Δtime slope would
 				// divide by zero; leave it 0. valueAt returns a zero-duration
-				// segment's endpoint directly, and slopePerDayAt never reaches this
-				// segment (the segment ending at the same instant precedes it in the
-				// walk), so the 0 is never sampled.
+				// segment's endpoint directly, and slopePerDayAt skips zero-duration
+				// segments, so this inert 0 is never reported as a real slope.
 				slopePerDay = 0
 			} else {
 				// Value row: slope derived from the materialised endpoints.
@@ -147,6 +146,15 @@ func (r road) slopePerDayAt(t time.Time) (float64, bool) {
 		return 0, false
 	}
 	for _, seg := range r {
+		if seg.endT == seg.startT {
+			// Zero-duration vertical step: it carries no meaningful daily slope (a
+			// value-step's is the inert 0). Skip it so that when a step is the
+			// road's *first* segment it doesn't shadow the real rate of the segment
+			// that actually runs from this instant. For an interior step the
+			// segment ending here already precedes it and is returned first, so the
+			// skip is a no-op there.
+			continue
+		}
 		if target <= seg.endT {
 			return seg.slopePerDay, true
 		}

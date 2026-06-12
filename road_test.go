@@ -154,6 +154,40 @@ func TestParseRoadVerticalStep(t *testing.T) {
 	}
 }
 
+// TestParseRoadLeadingVerticalStep pins the edge case where the road's FIRST
+// non-anchor row shares the anchor's instant, making the first segment
+// zero-duration (3/60 goals in the audited account: active, bm-time, uvi).
+// There's no preceding segment to shadow the step, so slopePerDayAt must still
+// skip it and report the real rate of the segment that runs from that instant —
+// not the step's inert 0.
+func TestParseRoadLeadingVerticalStep(t *testing.T) {
+	// anchor 0 → vertical jump to 50 at day 0 → rate 2/day to day 10.
+	r, err := parseRoad([][]*float64{
+		roadallRow(roadUnix(0), fptr(0), nil),
+		roadallRow(roadUnix(0), fptr(50), nil),
+		roadallRow(roadUnix(10), nil, fptr(2)),
+	}, "d")
+	if err != nil {
+		t.Fatalf("leading-step road must parse, got %v", err)
+	}
+	for _, seg := range r {
+		if math.IsNaN(seg.slopePerDay) || math.IsInf(seg.slopePerDay, 0) {
+			t.Fatalf("segment produced non-finite slope: %+v", seg)
+		}
+	}
+	// At and after the start instant the real rate is 2/day, never the step's 0.
+	if got, ok := r.slopePerDayAt(roadDay(0)); !ok || math.Abs(got-2.0) > 1e-9 {
+		t.Errorf("slope at start instant = %v,%v, want 2,true (not the step's 0)", got, ok)
+	}
+	if got, ok := r.slopePerDayAt(roadDay(5)); !ok || math.Abs(got-2.0) > 1e-9 {
+		t.Errorf("slope mid-road = %v,%v, want 2,true", got, ok)
+	}
+	// valueAt climbs from the post-jump value: 50 at day 0, 60 at day 5.
+	if got := r.valueAt(roadDay(5)); math.Abs(got-60) > 0.5 {
+		t.Errorf("valueAt(day 5) = %f, want ~60", got)
+	}
+}
+
 func TestRoadValuesForTimeframe(t *testing.T) {
 	r, err := parseRoad(validRoad(), "d")
 	if err != nil || len(r) == 0 {
