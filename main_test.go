@@ -714,6 +714,60 @@ func TestGoalByEndOfTomorrowAtPairsBareminAndLosedate(t *testing.T) {
 	})
 }
 
+// TestGoalByEndOfTomorrowAtFlagsMalformedRoad pins #325: a goal whose roadall is
+// malformed is flagged (roadMalformed → a ⚠ prefix on the displayed baremin),
+// while a valid road and an absent road ("not populated", benign) are not. The
+// flag is independent of the due-today bump gate.
+func TestGoalByEndOfTomorrowAtFlagsMalformedRoad(t *testing.T) {
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	t0 := float64(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC).Unix())
+	t1 := float64(time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC).Unix())
+
+	malformedRoad := [][]*float64{
+		roadallRow(t0, fptr(0), nil),
+		roadallRow(t1, fptr(5), fptr(1)), // both value and rate set → malformed
+	}
+	validRoad := [][]*float64{
+		roadallRow(t0, fptr(0), nil),
+		roadallRow(t1, fptr(5), nil), // value row
+	}
+
+	t.Run("malformed road sets the flag and marks the baremin", func(t *testing.T) {
+		g := Goal{Baremin: "+1 today", Roadall: malformedRoad, Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if !view.roadMalformed {
+			t.Error("expected roadMalformed = true for a malformed roadall")
+		}
+		if got := view.markedBaremin(); got != "⚠ +1" {
+			t.Errorf("markedBaremin = %q, want %q", got, "⚠ +1")
+		}
+	})
+
+	t.Run("valid road is not flagged", func(t *testing.T) {
+		g := Goal{Baremin: "+1 today", Roadall: validRoad, Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.roadMalformed {
+			t.Error("expected roadMalformed = false for a valid roadall")
+		}
+		if got := view.markedBaremin(); got != "+1" {
+			t.Errorf("markedBaremin = %q, want %q (no marker)", got, "+1")
+		}
+	})
+
+	t.Run("absent road is benign, not flagged", func(t *testing.T) {
+		// No roadall at all → parseRoad returns (nil, nil): "not populated", not
+		// malformed. The issue explicitly keeps this distinct from the error case.
+		g := Goal{Baremin: "+1 today"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.roadMalformed {
+			t.Error("expected roadMalformed = false for an absent roadall")
+		}
+		if got := view.markedBaremin(); got != "+1" {
+			t.Errorf("markedBaremin = %q, want %q (no marker)", got, "+1")
+		}
+	})
+}
+
 // TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
 // order the user actually sees in the deadline column. The tomorrow view
 // bumps due-today losedates by one calendar day, which can flip the relative

@@ -60,7 +60,7 @@ func handleTomorrowCommand() {
 		return v
 	}
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
-	bareminFor := func(g Goal) string { return viewFor(g).baremin }
+	bareminFor := func(g Goal) string { return viewFor(g).markedBaremin() }
 	losedateFor := func(g Goal) int64 { return viewFor(g).losedate }
 	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor)
 }
@@ -194,20 +194,38 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	fmt.Print(getUpdateMessage())
 }
 
-// tomorrowView is the pair a goal shows in the "due tomorrow" view: the baremin
-// string and the losedate timestamp. The two are vended together so they always
-// reflect the same horizon — a bumped amount never appears beside an un-bumped
-// deadline, or vice-versa.
+// tomorrowView is what a goal shows in the "due tomorrow" view: the baremin
+// string, the losedate timestamp, and whether the goal's bright red line failed
+// to parse. baremin and losedate are vended together so they always reflect the
+// same horizon — a bumped amount never appears beside an un-bumped deadline, or
+// vice-versa.
 type tomorrowView struct {
 	baremin  string
 	losedate int64
+	// roadMalformed is true when parseRoad rejected the goal's roadall. The
+	// bump silently falls back to g.Rate in that case (slopePerDayAt stays
+	// tolerant), so the view flags it with a ⚠ rather than presenting a
+	// fallback number as if it were authoritative. An absent road (benign,
+	// "not populated") is NOT malformed and carries no marker. See ADR-0003.
+	roadMalformed bool
 }
 
-// goalByEndOfTomorrowAt vends the baremin and losedate a goal should show in the
-// "due tomorrow" view, projected to tomorrow's deadline. The due-today gate and
-// `now` are evaluated once here, so the two fields can't disagree — the
-// coupling the caller previously had to enforce by wiring two closures
-// identically now holds by construction.
+// markedBaremin is the baremin string the tomorrow view prints, prefixed with a
+// ⚠ when the goal's bright red line is malformed — the bumped amount silently
+// fell back to g.Rate, so it's flagged rather than shown as if authoritative
+// (#325 / ADR-0003).
+func (v tomorrowView) markedBaremin() string {
+	if v.roadMalformed {
+		return "⚠ " + v.baremin
+	}
+	return v.baremin
+}
+
+// goalByEndOfTomorrowAt vends the baremin, losedate, and road-malformed flag a
+// goal should show in the "due tomorrow" view, projected to tomorrow's deadline.
+// The due-today gate and `now` are evaluated once here, so baremin and losedate
+// can't disagree — the coupling the caller previously had to enforce by wiring
+// two closures identically now holds by construction.
 //
 // A goal due *later today* is bumped: its baremin gains one day's worth of rate
 // (so the amount reflects what's required to avoid a beemergency tomorrow) and
@@ -217,13 +235,20 @@ type tomorrowView struct {
 // keeping the real losedate preserves the OVERDUE indicator. See bumpedBaremin
 // for the baremin projection and dueLaterTodayAt for the gate.
 func goalByEndOfTomorrowAt(g Goal, now time.Time) tomorrowView {
+	// A malformed roadall is surfaced regardless of the gate: the bump path
+	// swallows the parse error (falling back to g.Rate), so this is the tomorrow
+	// view's chance to signal it. An absent road parses without error and is not
+	// flagged.
+	_, roadErr := parseRoad(g.Roadall, g.Runits)
+	malformed := roadErr != nil
+
 	if !dueLaterTodayAt(g, now) {
-		return tomorrowView{baremin: stripTimeWindowSuffix(g.Baremin), losedate: g.Losedate}
+		return tomorrowView{baremin: stripTimeWindowSuffix(g.Baremin), losedate: g.Losedate, roadMalformed: malformed}
 	}
 	// Advance the deadline by one calendar day in the caller's local zone so the
 	// displayed wall-clock deadline stays correct across DST transitions.
 	losedate := time.Unix(g.Losedate, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
-	return tomorrowView{baremin: bumpedBaremin(g, now), losedate: losedate}
+	return tomorrowView{baremin: bumpedBaremin(g, now), losedate: losedate, roadMalformed: malformed}
 }
 
 // Tomorrow-view baremin bumping. bumpedBaremin projects a goal's "what's needed
