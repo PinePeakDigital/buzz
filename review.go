@@ -271,7 +271,10 @@ func (m reviewModel) View() string {
 	if m.ready {
 		return m.viewport.View() + "\n" + m.helpView()
 	}
-	return m.contentView() + "\n" + m.helpView()
+	// contentView can end with a trailing newline (e.g. the loading/error line);
+	// trim it so the inline fallback doesn't stack a blank row before the help
+	// bar, matching the viewport path (viewport.View has no trailing newline).
+	return strings.TrimRight(m.contentView(), "\n") + "\n" + m.helpView()
 }
 
 // contentView renders the scrollable portion of the review screen: the goal
