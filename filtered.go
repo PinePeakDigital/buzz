@@ -62,8 +62,22 @@ func handleTomorrowCommand() {
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
 	bareminFor := func(g Goal) string { return viewFor(g).markedBaremin() }
 	losedateFor := func(g Goal) int64 { return viewFor(g).losedate }
-	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor)
+	// Explain the "(!)" marker, but only when a flagged goal is actually shown.
+	legendFor := func(goals []Goal) string {
+		for _, g := range goals {
+			if viewFor(g).roadMalformed {
+				return tomorrowMalformedLegend
+			}
+		}
+		return ""
+	}
+	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor, legendFor)
 }
+
+// tomorrowMalformedLegend is the footnote shown beneath the tomorrow table when
+// at least one goal carries the "(!)" marker (a malformed bright red line). It
+// explains that the marked amount is a fallback, not a value read off the line.
+const tomorrowMalformedLegend = "\n(!) couldn't read the goal's bright red line; the amount shown is estimated from the goal's overall rate.\n"
 
 // handleLessCommand outputs all do-less type goals
 func handleLessCommand() {
@@ -110,6 +124,7 @@ func handleFilteredCommand(filterName string, filter func(Goal) bool) {
 	handleFilteredCommandWithDisplay(filterName, filter,
 		func(g Goal) string { return g.Baremin },
 		func(g Goal) int64 { return g.Losedate },
+		nil,
 	)
 }
 
@@ -128,7 +143,12 @@ func sortGoalsByDisplayedLosedate(goals []Goal, losedateFor func(Goal) int64) {
 // timestamp used for the timeframe/absolute-deadline columns. The tomorrow
 // view uses this to bump both for due-today goals so the bumped baremin and
 // the displayed deadline are aligned to the same target moment.
-func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool, bareminFor func(Goal) string, losedateFor func(Goal) int64) {
+//
+// legendFor, when non-nil, is called with the rendered goals after the table
+// and may return a footnote (e.g. explaining a marker the cells carry); an
+// empty string prints nothing. The tomorrow view uses it to explain its "(!)"
+// malformed-bright-red-line marker only when a flagged goal is actually shown.
+func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool, bareminFor func(Goal) string, losedateFor func(Goal) int64, legendFor func([]Goal) string) {
 	// Load config
 	if !ConfigExists() {
 		fmt.Println("Error: No configuration found. Please run 'buzz auth login' to authenticate.")
@@ -189,6 +209,12 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		},
 	}
 	fmt.Print(table.Render(filteredGoals))
+
+	if legendFor != nil {
+		if legend := legendFor(filteredGoals); legend != "" {
+			fmt.Print(legend)
+		}
+	}
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())

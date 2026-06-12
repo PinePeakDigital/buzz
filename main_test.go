@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -784,6 +785,23 @@ func TestGoalByEndOfTomorrowAtFlagsMalformedRoad(t *testing.T) {
 			t.Errorf("markedBaremin = %q, want %q (bumped via g.Rate fallback)", got, "(!) +2")
 		}
 	})
+}
+
+// TestTomorrowMalformedLegend keeps the footnote and the cell marker in sync:
+// the legend must reference the same "(!)" the marked baremin uses and name the
+// bright red line, so a user seeing "(!)" can connect it to its explanation.
+func TestTomorrowMalformedLegend(t *testing.T) {
+	marked := tomorrowView{roadMalformed: true, baremin: "+2"}.markedBaremin()
+	marker := strings.TrimSuffix(marked, "+2") // "(!) "
+	if strings.TrimSpace(marker) == "" {
+		t.Fatalf("expected a non-empty marker prefix, got %q", marked)
+	}
+	if !strings.Contains(tomorrowMalformedLegend, strings.TrimSpace(marker)) {
+		t.Errorf("legend %q should reference the marker %q", tomorrowMalformedLegend, strings.TrimSpace(marker))
+	}
+	if !strings.Contains(tomorrowMalformedLegend, "bright red line") {
+		t.Errorf("legend should name the bright red line, got %q", tomorrowMalformedLegend)
+	}
 }
 
 // TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
