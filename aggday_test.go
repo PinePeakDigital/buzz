@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestResolveAggdayDefaults(t *testing.T) {
@@ -116,4 +117,56 @@ func TestAggregateDayUnknownFallsBackToDefault(t *testing.T) {
 	if got := aggregateDay(Goal{Kyoom: false}, "bogus", []float64{1, 2, 3}); got != 3 {
 		t.Errorf("unknown on non-kyoom: got %v, want 3 (last)", got)
 	}
+}
+
+// TestAggregateByDay exercises the module's end-to-end "datapoints → one value
+// per day" reduction directly — the test surface the refactor opens up, without
+// reaching through processDatapoints / the chart window.
+func TestAggregateByDay(t *testing.T) {
+	loc := time.UTC
+	day := func(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, loc) }
+
+	t.Run("buckets by day and reduces with the goal's aggday", func(t *testing.T) {
+		// Two same-day points + one next-day point. Default aggday for a kyoom
+		// goal is "sum", so each day collapses to its sum; days come back
+		// ascending. (The kyoom running total across days is processDatapoints'
+		// job, not aggregateByDay's — here each day is reduced independently.)
+		goal := Goal{Kyoom: true}
+		dps := []Datapoint{
+			{Timestamp: day(2024, 3, 2).Add(9 * time.Hour).Unix(), Daystamp: "20240302", Value: 4},
+			{Timestamp: day(2024, 3, 1).Add(8 * time.Hour).Unix(), Daystamp: "20240301", Value: 1},
+			{Timestamp: day(2024, 3, 1).Add(20 * time.Hour).Unix(), Daystamp: "20240301", Value: 2},
+		}
+		got := aggregateByDay(goal, dps, loc)
+		if len(got) != 2 {
+			t.Fatalf("got %d days, want 2 (%v)", len(got), got)
+		}
+		if !got[0].day.Equal(day(2024, 3, 1)) || got[0].value != 3 {
+			t.Errorf("day0 = {%s, %v}, want {2024-03-01, 3}", got[0].day, got[0].value)
+		}
+		if !got[1].day.Equal(day(2024, 3, 2)) || got[1].value != 4 {
+			t.Errorf("day1 = {%s, %v}, want {2024-03-02, 4}", got[1].day, got[1].value)
+		}
+	})
+
+	t.Run("explicit aggday and timestamp-derived day", func(t *testing.T) {
+		// No daystamp → the day is derived from the timestamp in loc. aggday=max
+		// takes the largest value for the day.
+		goal := Goal{Aggday: "max"}
+		dps := []Datapoint{
+			{Timestamp: day(2024, 5, 10).Add(10 * time.Hour).Unix(), Value: 5},
+			{Timestamp: day(2024, 5, 10).Add(15 * time.Hour).Unix(), Value: 9},
+			{Timestamp: day(2024, 5, 10).Add(18 * time.Hour).Unix(), Value: 4},
+		}
+		got := aggregateByDay(goal, dps, loc)
+		if len(got) != 1 || got[0].value != 9 || !got[0].day.Equal(day(2024, 5, 10)) {
+			t.Errorf("got %v, want a single day 2024-05-10 valued 9", got)
+		}
+	})
+
+	t.Run("empty input yields no days", func(t *testing.T) {
+		if got := aggregateByDay(Goal{}, nil, loc); len(got) != 0 {
+			t.Errorf("got %d days, want 0", len(got))
+		}
+	})
 }

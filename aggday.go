@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"sort"
+	"time"
 )
 
 // aggday (aggregation method) decides how multiple datapoints landing on the
@@ -117,6 +118,96 @@ func goalDailyRate(g Goal) (float64, bool) {
 		return 0, false
 	}
 	return ratePerDay(*g.Rate, g.Runits), true
+}
+
+// Day-bucketing: the other half of "aggregate datapoints by day". bucketByDay
+// groups raw datapoints into timezone-aware calendar days; aggregateByDay then
+// reduces each day via the goal's aggday. Keeping both halves here (beside
+// aggregateDay/resolveAggday) means the whole "how a datapoint becomes one
+// charted value for its day" story lives in one module — chart.go layers only
+// windowing and the kyoom running total on top (see processDatapoints).
+
+// startOfDay floors an instant to local midnight of its own calendar day in loc.
+func startOfDay(t time.Time, loc *time.Location) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+}
+
+// dayValue is one calendar day reduced to a single plotted value, positioned at
+// the day's local-midnight boundary. aggregateByDay returns these in ascending
+// day order, making the sort order the chart series depends on explicit in the
+// result type rather than a comment on a bare []float64.
+type dayValue struct {
+	day   time.Time
+	value float64
+}
+
+// aggregateByDay is the aggday module's end-to-end "datapoints → one value per
+// day" reduction: it buckets datapoints into timezone-aware calendar days and
+// reduces each day to a single value via the goal's aggday. The result is in
+// ascending day order. Callers layer windowing and (for kyoom goals) the
+// running total on top — see processDatapoints.
+func aggregateByDay(goal Goal, datapoints []Datapoint, loc *time.Location) []dayValue {
+	aggday := resolveAggday(goal)
+	buckets := bucketByDay(datapoints, loc)
+	out := make([]dayValue, 0, len(buckets))
+	for _, b := range buckets {
+		out = append(out, dayValue{day: b.day, value: aggregateDay(goal, aggday, b.values)})
+	}
+	return out
+}
+
+// dayBucket is one calendar day's worth of datapoint values, in ascending
+// timestamp order, tagged with the day's start instant (local midnight).
+type dayBucket struct {
+	day    time.Time
+	values []float64
+}
+
+// bucketByDay groups datapoints into calendar days, ascending. Each day's
+// values stay in datapoint (ascending-timestamp) order so order-sensitive
+// aggdays (first/last) pick the right ends.
+//
+// The day is taken from the datapoint's Beeminder daystamp when present (it
+// already accounts for the goal's deadline), otherwise from the timestamp. Both
+// are resolved in loc — the same zone the chart window uses — so day boundaries
+// line up with the window and x-axis.
+func bucketByDay(datapoints []Datapoint, loc *time.Location) []dayBucket {
+	sorted := append([]Datapoint(nil), datapoints...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Timestamp < sorted[j].Timestamp
+	})
+
+	index := make(map[string]int)
+	var buckets []dayBucket
+	for _, dp := range sorted {
+		day := dayStart(dp, loc)
+		key := day.Format("2006-01-02")
+		if i, ok := index[key]; ok {
+			buckets[i].values = append(buckets[i].values, dp.Value)
+		} else {
+			index[key] = len(buckets)
+			buckets = append(buckets, dayBucket{day: day, values: []float64{dp.Value}})
+		}
+	}
+
+	// Buckets are first-seen in ascending-timestamp order, which is already
+	// ascending-day order; sort defensively in case daystamps and timestamps
+	// disagree near a boundary.
+	sort.SliceStable(buckets, func(i, j int) bool {
+		return buckets[i].day.Before(buckets[j].day)
+	})
+	return buckets
+}
+
+// dayStart returns the local-midnight instant of the datapoint's day, preferring
+// its daystamp (YYYYMMDD) and falling back to its timestamp.
+func dayStart(dp Datapoint, loc *time.Location) time.Time {
+	if len(dp.Daystamp) == 8 {
+		if t, err := time.ParseInLocation("20060102", dp.Daystamp, loc); err == nil {
+			return t
+		}
+	}
+	return startOfDay(time.Unix(dp.Timestamp, 0).In(loc), loc)
 }
 
 func aggSum(a []float64) float64 {

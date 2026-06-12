@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -246,18 +245,19 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 		}
 	}
 
-	days := bucketByDay(inRange, loc)
+	// Bucket + reduce per day in one call (aggday module). What's left here is
+	// purely the charting layer: window filtering and the kyoom running total.
+	days := aggregateByDay(goal, inRange, loc)
 	if len(days) == 0 {
 		return nil
 	}
-	aggday := resolveAggday(goal)
 
 	// Days are compared against the start of startTime's calendar day, not the
 	// startTime instant itself: when the window begins mid-day (e.g. a stale
 	// goal whose window starts at its last datapoint's timestamp), that day's
 	// midnight-anchored aggregate would otherwise fall just before the window
 	// and be dropped.
-	startDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, loc)
+	startDay := startOfDay(startTime, loc)
 
 	var processed []timedValue
 	running := 0.0 // cumulative total of daily aggregates (kyoom only)
@@ -268,7 +268,7 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 		if d.day.After(endTime) {
 			continue // future day: not plotted, and doesn't affect the in-window line
 		}
-		ad := aggregateDay(goal, aggday, d.values)
+		ad := d.value
 		switch {
 		case goal.Kyoom:
 			running += ad
@@ -295,61 +295,6 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 		processed = append([]timedValue{{timestamp: startDay.Unix(), value: carry}}, processed...)
 	}
 	return processed
-}
-
-// dayBucket is one calendar day's worth of datapoint values, in ascending
-// timestamp order, tagged with the day's start instant (local midnight).
-type dayBucket struct {
-	day    time.Time
-	values []float64
-}
-
-// bucketByDay groups datapoints into calendar days, ascending. Each day's
-// values stay in datapoint (ascending-timestamp) order so order-sensitive
-// aggdays (first/last) pick the right ends.
-//
-// The day is taken from the datapoint's Beeminder daystamp when present (it
-// already accounts for the goal's deadline), otherwise from the timestamp. Both
-// are resolved in loc — the same zone the chart window uses — so day boundaries
-// line up with the window and x-axis.
-func bucketByDay(datapoints []Datapoint, loc *time.Location) []dayBucket {
-	sorted := append([]Datapoint(nil), datapoints...)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp < sorted[j].Timestamp
-	})
-
-	index := make(map[string]int)
-	var buckets []dayBucket
-	for _, dp := range sorted {
-		day := dayStart(dp, loc)
-		key := day.Format("2006-01-02")
-		if i, ok := index[key]; ok {
-			buckets[i].values = append(buckets[i].values, dp.Value)
-		} else {
-			index[key] = len(buckets)
-			buckets = append(buckets, dayBucket{day: day, values: []float64{dp.Value}})
-		}
-	}
-
-	// Buckets are first-seen in ascending-timestamp order, which is already
-	// ascending-day order; sort defensively in case daystamps and timestamps
-	// disagree near a boundary.
-	sort.SliceStable(buckets, func(i, j int) bool {
-		return buckets[i].day.Before(buckets[j].day)
-	})
-	return buckets
-}
-
-// dayStart returns the local-midnight instant of the datapoint's day, preferring
-// its daystamp (YYYYMMDD) and falling back to its timestamp.
-func dayStart(dp Datapoint, loc *time.Location) time.Time {
-	if len(dp.Daystamp) == 8 {
-		if t, err := time.ParseInLocation("20060102", dp.Daystamp, loc); err == nil {
-			return t
-		}
-	}
-	t := time.Unix(dp.Timestamp, 0).In(loc)
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
 }
 
 // datapointSeries maps processed datapoints onto chartWidth evenly-spaced
