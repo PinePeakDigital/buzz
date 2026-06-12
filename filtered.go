@@ -204,19 +204,22 @@ type tomorrowView struct {
 	losedate int64
 	// roadMalformed is true when parseRoad rejected the goal's roadall. The
 	// bump silently falls back to g.Rate in that case (slopePerDayAt stays
-	// tolerant), so the view flags it with a ⚠ rather than presenting a
-	// fallback number as if it were authoritative. An absent road (benign,
-	// "not populated") is NOT malformed and carries no marker. See ADR-0003.
+	// tolerant), so the view flags it with a "(!) " marker rather than
+	// presenting a fallback number as if it were authoritative. An absent road
+	// (benign, "not populated") is NOT malformed and carries no marker. See
+	// ADR-0003.
 	roadMalformed bool
 }
 
 // markedBaremin is the baremin string the tomorrow view prints, prefixed with a
-// ⚠ when the goal's bright red line is malformed — the bumped amount silently
-// fell back to g.Rate, so it's flagged rather than shown as if authoritative
-// (#325 / ADR-0003).
+// "(!) " marker when the goal's bright red line is malformed — the bumped amount
+// silently fell back to g.Rate, so it's flagged rather than shown as if
+// authoritative (#325 / ADR-0003). The marker is ASCII so it occupies a known
+// display width and never shifts the goaltable's column alignment (a multi-byte
+// glyph like ⚠ can render 1 or 2 cells wide depending on the terminal/locale).
 func (v tomorrowView) markedBaremin() string {
 	if v.roadMalformed {
-		return "⚠ " + v.baremin
+		return "(!) " + v.baremin
 	}
 	return v.baremin
 }

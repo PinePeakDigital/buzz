@@ -715,7 +715,7 @@ func TestGoalByEndOfTomorrowAtPairsBareminAndLosedate(t *testing.T) {
 }
 
 // TestGoalByEndOfTomorrowAtFlagsMalformedRoad pins #325: a goal whose roadall is
-// malformed is flagged (roadMalformed → a ⚠ prefix on the displayed baremin),
+// malformed is flagged (roadMalformed → a "(!) " prefix on the displayed baremin),
 // while a valid road and an absent road ("not populated", benign) are not. The
 // flag is independent of the due-today bump gate.
 func TestGoalByEndOfTomorrowAtFlagsMalformedRoad(t *testing.T) {
@@ -738,8 +738,8 @@ func TestGoalByEndOfTomorrowAtFlagsMalformedRoad(t *testing.T) {
 		if !view.roadMalformed {
 			t.Error("expected roadMalformed = true for a malformed roadall")
 		}
-		if got := view.markedBaremin(); got != "⚠ +1" {
-			t.Errorf("markedBaremin = %q, want %q", got, "⚠ +1")
+		if got := view.markedBaremin(); got != "(!) +1" {
+			t.Errorf("markedBaremin = %q, want %q", got, "(!) +1")
 		}
 	})
 
@@ -764,6 +764,24 @@ func TestGoalByEndOfTomorrowAtFlagsMalformedRoad(t *testing.T) {
 		}
 		if got := view.markedBaremin(); got != "+1" {
 			t.Errorf("markedBaremin = %q, want %q (no marker)", got, "+1")
+		}
+	})
+
+	t.Run("malformed road on a bumped (due-later-today) goal", func(t *testing.T) {
+		// The gate-independence case that matters most: a due-later-today goal is
+		// bumped, and the bump silently falls back to g.Rate because the road
+		// won't parse. The marker warns that the bumped figure is a fallback.
+		// (Pins the roadMalformed flag on the bumped return branch, which is a
+		// separate struct literal from the not-bumped one.)
+		todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix() // later today → bumped
+		g := Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: fptr(1), Runits: "d", Roadall: malformedRoad}
+		view := goalByEndOfTomorrowAt(g, now)
+		if !view.roadMalformed {
+			t.Error("expected roadMalformed = true on the bumped branch")
+		}
+		// Malformed road → slopePerDayAt falls back to g.Rate (1/day): +1 → +2.
+		if got := view.markedBaremin(); got != "(!) +2" {
+			t.Errorf("markedBaremin = %q, want %q (bumped via g.Rate fallback)", got, "(!) +2")
 		}
 	})
 }
