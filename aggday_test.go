@@ -164,6 +164,30 @@ func TestAggregateByDay(t *testing.T) {
 		}
 	})
 
+	t.Run("daystamp wins over timestamp, days stay ascending", func(t *testing.T) {
+		// The daystamp accounts for the goal's deadline, so it can legitimately
+		// disagree with the raw timestamp's calendar day. Here the
+		// earlier-timestamp point carries a LATER daystamp and vice-versa, so the
+		// timestamp pre-sort alone would order the days backwards — only
+		// bucketByDay's defensive re-sort (and its daystamp-over-timestamp day
+		// derivation) produces the correct ascending result.
+		goal := Goal{} // non-kyoom default aggday "last" → one value per day
+		dps := []Datapoint{
+			{Timestamp: day(2024, 6, 1).Add(23 * time.Hour).Unix(), Daystamp: "20240602", Value: 10},
+			{Timestamp: day(2024, 6, 2).Add(1 * time.Hour).Unix(), Daystamp: "20240601", Value: 20},
+		}
+		got := aggregateByDay(goal, dps, loc)
+		if len(got) != 2 {
+			t.Fatalf("got %d days, want 2 (%v)", len(got), got)
+		}
+		if !got[0].day.Equal(day(2024, 6, 1)) || got[0].value != 20 {
+			t.Errorf("day0 = {%s, %v}, want {2024-06-01, 20}", got[0].day, got[0].value)
+		}
+		if !got[1].day.Equal(day(2024, 6, 2)) || got[1].value != 10 {
+			t.Errorf("day1 = {%s, %v}, want {2024-06-02, 10}", got[1].day, got[1].value)
+		}
+	})
+
 	t.Run("empty input yields no days", func(t *testing.T) {
 		if got := aggregateByDay(Goal{}, nil, loc); len(got) != 0 {
 			t.Errorf("got %d days, want 0", len(got))
