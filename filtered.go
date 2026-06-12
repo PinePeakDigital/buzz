@@ -44,12 +44,24 @@ func handleTodayCommand() {
 // bumped baremin is what's needed by *tomorrow's* deadline, not today's.
 func handleTomorrowCommand() {
 	now := time.Now()
+	// Memoize the vended pair per goal: losedateFor is called O(n log n) times
+	// while sorting and again per deadline column, and each goalByEndOfTomorrowAt
+	// runs the relatively expensive bumpedBaremin projection (string parsing +
+	// roadall slope lookup). Caching by slug computes it once per goal. Both
+	// columns still derive from the same pair, so the bumped baremin and bumped
+	// losedate can't disagree (see goalByEndOfTomorrowAt).
+	views := make(map[string]tomorrowView)
+	viewFor := func(g Goal) tomorrowView {
+		if v, ok := views[g.Slug]; ok {
+			return v
+		}
+		v := goalByEndOfTomorrowAt(g, now)
+		views[g.Slug] = v
+		return v
+	}
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
-	// Both columns derive from the same vended pair, so the bumped baremin and
-	// the bumped losedate share the due-today gate and `now` by construction —
-	// they can't disagree (see goalByEndOfTomorrowAt).
-	bareminFor := func(g Goal) string { return goalByEndOfTomorrowAt(g, now).baremin }
-	losedateFor := func(g Goal) int64 { return goalByEndOfTomorrowAt(g, now).losedate }
+	bareminFor := func(g Goal) string { return viewFor(g).baremin }
+	losedateFor := func(g Goal) int64 { return viewFor(g).losedate }
 	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor)
 }
 

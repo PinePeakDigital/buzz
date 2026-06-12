@@ -249,10 +249,10 @@ func TestRatePerDay(t *testing.T) {
 	}
 }
 
-// TestBareminByEndOfTomorrowAt verifies that due-today goals get their baremin
+// TestGoalByEndOfTomorrowAtBaremin verifies that due-today goals get their baremin
 // bumped by one day's worth of rate, while goals due tomorrow (or later) are
 // returned unchanged.
-func TestBareminByEndOfTomorrowAt(t *testing.T) {
+func TestGoalByEndOfTomorrowAtBaremin(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
 	todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
@@ -572,11 +572,11 @@ func piecewiseRoadall(startT int64, startV float64, segments ...float64) [][]*fl
 	return rows
 }
 
-// TestLosedateByEndOfTomorrowAt verifies that due-today goals get their
+// TestGoalByEndOfTomorrowAtLosedate verifies that due-today goals get their
 // displayed deadline advanced by one calendar day in the tomorrow view (in
 // the caller's local zone, so DST transitions stay aligned), while goals
 // already due tomorrow or later keep their own losedate.
-func TestLosedateByEndOfTomorrowAt(t *testing.T) {
+func TestGoalByEndOfTomorrowAtLosedate(t *testing.T) {
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
 	todayDeadline := time.Date(2025, 1, 15, 17, 59, 0, 0, time.UTC).Unix()
 	tomorrowDeadline := time.Date(2025, 1, 16, 17, 59, 0, 0, time.UTC).Unix()
