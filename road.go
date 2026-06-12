@@ -63,20 +63,33 @@ func parseRoad(roadall [][]*float64, runits string) (road, error) {
 			return nil, fmt.Errorf("road row %d: must set exactly one of value or rate", i)
 		}
 		curT := *cur[0]
-		// Times must strictly increase: an equal or earlier boundary would
-		// produce a zero- or negative-duration segment, after which valueAt /
-		// slopePerDayAt pick the wrong branch. Per ADR-0003 that's a malformed
-		// road, surfaced rather than silently materialised.
-		if curT <= prevT {
-			return nil, fmt.Errorf("road row %d: time must be greater than the previous row time", i)
+		// Times must be non-decreasing. An *equal* boundary is legitimate: it's a
+		// vertical step (the line jumps instantaneously), observed in real roadall
+		// as a rate-row and value-row sharing one instant — 3208 such rows across
+		// 52/60 goals in the audited account (see ADR-0003). An *earlier* boundary
+		// would produce a negative-duration segment after which valueAt /
+		// slopePerDayAt pick the wrong branch, so that alone is malformed and
+		// surfaced rather than silently materialised.
+		if curT < prevT {
+			return nil, fmt.Errorf("road row %d: time must not be earlier than the previous row time", i)
 		}
 
 		var curV, slopePerDay float64
 		if cur[1] != nil {
-			// Value row: slope derived from the materialised endpoints. curT >
-			// prevT is guaranteed above, so the divisor is always positive.
 			curV = *cur[1]
-			slopePerDay = (curV - prevV) / (curT - prevT) * 86400.0
+			if curT == prevT {
+				// Vertical step: the line jumps from prevV to curV instantaneously.
+				// The segment has zero duration, so a Δvalue/Δtime slope would
+				// divide by zero; leave it 0. The 0 is never reported as a real
+				// slope — slopePerDayAt skips zero-duration segments. (valueAt is
+				// left-continuous across the step: it holds the pre-jump value at
+				// the instant and switches to the post-jump line just after, since
+				// the segment ending here is matched first in the walk.)
+				slopePerDay = 0
+			} else {
+				// Value row: slope derived from the materialised endpoints.
+				slopePerDay = (curV - prevV) / (curT - prevT) * 86400.0
+			}
 		} else {
 			// Rate row: the slope is the row's rate (in gunits/day); the end
 			// value is materialised from it so a following value-or-rate row
@@ -135,6 +148,15 @@ func (r road) slopePerDayAt(t time.Time) (float64, bool) {
 		return 0, false
 	}
 	for _, seg := range r {
+		if seg.endT == seg.startT {
+			// Zero-duration vertical step: it carries no meaningful daily slope (a
+			// value-step's is the inert 0). Skip it so that when a step is the
+			// road's *first* segment it doesn't shadow the real rate of the segment
+			// that actually runs from this instant. For an interior step the
+			// segment ending here already precedes it and is returned first, so the
+			// skip is a no-op there.
+			continue
+		}
 		if target <= seg.endT {
 			return seg.slopePerDay, true
 		}
