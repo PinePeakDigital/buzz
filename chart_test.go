@@ -72,6 +72,62 @@ func TestRenderGoalChartWithDatapoints(t *testing.T) {
 	}
 }
 
+func TestRenderGoalChartMalformedRoad(t *testing.T) {
+	// A goal with in-window datapoints but a malformed roadall (a row carrying
+	// both a value and a rate) must surface loudly rather than draw a chart —
+	// the three-way render outcome from ADR-0003.
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+	goal := Goal{
+		Slug: "malformed",
+		Yaw:  1,
+		Datapoints: []Datapoint{
+			{Timestamp: yesterday.Unix(), Value: 5.0},
+			{Timestamp: now.Unix(), Value: 10.0},
+		},
+		Tmin: yesterday.Format("2006-01-02"),
+		Tmax: now.Format("2006-01-02"),
+		Roadall: [][]*float64{
+			roadallRow(float64(yesterday.Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.Unix()), fptr(5.0), fptr(1.0)), // both set → malformed
+		},
+	}
+
+	chart := renderGoalChart(goal, 80)
+	if !strings.Contains(chart, "Couldn't render the bright red line") {
+		t.Errorf("expected a malformed-road warning banner, got %q", chart)
+	}
+	if strings.Contains(chart, "Goal Progress Chart") {
+		t.Error("expected no plotted chart when the road is malformed")
+	}
+}
+
+func TestRenderGoalChartAbsentRoad(t *testing.T) {
+	// A goal with in-window datapoints but no roadall must say the bright red
+	// line wasn't populated rather than draw a flat zero line (ADR-0003).
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+	goal := Goal{
+		Slug: "absent",
+		Yaw:  1,
+		Datapoints: []Datapoint{
+			{Timestamp: yesterday.Unix(), Value: 5.0},
+			{Timestamp: now.Unix(), Value: 10.0},
+		},
+		Tmin: yesterday.Format("2006-01-02"),
+		Tmax: now.Format("2006-01-02"),
+		// No Roadall → absent.
+	}
+
+	chart := renderGoalChart(goal, 80)
+	if !strings.Contains(chart, "wasn't populated") {
+		t.Errorf("expected a 'not populated' notice, got %q", chart)
+	}
+	if strings.Contains(chart, "Goal Progress Chart") {
+		t.Error("expected no plotted chart when the road is absent")
+	}
+}
+
 func TestRenderGoalChartCumulative(t *testing.T) {
 	now := time.Now()
 	yesterday := now.AddDate(0, 0, -1)
