@@ -504,9 +504,9 @@ func TestBareminByEndOfTomorrowAt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := bareminByEndOfTomorrowAt(tt.goal, now)
+			got := goalByEndOfTomorrowAt(tt.goal, now).baremin
 			if got != tt.expected {
-				t.Errorf("bareminByEndOfTomorrowAt = %q, want %q", got, tt.expected)
+				t.Errorf("goalByEndOfTomorrowAt().baremin = %q, want %q", got, tt.expected)
 			}
 		})
 	}
@@ -626,9 +626,9 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := losedateByEndOfTomorrowAt(tt.goal, now)
+			got := goalByEndOfTomorrowAt(tt.goal, now).losedate
 			if got != tt.expected {
-				t.Errorf("losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+				t.Errorf("goalByEndOfTomorrowAt().losedate = %d, want %d (diff %d seconds)",
 					got, tt.expected, got-tt.expected)
 			}
 		})
@@ -646,10 +646,10 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 		// 5:59 PM the day before spring-forward (2025-03-09).
 		losedate := time.Date(2025, 3, 8, 17, 59, 0, 0, ny)
 		nowDST := time.Date(2025, 3, 8, 14, 0, 0, 0, ny)
-		got := losedateByEndOfTomorrowAt(Goal{Losedate: losedate.Unix()}, nowDST)
+		got := goalByEndOfTomorrowAt(Goal{Losedate: losedate.Unix()}, nowDST).losedate
 		want := time.Date(2025, 3, 9, 17, 59, 0, 0, ny).Unix()
 		if got != want {
-			t.Errorf("DST losedateByEndOfTomorrowAt = %d, want %d (diff %d seconds)",
+			t.Errorf("DST goalByEndOfTomorrowAt().losedate = %d, want %d (diff %d seconds)",
 				got, want, got-want)
 		}
 		// Sanity: a naive +86400 would land at the wrong wall-clock hour
@@ -666,7 +666,7 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 // order of goals if we don't resort using the same losedateFor projection.
 func TestSortGoalsByDisplayedLosedate(t *testing.T) {
 	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
-	losedateFor := func(g Goal) int64 { return losedateByEndOfTomorrowAt(g, now) }
+	losedateFor := func(g Goal) int64 { return goalByEndOfTomorrowAt(g, now).losedate }
 
 	// Goal A: due today at 11 PM → displays as tomorrow 11 PM
 	// Goal B: due tomorrow at 9 AM → displays as tomorrow 9 AM (earlier)
@@ -690,7 +690,7 @@ func TestSortGoalsByDisplayedLosedate(t *testing.T) {
 }
 
 // TestParseTimeValue verifies the colon-separated time parser used by
-// bareminByEndOfTomorrowAt for HH:MM and HH:MM:SS baremin values.
+// bumpedBaremin for HH:MM and HH:MM:SS baremin values.
 func TestParseTimeValue(t *testing.T) {
 	tests := []struct {
 		name            string
