@@ -127,8 +127,11 @@ func goalDailyRate(g Goal) (float64, bool) {
 // charted value for its day" story lives in one module — chart.go layers only
 // windowing and the kyoom running total on top (see processDatapoints).
 
-// startOfDay floors an instant to local midnight of its own calendar day in loc.
+// startOfDay floors an instant to midnight of its own calendar day in loc.
+// t is converted into loc first so the calendar day is read in loc — correct
+// for any caller regardless of t's original zone.
 func startOfDay(t time.Time, loc *time.Location) time.Time {
+	t = t.In(loc)
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
 }
 
