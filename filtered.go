@@ -14,7 +14,8 @@ import (
 // Filtered list views: `buzz all`, `buzz today`, `buzz tomorrow`, `buzz due`,
 // `buzz less`. They share an orchestration helper (load → filter → sort →
 // render via the goaltable.Table) and a small family of filter predicates +
-// tomorrow-view baremin bumping helpers.
+// the tomorrow-view projection (goalByEndOfTomorrowAt), which bumps both
+// baremin and losedate together for due-today goals.
 
 // isDoLessFilter returns true if the goal is a do-less type goal
 func isDoLessFilter(g Goal) bool {

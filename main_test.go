@@ -660,6 +660,60 @@ func TestLosedateByEndOfTomorrowAt(t *testing.T) {
 	})
 }
 
+// TestGoalByEndOfTomorrowAtPairsBareminAndLosedate pins the invariant the whole
+// refactor exists to guarantee: baremin and losedate are vended from a single
+// due-today gate evaluation, so they move together. Either both reflect the
+// one-day bump (due-later-today) or neither does (due tomorrow-or-later, or
+// overdue). Reading both fields off one call makes a re-split of the gate —
+// bumping one field but not the other — fail here.
+func TestGoalByEndOfTomorrowAtPairsBareminAndLosedate(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	now := time.Date(2025, 1, 15, 14, 0, 0, 0, time.UTC)
+	todayDeadline := time.Date(2025, 1, 15, 23, 0, 0, 0, time.UTC).Unix()
+	tomorrowDeadline := time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC).Unix()
+	overdue := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC).Unix() // before now
+
+	// Due later today: BOTH fields bump. Baremin +1 → +2, losedate advances one
+	// calendar day in the local zone.
+	t.Run("due later today bumps both", func(t *testing.T) {
+		g := Goal{Losedate: todayDeadline, Baremin: "+1 today", Rate: f(1), Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		wantLosedate := time.Unix(todayDeadline, 0).In(now.Location()).AddDate(0, 0, 1).Unix()
+		if view.baremin != "+2" {
+			t.Errorf("baremin = %q, want %q", view.baremin, "+2")
+		}
+		if view.losedate != wantLosedate {
+			t.Errorf("losedate = %d, want %d (advanced one day)", view.losedate, wantLosedate)
+		}
+	})
+
+	// Due tomorrow already: NEITHER field bumps. Baremin only loses its window
+	// suffix; losedate is unchanged.
+	t.Run("due tomorrow bumps neither", func(t *testing.T) {
+		g := Goal{Losedate: tomorrowDeadline, Baremin: "+3 in 1 day", Rate: f(1), Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.baremin != "+3" {
+			t.Errorf("baremin = %q, want %q (suffix stripped, not bumped)", view.baremin, "+3")
+		}
+		if view.losedate != tomorrowDeadline {
+			t.Errorf("losedate = %d, want %d (unchanged)", view.losedate, tomorrowDeadline)
+		}
+	})
+
+	// Overdue: NEITHER field bumps. The losedate stays in the past so the
+	// OVERDUE indicator survives; baremin only loses its window suffix.
+	t.Run("overdue bumps neither", func(t *testing.T) {
+		g := Goal{Losedate: overdue, Baremin: "+1 today", Rate: f(1), Runits: "d"}
+		view := goalByEndOfTomorrowAt(g, now)
+		if view.baremin != "+1" {
+			t.Errorf("baremin = %q, want %q (suffix stripped, not bumped)", view.baremin, "+1")
+		}
+		if view.losedate != overdue {
+			t.Errorf("losedate = %d, want %d (unchanged, stays overdue)", view.losedate, overdue)
+		}
+	})
+}
+
 // TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
 // order the user actually sees in the deadline column. The tomorrow view
 // bumps due-today losedates by one calendar day, which can flip the relative
