@@ -804,6 +804,25 @@ func TestTomorrowMalformedLegend(t *testing.T) {
 	}
 }
 
+// TestTomorrowLegendGating pins the visibility rule the footnote ships: it
+// appears only when at least one displayed goal carries the "(!)" marker, and
+// is suppressed otherwise (so a clean tomorrow view stays uncluttered).
+func TestTomorrowLegendGating(t *testing.T) {
+	viewOf := func(g Goal) tomorrowView {
+		return tomorrowView{roadMalformed: g.Slug == "bad"}
+	}
+
+	if got := tomorrowLegend([]Goal{{Slug: "ok"}, {Slug: "bad"}}, viewOf); got != tomorrowMalformedLegend {
+		t.Errorf("expected the legend when a shown goal is flagged, got %q", got)
+	}
+	if got := tomorrowLegend([]Goal{{Slug: "ok"}, {Slug: "ok2"}}, viewOf); got != "" {
+		t.Errorf("expected no legend when no goal is flagged, got %q", got)
+	}
+	if got := tomorrowLegend(nil, viewOf); got != "" {
+		t.Errorf("expected no legend for an empty goal list, got %q", got)
+	}
+}
+
 // TestSortGoalsByDisplayedLosedate locks in the rule that rows render in the
 // order the user actually sees in the deadline column. The tomorrow view
 // bumps due-today losedates by one calendar day, which can flip the relative

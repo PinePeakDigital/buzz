@@ -63,14 +63,7 @@ func handleTomorrowCommand() {
 	bareminFor := func(g Goal) string { return viewFor(g).markedBaremin() }
 	losedateFor := func(g Goal) int64 { return viewFor(g).losedate }
 	// Explain the "(!)" marker, but only when a flagged goal is actually shown.
-	legendFor := func(goals []Goal) string {
-		for _, g := range goals {
-			if viewFor(g).roadMalformed {
-				return tomorrowMalformedLegend
-			}
-		}
-		return ""
-	}
+	legendFor := func(goals []Goal) string { return tomorrowLegend(goals, viewFor) }
 	handleFilteredCommandWithDisplay("tomorrow", filter, bareminFor, losedateFor, legendFor)
 }
 
@@ -78,6 +71,19 @@ func handleTomorrowCommand() {
 // at least one goal carries the "(!)" marker (a malformed bright red line). It
 // explains that the marked amount is a fallback, not a value read off the line.
 const tomorrowMalformedLegend = "\n(!) couldn't read the goal's bright red line; the amount shown is estimated from the goal's overall rate.\n"
+
+// tomorrowLegend returns the malformed-road footnote when at least one of the
+// shown goals carries the "(!)" marker, else "". viewOf resolves each goal's
+// tomorrow view; the caller passes its memoized resolver so this adds no extra
+// parsing.
+func tomorrowLegend(goals []Goal, viewOf func(Goal) tomorrowView) string {
+	for _, g := range goals {
+		if viewOf(g).roadMalformed {
+			return tomorrowMalformedLegend
+		}
+	}
+	return ""
+}
 
 // handleLessCommand outputs all do-less type goals
 func handleLessCommand() {
