@@ -63,20 +63,32 @@ func parseRoad(roadall [][]*float64, runits string) (road, error) {
 			return nil, fmt.Errorf("road row %d: must set exactly one of value or rate", i)
 		}
 		curT := *cur[0]
-		// Times must strictly increase: an equal or earlier boundary would
-		// produce a zero- or negative-duration segment, after which valueAt /
-		// slopePerDayAt pick the wrong branch. Per ADR-0003 that's a malformed
-		// road, surfaced rather than silently materialised.
-		if curT <= prevT {
-			return nil, fmt.Errorf("road row %d: time must be greater than the previous row time", i)
+		// Times must be non-decreasing. An *equal* boundary is legitimate: it's a
+		// vertical step (the line jumps instantaneously), observed in real roadall
+		// as a rate-row and value-row sharing one instant — 3208 such rows across
+		// 52/60 goals in the audited account (see ADR-0003). An *earlier* boundary
+		// would produce a negative-duration segment after which valueAt /
+		// slopePerDayAt pick the wrong branch, so that alone is malformed and
+		// surfaced rather than silently materialised.
+		if curT < prevT {
+			return nil, fmt.Errorf("road row %d: time must not be earlier than the previous row time", i)
 		}
 
 		var curV, slopePerDay float64
 		if cur[1] != nil {
-			// Value row: slope derived from the materialised endpoints. curT >
-			// prevT is guaranteed above, so the divisor is always positive.
 			curV = *cur[1]
-			slopePerDay = (curV - prevV) / (curT - prevT) * 86400.0
+			if curT == prevT {
+				// Vertical step: the line jumps from prevV to curV instantaneously.
+				// The segment has zero duration, so a Δvalue/Δtime slope would
+				// divide by zero; leave it 0. valueAt returns a zero-duration
+				// segment's endpoint directly, and slopePerDayAt never reaches this
+				// segment (the segment ending at the same instant precedes it in the
+				// walk), so the 0 is never sampled.
+				slopePerDay = 0
+			} else {
+				// Value row: slope derived from the materialised endpoints.
+				slopePerDay = (curV - prevV) / (curT - prevT) * 86400.0
+			}
 		} else {
 			// Rate row: the slope is the row's rate (in gunits/day); the end
 			// value is materialised from it so a following value-or-rate row
