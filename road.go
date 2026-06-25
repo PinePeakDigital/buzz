@@ -66,11 +66,23 @@ func parseRoad(roadall [][]*float64, runits string) (road, error) {
 		// Times must be non-decreasing. An *equal* boundary is legitimate: it's a
 		// vertical step (the line jumps instantaneously), observed in real roadall
 		// as a rate-row and value-row sharing one instant — 3208 such rows across
-		// 52/60 goals in the audited account (see ADR-0003). An *earlier* boundary
-		// would produce a negative-duration segment after which valueAt /
-		// slopePerDayAt pick the wrong branch, so that alone is malformed and
-		// surfaced rather than silently materialised.
+		// 52/60 goals in the audited account (see ADR-0003).
 		if curT < prevT {
+			// A *leading* knot earlier than the anchor (no segment built yet) is not
+			// corruption: roadall[0] is not always the earliest row. Beeminder
+			// prepends the anchor [tini, vini, null] to the user's `road` kinks, and
+			// tini can be left snapped to an old deadline grid when the goal's
+			// deadline is changed after the kinks are set — stranding it off the kink
+			// grid so the first kink predates it (soktid: tini 12h off-grid, first
+			// kink before it). Beeminder's own resolved `fullroad` drops such
+			// pre-anchor knots and starts the line at the anchor, so we mirror that
+			// rather than alarm (see ADR-0003).
+			if len(segs) == 0 {
+				continue
+			}
+			// An earlier boundary *mid-road* would produce a negative-duration
+			// segment after which valueAt / slopePerDayAt pick the wrong branch, so
+			// that is malformed and surfaced rather than silently materialised.
 			return nil, fmt.Errorf("road row %d: time must not be earlier than the previous row time", i)
 		}
 
