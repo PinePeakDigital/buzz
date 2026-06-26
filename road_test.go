@@ -76,8 +76,11 @@ func TestParseRoadMalformed(t *testing.T) {
 			roadallRow(roadUnix(0), fptr(0), nil),
 			roadallRow(roadUnix(10), nil, fptr(1)),
 		}},
-		{"earlier time than previous", "d", [][]*float64{
-			roadallRow(roadUnix(10), fptr(0), nil),
+		// Earlier *mid-road* (after a forward segment exists) is genuine
+		// corruption: anchor → forward to day 10 → back to day 5.
+		{"earlier time mid-road", "d", [][]*float64{
+			roadallRow(roadUnix(0), fptr(0), nil),
+			roadallRow(roadUnix(10), nil, fptr(1)),
 			roadallRow(roadUnix(5), nil, fptr(1)),
 		}},
 	}
@@ -185,6 +188,37 @@ func TestParseRoadLeadingVerticalStep(t *testing.T) {
 	// valueAt climbs from the post-jump value: 50 at day 0, 60 at day 5.
 	if got := r.valueAt(roadDay(5)); math.Abs(got-60) > 0.5 {
 		t.Errorf("valueAt(day 5) = %f, want ~60", got)
+	}
+}
+
+// TestParseRoadLeadingPreAnchorRow pins soktid's real shape: a freshly-created
+// goal with an early (negative) deadline whose roadall[0] anchor is NOT the
+// earliest row — a rate-row sits before it. Beeminder's own `fullroad` drops
+// such pre-anchor knots and starts the line at the anchor; parseRoad mirrors
+// that instead of alarming "time must not be earlier than the previous row
+// time" (see ADR-0003).
+func TestParseRoadLeadingPreAnchorRow(t *testing.T) {
+	// rate-row at day -1 (before the anchor) → anchor value 0 at day 0 → flat to
+	// day 2 → rate 1/day to day 10.
+	r, err := parseRoad([][]*float64{
+		roadallRow(roadUnix(0), fptr(0), nil),  // anchor
+		roadallRow(roadUnix(-1), nil, fptr(0)), // pre-anchor knot, dropped
+		roadallRow(roadUnix(2), nil, fptr(0)),
+		roadallRow(roadUnix(10), nil, fptr(1)),
+	}, "d")
+	if err != nil {
+		t.Fatalf("leading pre-anchor road must parse, got %v", err)
+	}
+	// The pre-anchor row is dropped: the road runs anchor(day 0)→day 2→day 10.
+	if r[0].startT != roadUnix(0) {
+		t.Errorf("road must start at the anchor (day 0), got startT=%f", r[0].startT)
+	}
+	// Flat at 0 through day 2, then +1/day: value ~3 at day 5.
+	if got := r.valueAt(roadDay(1)); math.Abs(got-0) > 0.5 {
+		t.Errorf("valueAt(day 1) = %f, want ~0 (flat)", got)
+	}
+	if got := r.valueAt(roadDay(5)); math.Abs(got-3) > 0.5 {
+		t.Errorf("valueAt(day 5) = %f, want ~3", got)
 	}
 }
 
