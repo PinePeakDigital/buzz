@@ -20,6 +20,7 @@ output and exits — ideal for scripts, cron jobs, and status bars.
 | [`buzz due`](/commands/viewing/#buzz-due) | Goals due within a duration you specify |
 | [`buzz less`](/commands/viewing/#buzz-less) | All do-less type goals |
 | [`buzz view`](/commands/viewing/#buzz-view) | Detailed information about a goal |
+| [`buzz data`](/commands/viewing/#buzz-data) | List a goal's datapoints |
 | [`buzz schedule`](/commands/viewing/#buzz-schedule) | Deadline distribution across a 24-hour day |
 | [`buzz review`](/commands/viewing/#buzz-review) | Interactive review of all goals |
 
