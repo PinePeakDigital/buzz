@@ -40,11 +40,11 @@ func printHelp() {
 	fmt.Println("  echo \"<value>\" | buzz add [--requestid=<id>] [--daystamp=<date>] <goalslug> [comment]")
 	fmt.Println("                                    Add a datapoint with value from stdin")
 	fmt.Println("  buzz refresh <goalslug>           Refresh autodata for a goal")
-	fmt.Println("  buzz data <goalslug>              List a goal's datapoints (date, value, comment)")
 	fmt.Println("  buzz view <goalslug>              View detailed information about a specific goal")
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
 	fmt.Println("  buzz view <goalslug> --json       Output goal data as JSON")
 	fmt.Println("  buzz view <goalslug> --json --datapoints  Include datapoints in JSON output")
+	fmt.Println("  buzz data <goalslug>              List a goal's datapoints (date, value, comment)")
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
@@ -132,11 +132,11 @@ func main() {
 		case "refresh":
 			handleRefreshCommand()
 			return
-		case "data":
-			handleDataCommand()
-			return
 		case "view":
 			handleViewCommand()
+			return
+		case "data":
+			handleDataCommand()
 			return
 		case "review":
 			handleReviewCommand()
@@ -173,7 +173,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, data, view, review, charge, create, deadline, schedule, uncle, ratchet, api, auth, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, data, review, charge, create, deadline, schedule, uncle, ratchet, api, auth, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}

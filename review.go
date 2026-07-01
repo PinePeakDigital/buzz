@@ -480,13 +480,7 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 	maxValueLen := 0
 	for i := len(datapoints) - 1; i >= len(datapoints)-count; i-- {
 		dp := datapoints[i]
-		var dateStr string
-		if len(dp.Daystamp) == 8 {
-			// Daystamp avoids timezone drift: "20241217" -> "2024-12-17".
-			dateStr = dp.Daystamp[:4] + "-" + dp.Daystamp[4:6] + "-" + dp.Daystamp[6:8]
-		} else {
-			dateStr = time.Unix(dp.Timestamp, 0).UTC().Format("2006-01-02")
-		}
+		dateStr := datapointDate(dp)
 		valueStr := fmt.Sprintf("%.6g", dp.Value)
 		if len(valueStr) > maxValueLen {
 			maxValueLen = len(valueStr)
