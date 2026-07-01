@@ -53,23 +53,32 @@ func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int 
 	dps := append([]Datapoint(nil), goal.Datapoints...)
 	sort.SliceStable(dps, func(i, j int) bool { return dps[i].Timestamp < dps[j].Timestamp })
 
-	maxValueLen := 0
-	values := make([]string, len(dps))
+	dates, values, maxValueLen := formatDatapointRows(dps)
 	for i, dp := range dps {
+		if dp.Comment != "" {
+			fmt.Fprintf(stdout, "%s   %-*s   %s\n", dates[i], maxValueLen, values[i], dp.Comment)
+		} else {
+			fmt.Fprintf(stdout, "%s   %s\n", dates[i], values[i])
+		}
+	}
+	return 0
+}
+
+// formatDatapointRows renders per-datapoint date and value strings (parallel to
+// dps) and the width of the widest value, so callers can print aligned
+// "date   value   comment" rows. Shared by `buzz data` and the review view's
+// recent-datapoints block, keeping the date and value formatting identical.
+func formatDatapointRows(dps []Datapoint) (dates, values []string, maxValueLen int) {
+	dates = make([]string, len(dps))
+	values = make([]string, len(dps))
+	for i, dp := range dps {
+		dates[i] = datapointDate(dp)
 		values[i] = fmt.Sprintf("%.6g", dp.Value)
 		if len(values[i]) > maxValueLen {
 			maxValueLen = len(values[i])
 		}
 	}
-
-	for i, dp := range dps {
-		if dp.Comment != "" {
-			fmt.Fprintf(stdout, "%s   %-*s   %s\n", datapointDate(dp), maxValueLen, values[i], dp.Comment)
-		} else {
-			fmt.Fprintf(stdout, "%s   %s\n", datapointDate(dp), values[i])
-		}
-	}
-	return 0
+	return dates, values, maxValueLen
 }
 
 // datapointDate renders a datapoint's day as YYYY-MM-DD, preferring the
