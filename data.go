@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -23,19 +25,55 @@ func handleDataCommand() {
 }
 
 // runDataCommand is the testable core of `buzz data`. It expects a single
-// <goalslug> argument and prints that goal's datapoints in chronological order,
-// one per line as "date  value  comment".
+// <goalslug> argument and prints that goal's datapoints one per line as
+// "date  value  comment", oldest-first by default or newest-first with --desc.
 func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
-		if len(args) < 1 {
-			fmt.Fprintln(stderr, "Error: Missing required argument")
-		} else {
-			fmt.Fprintf(stderr, "Error: Too many arguments: %v\n", args[1:])
+	const usage = "Usage: buzz data [--asc|--desc] <goalslug>"
+
+	// Parse flags on either side of the positional slug (as `view` does), so
+	// `buzz data --desc g` and `buzz data g --desc` both work.
+	dataFlags := flag.NewFlagSet("data", flag.ContinueOnError)
+	dataFlags.SetOutput(stderr)
+	dataFlags.Usage = func() {} // we print our own usage on error
+	asc := dataFlags.Bool("asc", false, "Sort datapoints oldest-first (default)")
+	desc := dataFlags.Bool("desc", false, "Sort datapoints newest-first")
+
+	var positional []string
+	remaining := args
+	for len(remaining) > 0 {
+		if err := dataFlags.Parse(remaining); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				fmt.Fprintln(stdout, usage)
+				return 0
+			}
+			fmt.Fprintf(stderr, "Error parsing flags: %s\n", redactError(err))
+			fmt.Fprintln(stderr, usage)
+			return 2
 		}
-		fmt.Fprintln(stderr, "Usage: buzz data <goalslug>")
+		rest := dataFlags.Args()
+		if len(rest) == 0 {
+			break
+		}
+		positional = append(positional, rest[0])
+		remaining = rest[1:]
+	}
+
+	if *asc && *desc {
+		fmt.Fprintln(stderr, "Error: --asc and --desc are mutually exclusive")
+		fmt.Fprintln(stderr, usage)
 		return 1
 	}
-	goalSlug := args[0]
+
+	if len(positional) != 1 {
+		if len(positional) == 0 {
+			fmt.Fprintln(stderr, "Error: Missing required argument")
+		} else {
+			fmt.Fprintf(stderr, "Error: Too many arguments: %v\n", positional[1:])
+		}
+		fmt.Fprintln(stderr, usage)
+		return 1
+	}
+	goalSlug := positional[0]
 
 	goal, err := client.FetchGoalWithDatapoints(context.Background(), goalSlug)
 	if err != nil {
@@ -48,10 +86,15 @@ func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int 
 		return 0
 	}
 
-	// The API's datapoint order isn't guaranteed; sort ascending by timestamp
-	// so the output is deterministic (oldest first, newest last).
+	// The API's datapoint order isn't guaranteed; sort by timestamp so the
+	// output is deterministic. Default oldest-first; --desc flips to newest-first.
 	dps := append([]Datapoint(nil), goal.Datapoints...)
-	sort.SliceStable(dps, func(i, j int) bool { return dps[i].Timestamp < dps[j].Timestamp })
+	sort.SliceStable(dps, func(i, j int) bool {
+		if *desc {
+			return dps[i].Timestamp > dps[j].Timestamp
+		}
+		return dps[i].Timestamp < dps[j].Timestamp
+	})
 
 	dates, values, maxValueLen := formatDatapointRows(dps)
 	for i, dp := range dps {

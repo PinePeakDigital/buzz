@@ -35,6 +35,10 @@ func TestRunDataCommand(t *testing.T) {
 		{"api error", []string{"g"}, func(string) (*Goal, error) { return nil, errors.New("boom") }, 1, "", "boom"},
 		{"no datapoints", []string{"g"}, func(string) (*Goal, error) { return &Goal{}, nil }, 0, "No datapoints found for goal: g", ""},
 		{"lists sorted and aligned", []string{"g"}, twoPoints, 0, "2024-01-01   3      first\n2024-01-02   12.5   later\n", ""},
+		{"explicit --asc matches default", []string{"--asc", "g"}, twoPoints, 0, "2024-01-01   3      first\n2024-01-02   12.5   later\n", ""},
+		{"--desc reverses to newest-first", []string{"g", "--desc"}, twoPoints, 0, "2024-01-02   12.5   later\n2024-01-01   3      first\n", ""},
+		{"--asc and --desc are mutually exclusive", []string{"--asc", "--desc", "g"}, nil, 1, "", "mutually exclusive"},
+		{"unknown flag", []string{"--nope", "g"}, nil, 2, "", "Error parsing flags"},
 		{"daystamp fallback to utc timestamp", []string{"g"}, noDaystamp, 0, "2024-01-02   7\n", ""},
 	}
 	for _, tt := range tests {

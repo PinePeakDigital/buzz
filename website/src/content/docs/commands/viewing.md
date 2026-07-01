@@ -179,6 +179,15 @@ Each line shows the datapoint's date, value, and comment (comments are omitted
 when empty). Dates come from Beeminder's daystamp, so they match the day the
 datapoint counts toward regardless of your timezone.
 
+Sorting defaults to oldest-first so the newest datapoints land at the bottom of
+an unpaged dump. Use `--desc` for newest-first (or `--asc` to be explicit); the
+two flags are mutually exclusive:
+
+```bash
+buzz data exercise --desc   # newest datapoint first
+buzz data exercise --asc    # oldest first (same as the default)
+```
+
 ## `buzz schedule`
 
 Display the distribution of goal deadlines throughout a 24-hour day:
