@@ -44,6 +44,9 @@ func printHelp() {
 	fmt.Println("  buzz view <goalslug> --web        Open the goal in the browser")
 	fmt.Println("  buzz view <goalslug> --json       Output goal data as JSON")
 	fmt.Println("  buzz view <goalslug> --json --datapoints  Include datapoints in JSON output")
+	fmt.Println("  buzz data [--asc|--desc] <goalslug>")
+	fmt.Println("                                    List a goal's datapoints (date, value, comment)")
+	fmt.Println("                                    --asc: oldest-first (default)  --desc: newest-first")
 	fmt.Println("  buzz review                       Interactive review of all goals")
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
@@ -134,6 +137,9 @@ func main() {
 		case "view":
 			handleViewCommand()
 			return
+		case "data":
+			handleDataCommand()
+			return
 		case "review":
 			handleReviewCommand()
 			return
@@ -169,7 +175,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, review, charge, create, deadline, schedule, uncle, ratchet, api, auth, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, data, review, charge, create, deadline, schedule, uncle, ratchet, api, auth, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}
