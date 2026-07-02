@@ -771,23 +771,38 @@ func kyoomDailyGoal(days int) Goal {
 // line rather than floating in empty space, which would mean the asciigraph
 // value→row projection has drifted.
 func TestGoalChartMarkers(t *testing.T) {
-	sparse := renderGoalChart(kyoomDailyGoal(6), 80)
-	if !strings.ContainsRune(sparse, markerGlyph) {
-		t.Errorf("sparse chart should dot its datapoints, got:\n%s", sparse)
+	const width = 80
+	goal := kyoomDailyGoal(6)
+	sparse := renderGoalChart(goal, width)
+
+	// Every datapoint node must be dotted, not just "at least one": a drifted
+	// projection that lands markers on spaces (silently dropped by
+	// replaceCellGlyph) would still leave a stray one, so assert the exact count.
+	// Derive the expected node count from the same pipeline renderGoalChart uses.
+	start, end := chartTimeframe(goal, time.Now())
+	_, nodes := datapointSeries(processDatapoints(goal, start, end), start, end, width-10)
+	if got := strings.Count(sparse, string(markerGlyph)); got != len(nodes) {
+		t.Errorf("marker count = %d, want one per node (%d):\n%s", got, len(nodes), sparse)
 	}
-	// Every marker must sit on the blue line: asciigraph colours the cell before
-	// the glyph, so a marker with no blue code anywhere before it on its line
-	// would be a stray dot from a bad projection.
+
+	// Each marker must sit ON the blue line: the SGR immediately governing the
+	// marker cell (the last colour code before it on its row) must be blue. A
+	// projection off by a row could land a dot on the red line while blue merely
+	// appears elsewhere on the row — the weaker "blue somewhere before" check
+	// would miss that.
 	blue := "\x1b[94m"
 	for _, ln := range strings.Split(sparse, "\n") {
-		if idx := strings.IndexRune(ln, markerGlyph); idx >= 0 {
-			if !strings.Contains(ln[:idx], blue) {
-				t.Errorf("marker not on the blue line (no blue SGR before it): %q", ln)
-			}
+		idx := strings.IndexRune(ln, markerGlyph)
+		if idx < 0 {
+			continue
+		}
+		sgrs := ansiPattern.FindAllString(ln[:idx], -1)
+		if len(sgrs) == 0 || sgrs[len(sgrs)-1] != blue {
+			t.Errorf("marker not governed by the blue SGR (last code before it = %v): %q", sgrs, ln)
 		}
 	}
 
-	dense := renderGoalChart(kyoomDailyGoal(200), 80)
+	dense := renderGoalChart(kyoomDailyGoal(200), width)
 	if strings.ContainsRune(dense, markerGlyph) {
 		t.Errorf("dense chart should not dot datapoints (nodes fill the width), got:\n%s", dense)
 	}

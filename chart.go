@@ -404,8 +404,15 @@ const markerGlyph = '●'
 // recomputed here, so the target cell is already blue and swapping only its rune
 // keeps the colour. The mapping mirrors asciigraph.PlotMany — min/max across
 // both series, chartHeight rows, its sign-aware rounding; TestGoalChartMarkers
-// guards it against drift if the library changes. A node whose projected cell
-// isn't on the drawn line (a space) is skipped rather than dotting empty space.
+// guards it against drift if the library changes.
+//
+// asciigraph draws each segment's endpoints in the segment's left column, so the
+// final series value is rendered one column to its left and the last column is
+// never drawn; a terminal node (x == chartWidth-1) is retargeted there so its
+// dot isn't lost. (Nodes are anchored at local midnight, so in practice one
+// rarely lands on the last column, but the guard keeps the helper correct.) As a
+// backstop, a node whose projected cell still isn't on the drawn line (a space)
+// is skipped rather than dotting empty space.
 func overlayDatapointMarkers(graph string, nodeCols []int, datapointValues, roadValues []float64, gutter, chartWidth int) string {
 	if gutter < 0 || len(nodeCols) == 0 || len(nodeCols) > chartWidth/2 {
 		return graph
@@ -435,7 +442,11 @@ func overlayDatapointMarkers(graph string, nodeCols []int, datapointValues, road
 		if row < 0 || row >= len(lines) {
 			continue
 		}
-		lines[row] = replaceCellGlyph(lines[row], gutter+1+x, markerGlyph)
+		col := x
+		if col == chartWidth-1 && col > 0 {
+			col-- // asciigraph draws the terminal value one column to its left
+		}
+		lines[row] = replaceCellGlyph(lines[row], gutter+1+col, markerGlyph)
 	}
 	return strings.Join(lines, "\n")
 }
