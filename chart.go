@@ -63,7 +63,7 @@ func renderGoalChart(goal Goal, width int) string {
 	}
 
 	roadValues := roadValuesForTimeframe(brightLine, startTime, endTime, chartWidth)
-	datapointValues := datapointSeries(processed, startTime, endTime, chartWidth)
+	datapointValues, nodeCols := datapointSeries(processed, startTime, endTime, chartWidth)
 
 	var chart strings.Builder
 	chart.WriteString("\n")
@@ -103,6 +103,15 @@ func renderGoalChart(goal Goal, width int) string {
 	// the rest of the review UI. The gutter is measured on the un-indented
 	// output, then plot and axis are shifted together.
 	gutter := plotGutterWidth(graphOutput)
+	// On sparse charts — where the datapoints are far enough apart to read as
+	// separate steps — dot each datapoint on the blue line, mirroring Beeminder's
+	// graph. The dots make it obvious the data lands on the bright red line at
+	// each step, dispelling the illusion that the flat treads (which dip below the
+	// rising line between points) mean the goal is off track. On dense charts the
+	// nodes fill nearly every column and the dots would just smear the line into
+	// noise, so they're skipped — and dense charts don't have the illusion anyway,
+	// since the two lines merge.
+	graphOutput = overlayDatapointMarkers(graphOutput, nodeCols, datapointValues, roadValues, gutter, chartWidth)
 	chart.WriteString(indentLines(graphOutput, 2))
 	chart.WriteString("\n")
 
@@ -311,7 +320,11 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 // Beeminder never draws a diagonal connect-the-dots data line. (Cumulative goals
 // carry a running total, so their staircase climbs; non-cumulative goals hold a
 // raw value flat between points — both step.)
-func datapointSeries(processed []timedValue, startTime, endTime time.Time, chartWidth int) []float64 {
+//
+// The second return value is the distinct columns carrying an actual datapoint
+// (the staircase's nodes, ascending) — as opposed to the gap-fill columns
+// between them. overlayDatapointMarkers dots these nodes on sparse charts.
+func datapointSeries(processed []timedValue, startTime, endTime time.Time, chartWidth int) ([]float64, []int) {
 	values := make([]float64, chartWidth)
 	hasDatapoint := make([]bool, chartWidth)
 	duration := endTime.Sub(startTime).Seconds()
@@ -344,7 +357,7 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 		}
 	}
 	if firstDP < 0 {
-		return values
+		return values, nil
 	}
 
 	for i := 0; i < firstDP; i++ {
@@ -367,7 +380,132 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 		prevDP = i
 	}
 
-	return values
+	nodes := make([]int, 0)
+	for i := 0; i < chartWidth; i++ {
+		if hasDatapoint[i] {
+			nodes = append(nodes, i)
+		}
+	}
+	return values, nodes
+}
+
+// markerGlyph is the dot drawn on each datapoint node of a sparse chart,
+// mirroring the dots on Beeminder's own graph.
+const markerGlyph = '●'
+
+// overlayDatapointMarkers dots each datapoint node on the blue line, but only
+// when the chart is sparse enough that the nodes read as separate steps —
+// roughly half the columns or fewer carrying a datapoint. It returns graph
+// unchanged when the chart is too dense (the dots would just smear the merged
+// line), when there's nothing to mark, or when the gutter couldn't be located.
+//
+// A marker replaces the blue glyph asciigraph already drew at the node's cell:
+// asciigraph plots series[x]'s value at column x via the same value→row mapping
+// recomputed here, so the target cell is already blue and swapping only its rune
+// keeps the colour. The mapping mirrors asciigraph.PlotMany — min/max across
+// both series, chartHeight rows, its sign-aware rounding; TestGoalChartMarkers
+// guards it against drift if the library changes.
+//
+// asciigraph draws each segment's endpoints in the segment's left column, which
+// steers where a marker sits:
+//
+//   - Stepped node (its value differs from the previous column's): the riser and
+//     its top corner are drawn one column to the left, so the marker goes there —
+//     on the corner — and the vertical riser leads straight into the dot rather
+//     than the line cornering past it to a dot on the tread.
+//   - Flat node (same value as the previous column, e.g. a kyoom 0-day) has no
+//     riser; the marker stays in its own column, on the horizontal run.
+//   - A terminal node (x == chartWidth-1) is likewise drawn one column to its
+//     left (the last column is never drawn), so it's retargeted there. Nodes
+//     anchor at local midnight, so one rarely lands on the last column, but the
+//     guard keeps the helper correct.
+//
+// As a backstop, a node whose projected cell still isn't on the drawn line (a
+// space) is skipped rather than dotting empty space.
+func overlayDatapointMarkers(graph string, nodeCols []int, datapointValues, roadValues []float64, gutter, chartWidth int) string {
+	if gutter < 0 || len(nodeCols) == 0 || len(nodeCols) > chartWidth/2 {
+		return graph
+	}
+
+	minimum, maximum := math.Inf(1), math.Inf(-1)
+	for _, series := range [][]float64{roadValues, datapointValues} {
+		for _, v := range series {
+			minimum = math.Min(minimum, v)
+			maximum = math.Max(maximum, v)
+		}
+	}
+	interval := math.Abs(maximum - minimum)
+	ratio := 1.0
+	if interval != 0 {
+		ratio = float64(chartHeight) / interval
+	}
+	intmin2 := int(asciiRound(minimum * ratio))
+	rows := int(math.Abs(float64(int(asciiRound(maximum*ratio)) - intmin2)))
+
+	lines := strings.Split(graph, "\n")
+	for _, x := range nodeCols {
+		if x < 0 || x >= len(datapointValues) {
+			continue
+		}
+		row := rows - (int(asciiRound(datapointValues[x]*ratio)) - intmin2)
+		if row < 0 || row >= len(lines) {
+			continue
+		}
+		// A step into this node puts its riser + corner one column to the left;
+		// sit the dot on the corner so the riser runs straight into it. A flat node
+		// has no riser and keeps its own column. The terminal column is never drawn,
+		// so a node there also shifts left.
+		col := x
+		if col > 0 && (datapointValues[x] != datapointValues[x-1] || col == chartWidth-1) {
+			col--
+		}
+		lines[row] = replaceCellGlyph(lines[row], gutter+1+col, markerGlyph)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// asciiRound mirrors asciigraph's own rounding (round-half-up by magnitude) so a
+// marker lands on the exact cell asciigraph drew the blue line in.
+func asciiRound(input float64) float64 {
+	sign := 1.0
+	if input < 0 {
+		sign, input = -1, -input
+	}
+	if _, frac := math.Modf(input); frac >= 0.5 {
+		return math.Ceil(input) * sign
+	}
+	return math.Floor(input) * sign
+}
+
+// replaceCellGlyph replaces the rune at visible column targetCol in an
+// ANSI-coloured line, copying SGR escape sequences (which occupy no visible
+// column) verbatim so the replacement inherits the cell's colour. A space at the
+// target — meaning the projected node isn't on the drawn line — is left alone,
+// so a marker never floats in empty space.
+func replaceCellGlyph(line string, targetCol int, glyph rune) string {
+	var b strings.Builder
+	col := 0
+	runes := []rune(line)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\x1b' {
+			b.WriteRune(r)
+			for i++; i < len(runes); i++ {
+				b.WriteRune(runes[i])
+				if runes[i] == 'm' {
+					break
+				}
+			}
+			continue
+		}
+		if col == targetCol && r != ' ' {
+			b.WriteRune(glyph)
+		} else {
+			b.WriteRune(r)
+		}
+		col++
+	}
+	return b.String()
 }
 
 // indentLines prefixes n spaces to each non-empty line. Used to align the plot
