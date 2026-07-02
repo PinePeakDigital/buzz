@@ -406,13 +406,22 @@ const markerGlyph = '●'
 // both series, chartHeight rows, its sign-aware rounding; TestGoalChartMarkers
 // guards it against drift if the library changes.
 //
-// asciigraph draws each segment's endpoints in the segment's left column, so the
-// final series value is rendered one column to its left and the last column is
-// never drawn; a terminal node (x == chartWidth-1) is retargeted there so its
-// dot isn't lost. (Nodes are anchored at local midnight, so in practice one
-// rarely lands on the last column, but the guard keeps the helper correct.) As a
-// backstop, a node whose projected cell still isn't on the drawn line (a space)
-// is skipped rather than dotting empty space.
+// asciigraph draws each segment's endpoints in the segment's left column, which
+// steers where a marker sits:
+//
+//   - Stepped node (its value differs from the previous column's): the riser and
+//     its top corner are drawn one column to the left, so the marker goes there —
+//     on the corner — and the vertical riser leads straight into the dot rather
+//     than the line cornering past it to a dot on the tread.
+//   - Flat node (same value as the previous column, e.g. a kyoom 0-day) has no
+//     riser; the marker stays in its own column, on the horizontal run.
+//   - A terminal node (x == chartWidth-1) is likewise drawn one column to its
+//     left (the last column is never drawn), so it's retargeted there. Nodes
+//     anchor at local midnight, so one rarely lands on the last column, but the
+//     guard keeps the helper correct.
+//
+// As a backstop, a node whose projected cell still isn't on the drawn line (a
+// space) is skipped rather than dotting empty space.
 func overlayDatapointMarkers(graph string, nodeCols []int, datapointValues, roadValues []float64, gutter, chartWidth int) string {
 	if gutter < 0 || len(nodeCols) == 0 || len(nodeCols) > chartWidth/2 {
 		return graph
@@ -442,9 +451,13 @@ func overlayDatapointMarkers(graph string, nodeCols []int, datapointValues, road
 		if row < 0 || row >= len(lines) {
 			continue
 		}
+		// A step into this node puts its riser + corner one column to the left;
+		// sit the dot on the corner so the riser runs straight into it. A flat node
+		// has no riser and keeps its own column. The terminal column is never drawn,
+		// so a node there also shifts left.
 		col := x
-		if col == chartWidth-1 && col > 0 {
-			col-- // asciigraph draws the terminal value one column to its left
+		if col > 0 && (datapointValues[x] != datapointValues[x-1] || col == chartWidth-1) {
+			col--
 		}
 		lines[row] = replaceCellGlyph(lines[row], gutter+1+col, markerGlyph)
 	}

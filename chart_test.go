@@ -808,6 +808,39 @@ func TestGoalChartMarkers(t *testing.T) {
 	}
 }
 
+// TestGoalChartMarkerRiser guards that the vertical riser runs straight into each
+// dot: on this strictly-rising staircase the marker sits on the step's corner, so
+// the cell directly below it is a riser or bottom corner (│ ╯ ╰), not the tread
+// beside a corner. Without the corner-column shift the dot would sit one column
+// right (on the tread) with only empty space beneath it.
+func TestGoalChartMarkerRiser(t *testing.T) {
+	plain := ansiPattern.ReplaceAllString(renderGoalChart(kyoomDailyGoal(6), 60), "")
+	grid := strings.Split(plain, "\n")
+
+	connected := 0
+	total := 0
+	for r, ln := range grid {
+		for c, ch := range []rune(ln) {
+			if ch != markerGlyph {
+				continue
+			}
+			total++
+			// Look at the cell directly below (same visible column, next row).
+			if r+1 < len(grid) {
+				below := []rune(grid[r+1])
+				if c < len(below) && strings.ContainsRune("│╯╰", below[c]) {
+					connected++
+				}
+			}
+		}
+	}
+	// Every marker but the first (which sits at the origin with nothing beneath)
+	// must have the riser leading into it.
+	if total == 0 || connected < total-1 {
+		t.Errorf("riser leads into %d/%d markers, want >= %d:\n%s", connected, total, total-1, plain)
+	}
+}
+
 func TestReplaceCellGlyph(t *testing.T) {
 	// Colour runs must survive: only the rune at the target visible column
 	// changes; SGR escapes (which occupy no column) stay put.
