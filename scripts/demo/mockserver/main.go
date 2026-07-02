@@ -50,19 +50,35 @@ type demoGoal struct {
 	// chart's datapoints and bright red line so the plot stays readable.
 	kyoom bool
 	lvl   int
+	// historyDays overrides how far back this goal's chart reaches (initday and
+	// datapoint history). 0 uses chartWindowDays. A long history makes a *dense*
+	// chart where datapoint nodes fill nearly every column — so the demo shows
+	// both the sparse chart (dotted datapoint markers) and the dense one (none).
+	historyDays int
 }
 
-// chartWindowDays is how far back the goals' progress charts reach: initday and
+// chartWindowDays is the default reach of a goal's progress chart: initday and
 // the datapoint history both span this many days before today, so `buzz review`
-// shows a fully-populated chart.
+// shows a fully-populated chart. Goals can override it via historyDays.
 const chartWindowDays = 14
+
+// window returns how many days of history the goal's chart spans.
+func (g demoGoal) window() int {
+	if g.historyDays > 0 {
+		return g.historyDays
+	}
+	return chartWindowDays
+}
 
 // demoGoals is the cast of fictional goals shown in the demo.
 var demoGoals = []demoGoal{
 	{Slug: "read", Title: "Read every day", GoalType: "hustler", Gunits: "pages", Runits: "d", Limsum: "+10 within 1 day", Rate: 10, Pledge: 5, Safebuf: 0, Yaw: 1, Dir: 1, perDay: 10, base: 1200, kyoom: true},
 	{Slug: "meditate", Title: "Daily meditation", GoalType: "hustler", Gunits: "minutes", Runits: "d", Limsum: "+00:20:00 within 1 day", Rate: 20, Pledge: 10, Safebuf: 1, Yaw: 1, Dir: 1, perDay: 20, timey: true, base: 3000, kyoom: true},
 	{Slug: "inbox", Title: "Inbox zero", GoalType: "inboxer", Gunits: "emails", Runits: "d", Limsum: "-3 within 2 days", Rate: -3, Pledge: 5, Safebuf: 3, Yaw: -1, Dir: -1, perDay: 3, base: 40, lvl: 6},
-	{Slug: "pushups", Title: "Push-ups", GoalType: "hustler", Gunits: "pushups", Runits: "w", Limsum: "+50 within 5 days", Rate: 50, Pledge: 30, Safebuf: 7, Yaw: 1, Dir: 1, perDay: 7, base: 900, kyoom: true},
+	// pushups carries a long history so its chart is dense — datapoint nodes fill
+	// nearly every column, so the marker dots are suppressed (they'd smear the
+	// line). Contrast with the sparse goals above, which get dotted.
+	{Slug: "pushups", Title: "Push-ups", GoalType: "hustler", Gunits: "pushups", Runits: "w", Limsum: "+50 within 5 days", Rate: 50, Pledge: 30, Safebuf: 7, Yaw: 1, Dir: 1, perDay: 7, base: 900, kyoom: true, historyDays: 540},
 	{Slug: "screen", Title: "Limit screen time", GoalType: "drinker", Gunits: "hours", Runits: "d", Limsum: "+0 within 1 day", Rate: 2, Pledge: 90, Safebuf: 2, Yaw: -1, Dir: 1, perDay: 2, base: 14, lvl: 2},
 }
 
@@ -157,7 +173,7 @@ func goalJSON(g demoGoal, now time.Time, withData bool) map[string]any {
 		// The progress chart (buzz review) needs the goal's history, start date,
 		// cumulative flag, and bright red line. These ride on the single-goal
 		// detail response, mirroring the real API.
-		initday := startOfToday.AddDate(0, 0, -chartWindowDays)
+		initday := startOfToday.AddDate(0, 0, -g.window())
 		out["datapoints"] = datapoints(g, now)
 		out["kyoom"] = g.kyoom
 		out["initday"] = initday.Unix()
@@ -218,13 +234,14 @@ func dueby(g demoGoal, startOfToday time.Time) map[string]any {
 	return out
 }
 
-// datapoints builds a chartWindowDays-long daily history ending yesterday, so
+// datapoints builds a daily history (g.window() days long) ending yesterday, so
 // the progress chart has shape. Cumulative goals get an uneven per-day stream
 // (with a couple of zero days) that the chart sums into a staircase; non-
 // cumulative goals get values oscillating around their typical daily level.
 func datapoints(g demoGoal, now time.Time) []map[string]any {
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	initday := startOfToday.AddDate(0, 0, -chartWindowDays)
+	window := g.window()
+	initday := startOfToday.AddDate(0, 0, -window)
 
 	// Day-to-day texture. The cumulative goals are all Do More (yaw +1), where the
 	// safe side is *above* the bright red line (which rises at the goal's rate).
@@ -236,8 +253,8 @@ func datapoints(g demoGoal, now time.Time) []map[string]any {
 	kyoomMult := []float64{2, 1, 2, 1, 2, 0, 2, 1, 2, 1, 2, 1, 2}
 	wave := []float64{0, 1, -1, 0, 1, -2, 1, 0, -1, 1, 0, 1, -1}
 
-	out := make([]map[string]any, 0, chartWindowDays-1)
-	for i := 1; i < chartWindowDays; i++ {
+	out := make([]map[string]any, 0, window-1)
+	for i := 1; i < window; i++ {
 		day := initday.AddDate(0, 0, i)
 		var value float64
 		if g.kyoom {

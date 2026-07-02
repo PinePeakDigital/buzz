@@ -681,7 +681,7 @@ func TestDatapointSeriesStep(t *testing.T) {
 	// Step-after: the first value is held flat across the gap and the line jumps
 	// to the second value only at its column — never a linear ramp between them.
 	// Matches Beeminder's steppy line, which is not interpolated.
-	got := datapointSeries([]timedValue{
+	got, _ := datapointSeries([]timedValue{
 		{timestamp: start.Unix(), value: 0},
 		{timestamp: end.Unix(), value: 100},
 	}, start, end, 11)
@@ -698,7 +698,7 @@ func TestDatapointSeriesStep(t *testing.T) {
 	}
 
 	// A single datapoint fills the whole row with its value (no gaps, no NaN).
-	single := datapointSeries([]timedValue{
+	single, _ := datapointSeries([]timedValue{
 		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 7},
 	}, start, end, 11)
 	for i, v := range single {
@@ -720,7 +720,7 @@ func TestDatapointSeriesCumulativeSteps(t *testing.T) {
 	// Anchor of 0 at the window start, then a cumulative total of 1 at the
 	// midpoint. Columns 0..mid-1 must stay flat at 0 (no ramp), the jump lands at
 	// the midpoint column, and everything after holds 1.
-	got := datapointSeries([]timedValue{
+	got, _ := datapointSeries([]timedValue{
 		{timestamp: start.Unix(), value: 0},
 		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 1},
 	}, start, end, 11)
@@ -735,6 +735,87 @@ func TestDatapointSeriesCumulativeSteps(t *testing.T) {
 	for i := 5; i < 11; i++ {
 		if got[i] != 1 {
 			t.Errorf("cumulative step: col %d = %v, want 1 (held after jump)", i, got[i])
+		}
+	}
+}
+
+// kyoomDailyGoal builds a cumulative do-more goal with one +1 datapoint per day
+// over the last `days` days, its bright red line rising alongside. Used to flip
+// between a sparse chart (few days → nodes read as separate steps) and a dense
+// one (many days → nodes fill nearly every column).
+func kyoomDailyGoal(days int) Goal {
+	now := time.Now()
+	start := now.AddDate(0, 0, -(days - 1))
+	dps := make([]Datapoint, days)
+	for i := 0; i < days; i++ {
+		dps[i] = Datapoint{Timestamp: start.AddDate(0, 0, i).Unix(), Value: 1.0}
+	}
+	return Goal{
+		Slug:       "daily",
+		Yaw:        1,
+		Kyoom:      true,
+		Datapoints: dps,
+		Tmin:       start.Format("2006-01-02"),
+		Tmax:       now.Format("2006-01-02"),
+		Roadall: [][]*float64{
+			roadallRow(float64(start.Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.Unix()), fptr(float64(days)), nil),
+		},
+	}
+}
+
+// TestGoalChartMarkers covers the sparse/dense gate: a short-history chart dots
+// each datapoint node on the blue line (mirroring Beeminder's graph), while a
+// long-history chart — where nodes fill nearly every column and dots would just
+// smear the line — draws none. It also guards that the dot lands on the blue
+// line rather than floating in empty space, which would mean the asciigraph
+// value→row projection has drifted.
+func TestGoalChartMarkers(t *testing.T) {
+	sparse := renderGoalChart(kyoomDailyGoal(6), 80)
+	if !strings.ContainsRune(sparse, markerGlyph) {
+		t.Errorf("sparse chart should dot its datapoints, got:\n%s", sparse)
+	}
+	// Every marker must sit on the blue line: asciigraph colours the cell before
+	// the glyph, so a marker with no blue code anywhere before it on its line
+	// would be a stray dot from a bad projection.
+	blue := "\x1b[94m"
+	for _, ln := range strings.Split(sparse, "\n") {
+		if idx := strings.IndexRune(ln, markerGlyph); idx >= 0 {
+			if !strings.Contains(ln[:idx], blue) {
+				t.Errorf("marker not on the blue line (no blue SGR before it): %q", ln)
+			}
+		}
+	}
+
+	dense := renderGoalChart(kyoomDailyGoal(200), 80)
+	if strings.ContainsRune(dense, markerGlyph) {
+		t.Errorf("dense chart should not dot datapoints (nodes fill the width), got:\n%s", dense)
+	}
+}
+
+func TestReplaceCellGlyph(t *testing.T) {
+	// Colour runs must survive: only the rune at the target visible column
+	// changes; SGR escapes (which occupy no column) stay put.
+	line := "ab\x1b[94mcd\x1b[0mef"
+	got := replaceCellGlyph(line, 3, '●') // visible cols: a0 b1 c2 d3 e4 f5
+	want := "ab\x1b[94mc●\x1b[0mef"
+	if got != want {
+		t.Errorf("replaceCellGlyph = %q, want %q", got, want)
+	}
+	// A space at the target is left alone — a marker never floats off the line.
+	if got := replaceCellGlyph("a c", 1, '●'); got != "a c" {
+		t.Errorf("replaceCellGlyph over a space = %q, want unchanged", got)
+	}
+}
+
+func TestAsciiRound(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want float64
+	}{{0.4, 0}, {0.5, 1}, {1.5, 2}, {-0.5, -1}, {-1.4, -1}, {2.0, 2}}
+	for _, c := range cases {
+		if got := asciiRound(c.in); got != c.want {
+			t.Errorf("asciiRound(%v) = %v, want %v", c.in, got, c.want)
 		}
 	}
 }

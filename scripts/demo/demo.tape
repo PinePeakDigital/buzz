@@ -69,13 +69,21 @@ Sleep 700ms
 # --- Interactive review with progress chart (TUI) ---
 # Walks goals one at a time, each with a progress chart of its datapoints
 # (blue) against the bright red line (red). Goals are ordered alphabetically,
-# so this opens on `inbox`; pressing Right advances to `meditate`, a cumulative
-# goal whose chart is a rising staircase.
+# so this opens on `inbox`; pressing Right advances through the cast.
+#
+# The two Right presses showcase the two chart densities:
+#   - `meditate` — a short-history *sparse* chart: each datapoint is dotted (●)
+#     on the blue staircase, mirroring Beeminder's graph, so it's clear the data
+#     lands on the bright red line at each step.
+#   - `pushups`  — a long-history *dense* chart: nodes fill nearly every column,
+#     so the dots are suppressed and the line stays clean.
 Type@60ms "buzz review"
 Enter
 Sleep 3.5s
 Right
-Sleep 3s
+Sleep 3.5s
+Right
+Sleep 3.5s
 Type "q"
 Sleep 1s
 
