@@ -470,36 +470,20 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 		count = len(datapoints)
 	}
 
-	type row struct {
-		date    string
-		value   string
-		comment string
+	// The most recent `count` datapoints, newest first.
+	recent := make([]Datapoint, 0, count)
+	for i := len(datapoints) - 1; i >= len(datapoints)-count; i-- {
+		recent = append(recent, datapoints[i])
 	}
 
-	rows := make([]row, 0, count)
-	maxValueLen := 0
-	for i := len(datapoints) - 1; i >= len(datapoints)-count; i-- {
-		dp := datapoints[i]
-		var dateStr string
-		if len(dp.Daystamp) == 8 {
-			// Daystamp avoids timezone drift: "20241217" -> "2024-12-17".
-			dateStr = dp.Daystamp[:4] + "-" + dp.Daystamp[4:6] + "-" + dp.Daystamp[6:8]
-		} else {
-			dateStr = time.Unix(dp.Timestamp, 0).UTC().Format("2006-01-02")
-		}
-		valueStr := fmt.Sprintf("%.6g", dp.Value)
-		if len(valueStr) > maxValueLen {
-			maxValueLen = len(valueStr)
-		}
-		rows = append(rows, row{date: dateStr, value: valueStr, comment: dp.Comment})
-	}
+	dates, values, maxValueLen := formatDatapointRows(recent)
 
 	output := "\nRecent datapoints:\n"
-	for _, r := range rows {
-		if r.comment != "" {
-			output += fmt.Sprintf("  %s   %-*s   %s\n", r.date, maxValueLen, r.value, r.comment)
+	for i, dp := range recent {
+		if dp.Comment != "" {
+			output += fmt.Sprintf("  %s   %-*s   %s\n", dates[i], maxValueLen, values[i], dp.Comment)
 		} else {
-			output += fmt.Sprintf("  %s   %s\n", r.date, r.value)
+			output += fmt.Sprintf("  %s   %s\n", dates[i], values[i])
 		}
 	}
 

@@ -161,6 +161,33 @@ buzz view exercise --json              # Output as JSON
 buzz view exercise --json --datapoints # JSON with datapoints included
 ```
 
+## `buzz data`
+
+List a goal's datapoints in chronological order (oldest first):
+
+```bash
+buzz data <goalslug>
+
+# Example:
+buzz data exercise
+# Output:
+# 2024-01-01   3
+# 2024-01-02   12.5   morning run
+```
+
+Each line shows the datapoint's date, value, and comment (comments are omitted
+when empty). Dates come from Beeminder's daystamp, so they match the day the
+datapoint counts toward regardless of your timezone.
+
+Sorting defaults to oldest-first so the newest datapoints land at the bottom of
+an unpaged dump. Use `--desc` for newest-first (or `--asc` to be explicit); the
+two flags are mutually exclusive:
+
+```bash
+buzz data exercise --desc   # newest datapoint first
+buzz data exercise --asc    # oldest first (same as the default)
+```
+
 ## `buzz schedule`
 
 Display the distribution of goal deadlines throughout a 24-hour day:
