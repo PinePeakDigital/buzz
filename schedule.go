@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/term"
 	"github.com/muesli/termenv"
 )
 
@@ -274,13 +273,7 @@ func displayTimeline(slots []timeSlot) {
 		const prefixVisualWidth = 9
 
 		// Determine terminal width; fallback to 80 if unavailable
-		width := 80
-		fd := os.Stdout.Fd()
-		if term.IsTerminal(fd) {
-			if w, _, err := term.GetSize(fd); err == nil && w > 0 {
-				width = w
-			}
-		}
+		width := terminalWidth()
 
 		// Simple wrapping: break on commas before exceeding width
 		available := width
