@@ -263,6 +263,10 @@ func displayTimeline(slots []timeSlot) {
 		treeStyle = treeStyle.Foreground(lipgloss.Color("8")) // Gray for tree structure (├─ and │)
 	}
 
+	// Determine terminal width once; it doesn't change across slots.
+	// Fallback to 80 if unavailable.
+	width := terminalWidth()
+
 	for _, slot := range slots {
 		timeStr := fmt.Sprintf("%02d:%02d", slot.hour, slot.minute)
 
@@ -271,9 +275,6 @@ func displayTimeline(slots []timeSlot) {
 		prefix := timeStyle.Render(timeStr) + " " + treeStyle.Render("├─") + " "
 		// Visual width of prefix: "HH:MM ├─ " = 9 characters (ANSI codes have zero width)
 		const prefixVisualWidth = 9
-
-		// Determine terminal width; fallback to 80 if unavailable
-		width := terminalWidth()
 
 		// Simple wrapping: break on commas before exceeding width
 		available := width
