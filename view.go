@@ -9,7 +9,21 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/charmbracelet/x/term"
 )
+
+// terminalWidth returns the width of stdout in columns, falling back to 80 when
+// stdout isn't a terminal (piped, redirected) or the size can't be determined.
+func terminalWidth() int {
+	fd := os.Stdout.Fd()
+	if term.IsTerminal(fd) {
+		if w, _, err := term.GetSize(fd); err == nil && w > 0 {
+			return w
+		}
+	}
+	return 80
+}
 
 // handleViewCommand displays detailed information about a specific goal
 func handleViewCommand() {
@@ -119,6 +133,10 @@ func handleViewCommand() {
 	// Display goal information (human-readable format)
 	fmt.Printf("Goal: %s\n", goal.Slug)
 	fmt.Print(formatGoalDetails(goal, config, time.Now()))
+
+	// Progress chart, matching `buzz review`. Empty when the goal has no
+	// datapoints inside the charted window.
+	fmt.Print(renderGoalChart(*goal, terminalWidth()))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
