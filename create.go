@@ -3,12 +3,39 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 )
+
+// createUsage documents the non-interactive flag form of `buzz create`.
+const createUsage = `Usage: buzz create                 (interactive; prompts for each field)
+       buzz create [flags]         (non-interactive; scriptable)
+
+Flags:
+  --slug       Goal slug (required)
+  --units      Goal units (required)
+  --title      Goal title (defaults to the slug if omitted)
+  --type       Goal type name/label/number (default: hustler)
+  --goaldate   Goal date as an epoch timestamp
+  --goalval    Goal value
+  --rate       Rate
+  --deadline   Deadline in seconds from midnight (may be negative)
+
+Provide exactly 2 of --goaldate, --goalval, --rate.`
+
+// createRequest is a fully-gathered `buzz create` invocation, from either the
+// interactive prompts or CLI flags, ready to validate and send.
+type createRequest struct {
+	slug, title, goalType, gunits string
+	goaldate, goalval, rate       string
+	deadline                      int
+	setDeadline                   bool // whether --deadline was explicitly passed
+}
 
 // defaultGoalType is used when the user leaves the goal type prompt blank.
 const defaultGoalType = "hustler"
@@ -40,6 +67,21 @@ var goalTypeOptions = []goalTypeOption{
 // plain CLI command, reusing the same validateCreateGoalInput validation and the
 // client's CreateGoal method.
 func handleCreateCommand() {
+	args := os.Args[2:]
+	interactive := len(args) == 0
+
+	// Parse flags first (when present) so `--help` and bad input are reported
+	// without requiring authentication, matching `buzz add`.
+	var req createRequest
+	if !interactive {
+		var code int
+		var done bool
+		req, code, done = parseCreateArgs(args, os.Stdout, os.Stderr)
+		if done {
+			os.Exit(code)
+		}
+	}
+
 	if !ConfigExists() {
 		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz auth login' to authenticate.")
 		os.Exit(1)
@@ -52,12 +94,57 @@ func handleCreateCommand() {
 	}
 
 	client := NewHTTPClient(config)
-	code := runCreateCommand(os.Stdin, client, os.Stdout, os.Stderr)
+	var code int
+	if interactive {
+		code = runCreateCommand(os.Stdin, client, os.Stdout, os.Stderr)
+	} else {
+		code = doCreate(req, client, os.Stdout, os.Stderr)
+	}
 	if code == 0 {
 		// Check for updates and display message if available
 		fmt.Print(getUpdateMessage())
 	}
 	os.Exit(code)
+}
+
+// parseCreateArgs parses non-interactive `buzz create` flags into a request. It
+// returns a process exit code and done=true when the caller should stop (help
+// shown or a parse error).
+func parseCreateArgs(args []string, stdout, stderr io.Writer) (createRequest, int, bool) {
+	fs := flag.NewFlagSet("create", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // we print our own richer usage
+	slug := fs.String("slug", "", "Goal slug")
+	title := fs.String("title", "", "Goal title (defaults to slug)")
+	goalType := fs.String("type", defaultGoalType, "Goal type")
+	gunits := fs.String("units", "", "Goal units")
+	goaldate := fs.String("goaldate", "", "Goal date (epoch timestamp)")
+	goalval := fs.String("goalval", "", "Goal value")
+	rate := fs.String("rate", "", "Rate")
+	deadline := fs.Int("deadline", 0, "Deadline in seconds from midnight")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(stdout, createUsage)
+			return createRequest{}, 0, true
+		}
+		fmt.Fprintf(stderr, "Error parsing flags: %s\n", redactError(err))
+		fmt.Fprintln(stderr, createUsage)
+		return createRequest{}, 1, true
+	}
+
+	// Detect whether --deadline was explicitly set: 0 (midnight) is a valid
+	// deadline, so we can't infer intent from the value alone.
+	setDeadline := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "deadline" {
+			setDeadline = true
+		}
+	})
+
+	return createRequest{
+		slug: *slug, title: *title, goalType: *goalType, gunits: *gunits,
+		goaldate: *goaldate, goalval: *goalval, rate: *rate,
+		deadline: *deadline, setDeadline: setDeadline,
+	}, 0, false
 }
 
 // runCreateCommand is the testable core of `buzz create`. It prompts for goal
@@ -71,18 +158,31 @@ func runCreateCommand(stdin io.Reader, client Client, stdout, stderr io.Writer) 
 	fmt.Fprintln(stdout, "===========================")
 	fmt.Fprintln(stdout, "")
 
-	slug := promptField(r, stdout, "Goal slug: ")
-	title := promptField(r, stdout, "Goal title: ")
-	goalType := promptGoalType(r, stdout)
-	gunits := promptField(r, stdout, "Goal units: ")
+	req := createRequest{
+		slug:     promptField(r, stdout, "Goal slug: "),
+		title:    promptField(r, stdout, "Goal title (defaults to slug): "),
+		goalType: promptGoalType(r, stdout),
+		gunits:   promptField(r, stdout, "Goal units: "),
+	}
 
 	fmt.Fprintln(stdout, "")
 	fmt.Fprintln(stdout, "Provide exactly 2 of the next 3 (leave one blank):")
-	goaldate := promptField(r, stdout, "Goal date (epoch timestamp): ")
-	goalval := promptField(r, stdout, "Goal value: ")
-	rate := promptField(r, stdout, "Rate: ")
+	req.goaldate = promptField(r, stdout, "Goal date (epoch timestamp): ")
+	req.goalval = promptField(r, stdout, "Goal value: ")
+	req.rate = promptField(r, stdout, "Rate: ")
 
-	if errMsg := validateCreateGoalInput(slug, title, goalType, gunits, goaldate, goalval, rate); errMsg != "" {
+	return doCreate(req, client, stdout, stderr)
+}
+
+// doCreate validates a gathered request, creates the goal, and (if requested)
+// sets its deadline. Shared by the interactive and non-interactive paths. Title
+// defaults to the slug when omitted, so callers needn't supply one.
+func doCreate(req createRequest, client Client, stdout, stderr io.Writer) int {
+	if req.title == "" {
+		req.title = req.slug
+	}
+
+	if errMsg := validateCreateGoalInput(req.slug, req.title, req.goalType, req.gunits, req.goaldate, req.goalval, req.rate); errMsg != "" {
 		fmt.Fprintf(stderr, "Error: %s\n", errMsg)
 		return 1
 	}
@@ -90,13 +190,22 @@ func runCreateCommand(stdin io.Reader, client Client, stdout, stderr io.Writer) 
 	fmt.Fprintln(stdout, "")
 	fmt.Fprintln(stdout, "Creating goal...")
 
-	goal, err := client.CreateGoal(context.Background(), slug, title, goalType, gunits, goaldate, goalval, rate)
+	goal, err := client.CreateGoal(context.Background(), req.slug, req.title, req.goalType, req.gunits, req.goaldate, req.goalval, req.rate)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: Failed to create goal: %s\n", redactError(err))
 		return 1
 	}
 
 	fmt.Fprintf(stdout, "Successfully created goal: %s\n", goal.Slug)
+
+	if req.setDeadline {
+		if _, err := client.UpdateGoalDeadline(context.Background(), goal.Slug, req.deadline); err != nil {
+			fmt.Fprintf(stderr, "Error: Goal created but failed to set deadline: %s\n", redactError(err))
+			return 1
+		}
+		fmt.Fprintf(stdout, "Set deadline: %d seconds from midnight\n", req.deadline)
+	}
+
 	return 0
 }
 

@@ -51,6 +51,8 @@ func printHelp() {
 	fmt.Println("  buzz charge <amount> <note> [--dryrun]")
 	fmt.Println("                                    Create a charge for the authenticated user")
 	fmt.Println("  buzz create                       Interactively create a new Beeminder goal")
+	fmt.Println("  buzz create --slug=<s> --units=<u> [--title --type --goaldate --goalval --rate --deadline]")
+	fmt.Println("                                    Non-interactively create a goal (see --help)")
 	fmt.Println("  buzz deadline [--yes] <goalslug> <time>")
 	fmt.Println("                                    Change a goal's deadline (e.g., \"3:00 PM\" or \"15:00\")")
 	fmt.Println("  buzz schedule                     Display goal deadline distribution throughout a 24-hour day")

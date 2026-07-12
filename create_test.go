@@ -275,6 +275,62 @@ func TestRunCreateCommandValidationError(t *testing.T) {
 	}
 }
 
+// TestParseCreateArgsNonInteractive verifies flags are parsed into a request,
+// title defaults to the slug when omitted (#335), and --deadline is threaded
+// through to UpdateGoalDeadline (#332).
+func TestParseCreateArgsNonInteractive(t *testing.T) {
+	req, code, done := parseCreateArgs(
+		[]string{"--slug=reading", "--units=pages", "--goalval=365", "--rate=1", "--deadline=-3600"},
+		&bytes.Buffer{}, &bytes.Buffer{},
+	)
+	if done || code != 0 {
+		t.Fatalf("unexpected parse result: code=%d done=%v", code, done)
+	}
+	if req.slug != "reading" || req.gunits != "pages" || req.goalType != defaultGoalType {
+		t.Errorf("unexpected fields: %+v", req)
+	}
+	if !req.setDeadline || req.deadline != -3600 {
+		t.Errorf("deadline not captured: set=%v val=%d", req.setDeadline, req.deadline)
+	}
+
+	var gotTitle string
+	var gotDeadline int
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			gotTitle = title
+			return &Goal{Slug: slug}, nil
+		},
+		UpdateGoalDeadlineFunc: func(goalSlug string, deadline int) (*Goal, error) {
+			gotDeadline = deadline
+			return &Goal{Slug: goalSlug}, nil
+		},
+	}
+
+	var stdout, stderr bytes.Buffer
+	if c := doCreate(req, client, &stdout, &stderr); c != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", c, stderr.String())
+	}
+	if gotTitle != "reading" {
+		t.Errorf("title should default to slug, got %q", gotTitle)
+	}
+	if gotDeadline != -3600 {
+		t.Errorf("deadline not forwarded, got %d", gotDeadline)
+	}
+}
+
+// TestParseCreateArgsHelp verifies --help prints usage and signals done without
+// error.
+func TestParseCreateArgsHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	_, code, done := parseCreateArgs([]string{"--help"}, &stdout, &stderr)
+	if !done || code != 0 {
+		t.Fatalf("expected help to finish cleanly: code=%d done=%v", code, done)
+	}
+	if !strings.Contains(stdout.String(), "buzz create") {
+		t.Errorf("usage not printed, got: %s", stdout.String())
+	}
+}
+
 // TestRunCreateCommandAPIError verifies that an error from CreateGoal is
 // reported and produces a non-zero exit code.
 func TestRunCreateCommandAPIError(t *testing.T) {
