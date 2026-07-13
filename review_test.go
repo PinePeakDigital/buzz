@@ -1619,6 +1619,52 @@ func TestReviewModelDetailsErrorReflows(t *testing.T) {
 	}
 }
 
+// TestReviewModelErrorWraps verifies a long error message wraps to the terminal
+// width instead of overflowing and getting cut off (issue #339).
+func TestReviewModelErrorWraps(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A goal", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 24})
+	m = updated.(reviewModel)
+	m.err = "Failed to load goal details: failed to fetch goal details: " +
+		"Get \"https://www.beeminder.com/api/v1/users/x/goals/y.json\": dial tcp: timeout"
+
+	// The error block is the last thing contentView appends, so every line from
+	// the ⚠ marker onward belongs to it.
+	inError := false
+	for _, line := range strings.Split(m.contentView(), "\n") {
+		if strings.Contains(line, "⚠") {
+			inError = true
+		}
+		if !inError {
+			continue
+		}
+		if w := lipgloss.Width(line); w > 40 {
+			t.Errorf("expected error to wrap within width 40, got line width %d: %q", w, line)
+		}
+	}
+	if !inError {
+		t.Fatal("expected the error to render, but no ⚠ line was found")
+	}
+}
+
+// TestReviewModelErrorRendersBeforeResize verifies the width guard: before any
+// WindowSizeMsg (m.width == 0), the error must render in full. Without the
+// `if m.width > 0` guard, lipgloss Width(0) would collapse it to nothing.
+func TestReviewModelErrorRendersBeforeResize(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A goal", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config) // no WindowSizeMsg → m.width == 0
+	m.err = "Failed to load goal details: boom"
+
+	if !strings.Contains(m.contentView(), "Failed to load goal details: boom") {
+		t.Errorf("expected the full error to render before resize, got:\n%s", m.contentView())
+	}
+}
+
 // TestReviewModelNoScrollIndicatorWhenContentFits verifies the help bar omits the
 // scroll-position indicator when the goal fits the terminal (nothing to scroll).
 func TestReviewModelNoScrollIndicatorWhenContentFits(t *testing.T) {
