@@ -1650,6 +1650,21 @@ func TestReviewModelErrorWraps(t *testing.T) {
 	}
 }
 
+// TestReviewModelErrorRendersBeforeResize verifies the width guard: before any
+// WindowSizeMsg (m.width == 0), the error must render in full. Without the
+// `if m.width > 0` guard, lipgloss Width(0) would collapse it to nothing.
+func TestReviewModelErrorRendersBeforeResize(t *testing.T) {
+	goals := []Goal{{Slug: "g", Title: "A goal", Limsum: "+1 in 2 days"}}
+	config := &Config{Username: "testuser", AuthToken: "testtoken"}
+
+	m := initialReviewModel(goals, config) // no WindowSizeMsg → m.width == 0
+	m.err = "Failed to load goal details: boom"
+
+	if !strings.Contains(m.contentView(), "Failed to load goal details: boom") {
+		t.Errorf("expected the full error to render before resize, got:\n%s", m.contentView())
+	}
+}
+
 // TestReviewModelNoScrollIndicatorWhenContentFits verifies the help bar omits the
 // scroll-position indicator when the goal fits the terminal (nothing to scroll).
 func TestReviewModelNoScrollIndicatorWhenContentFits(t *testing.T) {
