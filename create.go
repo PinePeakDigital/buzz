@@ -82,18 +82,11 @@ func handleCreateCommand() {
 		}
 	}
 
-	if !ConfigExists() {
-		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz auth login' to authenticate.")
+	client, ok := loadClient(os.Stderr)
+	if !ok {
 		os.Exit(1)
 	}
 
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
 	var code int
 	if interactive {
 		code = runCreateCommand(os.Stdin, client, os.Stdout, os.Stderr)
@@ -141,7 +134,7 @@ func parseCreateArgs(args []string, stdout, stderr io.Writer) (createRequest, in
 	})
 
 	return createRequest{
-		slug: *slug, title: *title, goalType: *goalType, gunits: *gunits,
+		slug: *slug, title: *title, goalType: resolveGoalType(*goalType), gunits: *gunits,
 		goaldate: *goaldate, goalval: *goalval, rate: *rate,
 		deadline: *deadline, setDeadline: setDeadline,
 	}, 0, false
@@ -238,7 +231,16 @@ func promptGoalType(r *bufio.Reader, w io.Writer) string {
 	if choice == "" {
 		return defaultGoalType
 	}
+	return resolveGoalType(choice)
+}
 
+// resolveGoalType maps a goal-type choice — a menu number, a canonical name, or
+// a human label (all case-insensitive) — to its canonical goal_type value. Used
+// by both the interactive prompt and the --type flag so `--type=1` or
+// `--type="Do More"` behave the same as picking from the menu. Unrecognized
+// non-empty input is returned unchanged so newly-added Beeminder types still
+// work; the API validates the final value.
+func resolveGoalType(choice string) string {
 	// Numeric selection from the menu.
 	if n, err := strconv.Atoi(choice); err == nil && n >= 1 && n <= len(goalTypeOptions) {
 		return goalTypeOptions[n-1].name

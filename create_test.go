@@ -318,6 +318,85 @@ func TestParseCreateArgsNonInteractive(t *testing.T) {
 	}
 }
 
+// TestParseCreateArgsTypeResolution verifies that --type accepts a menu number
+// or human label and resolves it to the canonical goal_type, matching the
+// interactive prompt (so `--type=1` and `--type="Do Less"` both work).
+func TestParseCreateArgsTypeResolution(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"2", "drinker"},
+		{"Do Less", "drinker"},
+		{"HUSTLER", "hustler"},
+		{"whittler", "whittler"}, // unknown passes through
+	} {
+		req, code, done := parseCreateArgs([]string{"--slug=x", "--type=" + tc.in}, &bytes.Buffer{}, &bytes.Buffer{})
+		if done || code != 0 {
+			t.Fatalf("--type=%q: parse failed code=%d done=%v", tc.in, code, done)
+		}
+		if req.goalType != tc.want {
+			t.Errorf("--type=%q resolved to %q, want %q", tc.in, req.goalType, tc.want)
+		}
+	}
+}
+
+// TestDoCreateDeadlineFailure verifies the partial-failure path: the goal is
+// created but setting its deadline fails, so a distinct error is reported and
+// the exit code is non-zero.
+func TestDoCreateDeadlineFailure(t *testing.T) {
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			return &Goal{Slug: slug}, nil
+		},
+		UpdateGoalDeadlineFunc: func(goalSlug string, deadline int) (*Goal, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	req := createRequest{slug: "reading", gunits: "pages", goalType: "hustler", goalval: "365", rate: "1", deadline: -3600, setDeadline: true}
+	var stdout, stderr bytes.Buffer
+	if code := doCreate(req, client, &stdout, &stderr); code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "Goal created but failed to set deadline") {
+		t.Errorf("missing partial-failure message, got: %s", stderr.String())
+	}
+}
+
+// TestDoCreateNoDeadlineSkipsUpdate verifies that when --deadline was not passed
+// (setDeadline false), UpdateGoalDeadline is never called — the reason the
+// setDeadline flag exists, since 0 is itself a valid deadline.
+func TestDoCreateNoDeadlineSkipsUpdate(t *testing.T) {
+	deadlineCalled := false
+	client := &FakeClient{
+		CreateGoalFunc: func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error) {
+			return &Goal{Slug: slug}, nil
+		},
+		UpdateGoalDeadlineFunc: func(goalSlug string, deadline int) (*Goal, error) {
+			deadlineCalled = true
+			return &Goal{Slug: goalSlug}, nil
+		},
+	}
+	req := createRequest{slug: "reading", gunits: "pages", goalType: "hustler", goalval: "365", rate: "1"}
+	var stdout, stderr bytes.Buffer
+	if code := doCreate(req, client, &stdout, &stderr); code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if deadlineCalled {
+		t.Error("UpdateGoalDeadline should not be called when setDeadline is false")
+	}
+}
+
+// TestParseCreateArgsBadFlag verifies an unrecognized flag is reported on stderr
+// with a non-zero exit, distinct from the --help path.
+func TestParseCreateArgsBadFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	_, code, done := parseCreateArgs([]string{"--bogus"}, &stdout, &stderr)
+	if !done || code != 1 {
+		t.Fatalf("expected error exit: code=%d done=%v", code, done)
+	}
+	if !strings.Contains(stderr.String(), "Error parsing flags") {
+		t.Errorf("missing parse-error message, got: %s", stderr.String())
+	}
+}
+
 // TestParseCreateArgsHelp verifies --help prints usage and signals done without
 // error.
 func TestParseCreateArgsHelp(t *testing.T) {
