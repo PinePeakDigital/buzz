@@ -124,6 +124,14 @@ func parseCreateArgs(args []string, stdout, stderr io.Writer) (createRequest, in
 		return createRequest{}, 1, true
 	}
 
+	// `buzz create` takes no positional arguments; leftovers usually mean a
+	// typo'd flag or a stray value that would otherwise be silently ignored.
+	if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "Error: unexpected argument(s): %s\n", strings.Join(fs.Args(), " "))
+		fmt.Fprintln(stderr, createUsage)
+		return createRequest{}, 1, true
+	}
+
 	// Detect whether --deadline was explicitly set: 0 (midnight) is a valid
 	// deadline, so we can't infer intent from the value alone.
 	setDeadline := false

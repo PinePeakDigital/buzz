@@ -318,6 +318,44 @@ func TestParseCreateArgsNonInteractive(t *testing.T) {
 	}
 }
 
+// TestParseCreateArgsMidnightDeadline verifies that --deadline=0 (midnight) is
+// treated as an explicitly-set deadline: setDeadline must be true even though
+// the value is the zero value, since intent can't be inferred from the value.
+func TestParseCreateArgsMidnightDeadline(t *testing.T) {
+	req, code, done := parseCreateArgs(
+		[]string{"--slug=reading", "--units=pages", "--goalval=365", "--rate=1", "--deadline=0"},
+		&bytes.Buffer{}, &bytes.Buffer{},
+	)
+	if done || code != 0 {
+		t.Fatalf("unexpected parse result: code=%d done=%v", code, done)
+	}
+	if !req.setDeadline || req.deadline != 0 {
+		t.Errorf("midnight deadline not captured: set=%v val=%d", req.setDeadline, req.deadline)
+	}
+}
+
+// TestParseCreateArgsRejectsTrailingArgs verifies that stray positional
+// arguments (e.g. a typo'd flag) are rejected rather than silently ignored,
+// while valid flag-only input still parses.
+func TestParseCreateArgsRejectsTrailingArgs(t *testing.T) {
+	var stderr bytes.Buffer
+	_, code, done := parseCreateArgs(
+		[]string{"--slug=x", "--units=y", "--goalval=1", "--rate=1", "typo"},
+		&bytes.Buffer{}, &stderr,
+	)
+	if !done || code != 1 {
+		t.Fatalf("expected trailing arg to be rejected: code=%d done=%v", code, done)
+	}
+	if !strings.Contains(stderr.String(), "unexpected argument") {
+		t.Errorf("missing unexpected-argument error, got: %s", stderr.String())
+	}
+
+	// Flag-only input remains valid.
+	if _, code, done := parseCreateArgs([]string{"--slug=x", "--units=y"}, &bytes.Buffer{}, &bytes.Buffer{}); done || code != 0 {
+		t.Errorf("valid flag-only input rejected: code=%d done=%v", code, done)
+	}
+}
+
 // TestParseCreateArgsTypeResolution verifies that --type accepts a menu number
 // or human label and resolves it to the canonical goal_type, matching the
 // interactive prompt (so `--type=1` and `--type="Do Less"` both work).
