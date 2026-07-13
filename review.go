@@ -360,11 +360,16 @@ func (m reviewModel) contentView() string {
 		view += loadingStyle.Render("Loading datapoints…") + "\n"
 	}
 
-	// Error message section (if any)
+	// Error message section (if any). Errors are free-form (e.g. a full API URL
+	// in a fetch failure), so wrap to the terminal width instead of letting the
+	// line overflow and get cut off. Width includes the horizontal padding.
 	if m.err != "" {
 		errorStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("9")).
 			Padding(0, 2)
+		if m.width > 0 {
+			errorStyle = errorStyle.Width(m.width)
+		}
 		view += errorStyle.Render(fmt.Sprintf("⚠ %s", m.err)) + "\n"
 	}
 
