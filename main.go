@@ -20,8 +20,8 @@ import (
 var version = "dev"
 
 // outputFormat holds the global --format value ("table", "json", or "csv"),
-// set once in main from the CLI. The list-style read commands and `data` honor
-// it; other commands ignore it (like --no-color).
+// set once in main from the CLI. The list-style read commands, `data`, and
+// `next` honor it; other commands ignore it (like --no-color).
 var outputFormat = "table"
 
 // validFormats are the accepted --format values.
@@ -77,7 +77,7 @@ func printHelp() {
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
-	fmt.Println("  --format <table|json|csv>         Output format for list commands and data (default: table)")
+	fmt.Println("  --format <table|json|csv>         Output format for the list commands, data, and next (default: table)")
 	fmt.Println("  --no-color                        Disable colored output")
 	fmt.Println("  -h, --help                        Show this help message")
 	fmt.Println("  -v, --version                     Show version information")

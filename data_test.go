@@ -49,6 +49,33 @@ func TestRunDataCommand(t *testing.T) {
 			checkResult(t, code, out.String(), errb.String(), tt.wantCode, tt.wantOut, tt.wantErr)
 		})
 	}
+
+	t.Run("json format emits datapoint objects", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		code := runDataCommand([]string{"g"}, &FakeClient{FetchGoalWithDatapointsFunc: twoPoints}, "json", &out, &errb)
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d (stderr: %s)", code, errb.String())
+		}
+		var dps []Datapoint
+		if err := json.Unmarshal([]byte(out.String()), &dps); err != nil {
+			t.Fatalf("json output not valid: %v\n%s", err, out.String())
+		}
+		if len(dps) != 2 {
+			t.Errorf("expected 2 datapoints, got %d", len(dps))
+		}
+	})
+
+	t.Run("json format emits [] for no datapoints", func(t *testing.T) {
+		empty := func(string) (*Goal, error) { return &Goal{}, nil }
+		var out, errb bytes.Buffer
+		code := runDataCommand([]string{"g"}, &FakeClient{FetchGoalWithDatapointsFunc: empty}, "json", &out, &errb)
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d", code)
+		}
+		if got := out.String(); got != "[]\n" {
+			t.Errorf("empty json = %q, want %q", got, "[]\n")
+		}
+	})
 }
 
 // TestRenderDatapointsAs covers the --format json/csv output for `buzz data`:
@@ -86,5 +113,9 @@ func TestRenderDatapointsAs(t *testing.T) {
 	}
 	if got, _ := renderDatapointsAs("csv", nil); got != "date,value,comment\n" {
 		t.Errorf("empty csv = %q, want header only", got)
+	}
+
+	if _, err := renderDatapointsAs("yaml", dps); err == nil {
+		t.Error("renderDatapointsAs(yaml) = nil error, want error")
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,7 +9,6 @@ import (
 	"io"
 	"os"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -21,7 +19,8 @@ func handleDataCommand() {
 		os.Exit(1)
 	}
 	code := runDataCommand(os.Args[2:], client, outputFormat, os.Stdout, os.Stderr)
-	if code == 0 {
+	if code == 0 && outputFormat == "table" {
+		// Skip the update banner for json/csv so it never corrupts machine output.
 		fmt.Print(getUpdateMessage())
 	}
 	os.Exit(code)
@@ -137,19 +136,11 @@ func renderDatapointsAs(format string, dps []Datapoint) (string, error) {
 		}
 		return string(b) + "\n", nil
 	case "csv":
-		var buf strings.Builder
-		w := csv.NewWriter(&buf)
-		if err := w.Write([]string{"date", "value", "comment"}); err != nil {
-			return "", err
+		rows := make([][]string, len(dps))
+		for i, dp := range dps {
+			rows[i] = []string{datapointDate(dp), fmt.Sprintf("%.6g", dp.Value), dp.Comment}
 		}
-		for _, dp := range dps {
-			row := []string{datapointDate(dp), fmt.Sprintf("%.6g", dp.Value), dp.Comment}
-			if err := w.Write(row); err != nil {
-				return "", err
-			}
-		}
-		w.Flush()
-		return buf.String(), w.Error()
+		return encodeCSV([]string{"date", "value", "comment"}, rows)
 	default:
 		return "", fmt.Errorf("unknown format %q (want table, json, or csv)", format)
 	}

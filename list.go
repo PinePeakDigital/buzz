@@ -35,8 +35,9 @@ func handleListCommand() {
 
 	client := NewHTTPClient(config)
 	code = runListCommand(context.Background(), client, archived, outputFormat, os.Stdout, os.Stderr)
-	if code == 0 {
-		// Check for updates and display message if available
+	if code == 0 && outputFormat == "table" {
+		// Check for updates and display message if available. Skipped for json/csv
+		// so the update banner never corrupts machine-readable output.
 		fmt.Print(getUpdateMessage())
 	}
 	os.Exit(code)

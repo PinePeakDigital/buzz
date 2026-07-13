@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -214,6 +215,44 @@ func TestRunListCommand(t *testing.T) {
 		}
 		if got := out.String(); !strings.Contains(got, "No archived goals found.") {
 			t.Errorf("expected empty-archived message, got:\n%s", got)
+		}
+	})
+
+	t.Run("json format skips the human header", func(t *testing.T) {
+		client := &FakeClient{
+			FetchGoalsFunc: func() ([]Goal, error) {
+				return []Goal{{Slug: "apple"}, {Slug: "zebra"}}, nil
+			},
+		}
+
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, "json", &out, &errOut)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		got := out.String()
+		if strings.Contains(got, "Total goals") {
+			t.Errorf("json output should not contain the human header, got:\n%s", got)
+		}
+		var goals []Goal
+		if err := json.Unmarshal([]byte(got), &goals); err != nil {
+			t.Fatalf("json output not valid: %v\n%s", err, got)
+		}
+		if len(goals) != 2 || goals[0].Slug != "apple" {
+			t.Errorf("json roundtrip mismatch: %+v", goals)
+		}
+	})
+
+	t.Run("json format emits [] for empty goals", func(t *testing.T) {
+		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return nil, nil }}
+
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, "json", &out, &errOut)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		if got := out.String(); got != "[]\n" {
+			t.Errorf("empty json = %q, want %q", got, "[]\n")
 		}
 	})
 

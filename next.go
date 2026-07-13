@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -94,15 +92,11 @@ func displayNextGoal() error {
 		fmt.Println(string(b))
 		return nil
 	case "csv":
-		var buf strings.Builder
-		w := csv.NewWriter(&buf)
-		w.Write([]string{"slug", "baremin", "due"})
-		w.Write([]string{nextGoal.Slug, nextGoal.Baremin, timeframe})
-		w.Flush()
-		if err := w.Error(); err != nil {
+		out, err := encodeCSV([]string{"slug", "baremin", "due"}, [][]string{{nextGoal.Slug, nextGoal.Baremin, timeframe}})
+		if err != nil {
 			return err
 		}
-		fmt.Print(buf.String())
+		fmt.Print(out)
 		return nil
 	}
 
