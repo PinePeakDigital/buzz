@@ -187,8 +187,9 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		}
 	}
 
-	// If no matching goals, exit
-	if len(filteredGoals) == 0 {
+	// If no matching goals, exit — but only short-circuit the human table;
+	// json/csv still emit an empty result below so scripts get valid output.
+	if len(filteredGoals) == 0 && outputFormat == "table" {
 		fmt.Printf("No %s goals found.\n", filterName)
 		return
 	}
@@ -200,20 +201,35 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	// displayed losedates are equal.
 	sortGoalsByDisplayedLosedate(filteredGoals, losedateFor)
 
+	// Headers are unused by the colorized text table (ShowHeader stays false)
+	// but label the columns for --format csv.
 	table := Table{
 		Colorize: true,
 		Columns: []Column{
-			{Cell: func(g Goal) string { return g.Slug }},
-			{Cell: func(g Goal) string { return bareminFor(g) }},
-			{Cell: func(g Goal) string {
+			{Header: "Slug", Cell: func(g Goal) string { return g.Slug }},
+			{Header: "Baremin", Cell: func(g Goal) string { return bareminFor(g) }},
+			{Header: "Due", Cell: func(g Goal) string {
 				if IsEndValueReached(g) {
 					return "COMPLETE"
 				}
 				return FormatDueDate(losedateFor(g))
 			}},
-			{Cell: func(g Goal) string { return FormatAbsoluteDeadline(losedateFor(g)) }},
+			{Header: "Deadline", Cell: func(g Goal) string { return FormatAbsoluteDeadline(losedateFor(g)) }},
 		},
 	}
+
+	// Machine-readable formats: emit just the data, no legend or update banner
+	// (they'd corrupt json/csv output).
+	if outputFormat != "table" {
+		rendered, err := table.RenderAs(outputFormat, filteredGoals)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
+			os.Exit(1)
+		}
+		fmt.Print(rendered)
+		return
+	}
+
 	fmt.Print(table.Render(filteredGoals))
 
 	if legendFor != nil {

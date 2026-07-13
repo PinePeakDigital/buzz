@@ -168,6 +168,46 @@ func TestNoColorFlag(t *testing.T) {
 	}
 }
 
+// TestParseFormatFlag covers the global --format extraction: default, both flag
+// spellings, flag removal from args, and error cases (missing/invalid value).
+func TestParseFormatFlag(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantFormat string
+		wantArgs   []string
+		wantErr    bool
+	}{
+		{"no flag defaults to table", []string{"buzz", "list"}, "table", []string{"buzz", "list"}, false},
+		{"--format json (space)", []string{"buzz", "--format", "json", "list"}, "json", []string{"buzz", "list"}, false},
+		{"--format=csv (equals)", []string{"buzz", "list", "--format=csv"}, "csv", []string{"buzz", "list"}, false},
+		{"invalid value errors", []string{"buzz", "--format", "yaml", "list"}, "", nil, true},
+		{"missing value errors", []string{"buzz", "list", "--format"}, "", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			format, filtered, err := parseFormatFlag(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if format != tt.wantFormat {
+				t.Errorf("format = %q, want %q", format, tt.wantFormat)
+			}
+			if len(filtered) != len(tt.wantArgs) {
+				t.Fatalf("filtered args = %v, want %v", filtered, tt.wantArgs)
+			}
+			for i, a := range tt.wantArgs {
+				if filtered[i] != a {
+					t.Errorf("filtered[%d] = %q, want %q", i, filtered[i], a)
+				}
+			}
+		})
+	}
+}
+
 // TestDueFiltersSkipEndValueReached verifies that the today and tomorrow filters
 // exclude goals whose end value has already been reached — those goals can show
 // a negative baremin and shouldn't be surfaced as due.

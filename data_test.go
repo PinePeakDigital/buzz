@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -44,8 +45,46 @@ func TestRunDataCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, errb bytes.Buffer
-			code := runDataCommand(tt.args, &FakeClient{FetchGoalWithDatapointsFunc: tt.fn}, &out, &errb)
+			code := runDataCommand(tt.args, &FakeClient{FetchGoalWithDatapointsFunc: tt.fn}, "table", &out, &errb)
 			checkResult(t, code, out.String(), errb.String(), tt.wantCode, tt.wantOut, tt.wantErr)
 		})
+	}
+}
+
+// TestRenderDatapointsAs covers the --format json/csv output for `buzz data`:
+// csv reuses the date/value/comment columns, json is a valid array, and empty
+// input yields [] (json) / a header-only file (csv) rather than "null".
+func TestRenderDatapointsAs(t *testing.T) {
+	dps := []Datapoint{
+		{Daystamp: "20240101", Value: 3, Comment: "first"},
+		{Daystamp: "20240102", Value: 12.5, Comment: ""},
+	}
+
+	csvOut, err := renderDatapointsAs("csv", dps)
+	if err != nil {
+		t.Fatalf("csv error: %v", err)
+	}
+	wantCSV := "date,value,comment\n2024-01-01,3,first\n2024-01-02,12.5,\n"
+	if csvOut != wantCSV {
+		t.Errorf("csv = %q, want %q", csvOut, wantCSV)
+	}
+
+	jsonOut, err := renderDatapointsAs("json", dps)
+	if err != nil {
+		t.Fatalf("json error: %v", err)
+	}
+	var decoded []Datapoint
+	if err := json.Unmarshal([]byte(jsonOut), &decoded); err != nil {
+		t.Fatalf("json invalid: %v\n%s", err, jsonOut)
+	}
+	if len(decoded) != 2 || decoded[0].Comment != "first" {
+		t.Errorf("json roundtrip mismatch: %+v", decoded)
+	}
+
+	if got, _ := renderDatapointsAs("json", nil); got != "[]\n" {
+		t.Errorf("empty json = %q, want %q", got, "[]\n")
+	}
+	if got, _ := renderDatapointsAs("csv", nil); got != "date,value,comment\n" {
+		t.Errorf("empty csv = %q, want header only", got)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -104,5 +105,60 @@ func TestTableRenderColorize(t *testing.T) {
 	if strings.ReplaceAll(overdueLine, "overdue", "") == strings.ReplaceAll(distantLine, "distant", "") {
 		t.Errorf("colourised rows for different urgencies are identical; expected different ANSI wrappers\noverdue: %q\ndistant: %q",
 			overdueLine, distantLine)
+	}
+}
+
+// TestTableRenderAs covers the --format json/csv paths: json carries the raw
+// goal objects, csv reuses the column headers/cells, table is unchanged, and an
+// unknown format errors. Empty goals must still produce valid output ([] / a
+// header row) rather than "null".
+func TestTableRenderAs(t *testing.T) {
+	tbl := Table{
+		Columns: []Column{
+			{Header: "Slug", Cell: func(g Goal) string { return g.Slug }},
+			{Header: "Baremin", Cell: func(g Goal) string { return g.Baremin }},
+		},
+	}
+	goals := []Goal{{Slug: "run", Baremin: "+1"}, {Slug: "read", Baremin: "+2"}}
+
+	// table == Render
+	if got, err := tbl.RenderAs("table", goals); err != nil || got != tbl.Render(goals) {
+		t.Errorf("RenderAs(table) = %q, %v; want == Render", got, err)
+	}
+
+	// json: valid array of the full goal objects (raw slug field present)
+	jsonOut, err := tbl.RenderAs("json", goals)
+	if err != nil {
+		t.Fatalf("RenderAs(json) error: %v", err)
+	}
+	var decoded []Goal
+	if err := json.Unmarshal([]byte(jsonOut), &decoded); err != nil {
+		t.Fatalf("json output not valid: %v\n%s", err, jsonOut)
+	}
+	if len(decoded) != 2 || decoded[0].Slug != "run" {
+		t.Errorf("json roundtrip mismatch: %+v", decoded)
+	}
+
+	// csv: header row from Column.Header, then one row per goal
+	csvOut, err := tbl.RenderAs("csv", goals)
+	if err != nil {
+		t.Fatalf("RenderAs(csv) error: %v", err)
+	}
+	wantCSV := "Slug,Baremin\nrun,+1\nread,+2\n"
+	if csvOut != wantCSV {
+		t.Errorf("csv output = %q, want %q", csvOut, wantCSV)
+	}
+
+	// empty goals: json emits [] not null; csv emits just the header
+	if got, _ := tbl.RenderAs("json", nil); got != "[]\n" {
+		t.Errorf("RenderAs(json, nil) = %q, want %q", got, "[]\n")
+	}
+	if got, _ := tbl.RenderAs("csv", nil); got != "Slug,Baremin\n" {
+		t.Errorf("RenderAs(csv, nil) = %q, want header only", got)
+	}
+
+	// unknown format is an error
+	if _, err := tbl.RenderAs("yaml", goals); err == nil {
+		t.Error("RenderAs(yaml) = nil error, want error")
 	}
 }

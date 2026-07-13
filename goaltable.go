@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -95,6 +97,54 @@ func (t Table) Render(goals []Goal) string {
 	}
 
 	return b.String()
+}
+
+// RenderAs renders the goals in the requested output format for the global
+// --format flag. "table" (and "") give the human-readable column table; "json"
+// emits the raw goal objects (every API field) for scripting; "csv" emits the
+// table's own columns as comma-separated rows with a header.
+//
+// json intentionally carries the full objects rather than the displayed
+// columns, so a projected/bumped column value (e.g. the `tomorrow` view's
+// baremin) surfaces only in table and csv output — csv reuses the Cell
+// functions, json reflects the underlying goal.
+func (t Table) RenderAs(format string, goals []Goal) (string, error) {
+	switch format {
+	case "", "table":
+		return t.Render(goals), nil
+	case "json":
+		if goals == nil {
+			goals = []Goal{} // marshal an empty list as [] rather than null
+		}
+		b, err := json.MarshalIndent(goals, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(b) + "\n", nil
+	case "csv":
+		var buf strings.Builder
+		w := csv.NewWriter(&buf)
+		headers := make([]string, len(t.Columns))
+		for i, c := range t.Columns {
+			headers[i] = c.Header
+		}
+		if err := w.Write(headers); err != nil {
+			return "", err
+		}
+		for _, g := range goals {
+			row := make([]string, len(t.Columns))
+			for j, c := range t.Columns {
+				row[j] = c.Cell(g)
+			}
+			if err := w.Write(row); err != nil {
+				return "", err
+			}
+		}
+		w.Flush()
+		return buf.String(), w.Error()
+	default:
+		return "", fmt.Errorf("unknown format %q (want table, json, or csv)", format)
+	}
 }
 
 // padRow joins cells with two-space separators, left-padding every column

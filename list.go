@@ -34,7 +34,7 @@ func handleListCommand() {
 	}
 
 	client := NewHTTPClient(config)
-	code = runListCommand(context.Background(), client, archived, os.Stdout, os.Stderr)
+	code = runListCommand(context.Background(), client, archived, outputFormat, os.Stdout, os.Stderr)
 	if code == 0 {
 		// Check for updates and display message if available
 		fmt.Print(getUpdateMessage())
@@ -76,7 +76,7 @@ func parseListArgs(args []string, out, errOut io.Writer) (archived bool, exitCod
 // to out, writes any fetch error to errOut, and returns the process exit code.
 // Splitting stdout (out) from stderr (errOut) keeps the table pipeable and
 // matches the other command cores (e.g. runCreateCommand).
-func runListCommand(ctx context.Context, client Client, archived bool, out, errOut io.Writer) int {
+func runListCommand(ctx context.Context, client Client, archived bool, format string, out, errOut io.Writer) int {
 	noun := "goals"
 	fetch := client.FetchGoals
 	if archived {
@@ -93,14 +93,6 @@ func runListCommand(ctx context.Context, client Client, archived bool, out, errO
 	// Sort goals alphabetically by slug for easy scanning
 	SortGoalsBySlug(goals)
 
-	if len(goals) == 0 {
-		fmt.Fprintf(out, "No %s found.\n", noun)
-		return 0
-	}
-
-	// Print summary header
-	fmt.Fprintf(out, "Total %s: %d\n\n", noun, len(goals))
-
 	table := Table{
 		ShowHeader: true,
 		Columns: []Column{
@@ -116,6 +108,26 @@ func runListCommand(ctx context.Context, client Client, archived bool, out, errO
 			{Header: "Stakes", Cell: func(g Goal) string { return fmt.Sprintf("$%.2f", g.Pledge) }},
 		},
 	}
+
+	// Machine-readable formats: emit just the data (json/csv handle the empty
+	// case as [] / a header-only file), skipping the human summary header.
+	if format != "table" {
+		rendered, err := table.RenderAs(format, goals)
+		if err != nil {
+			fmt.Fprintf(errOut, "Error: %s\n", redactError(err))
+			return 1
+		}
+		fmt.Fprint(out, rendered)
+		return 0
+	}
+
+	if len(goals) == 0 {
+		fmt.Fprintf(out, "No %s found.\n", noun)
+		return 0
+	}
+
+	// Print summary header
+	fmt.Fprintf(out, "Total %s: %d\n\n", noun, len(goals))
 	fmt.Fprint(out, table.Render(goals))
 
 	return 0

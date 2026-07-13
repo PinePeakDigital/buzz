@@ -151,7 +151,7 @@ func TestRunListCommand(t *testing.T) {
 		}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, false, &out, &errOut)
+		code := runListCommand(context.Background(), client, false, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -175,7 +175,7 @@ func TestRunListCommand(t *testing.T) {
 		}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out, &errOut)
+		code := runListCommand(context.Background(), client, true, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -195,7 +195,7 @@ func TestRunListCommand(t *testing.T) {
 		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return nil, nil }}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, false, &out, &errOut)
+		code := runListCommand(context.Background(), client, false, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -208,7 +208,7 @@ func TestRunListCommand(t *testing.T) {
 		client := &FakeClient{FetchArchivedGoalsFunc: func() ([]Goal, error) { return nil, nil }}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out, &errOut)
+		code := runListCommand(context.Background(), client, true, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -225,7 +225,7 @@ func TestRunListCommand(t *testing.T) {
 		}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out, &errOut)
+		code := runListCommand(context.Background(), client, true, "table", &out, &errOut)
 		if code != 1 {
 			t.Fatalf("expected exit code 1, got %d", code)
 		}

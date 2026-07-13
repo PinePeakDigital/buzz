@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -79,6 +82,29 @@ func displayNextGoal() error {
 
 	// Format the output: "goalslug baremin timeframe"
 	timeframe := FormatGoalDueDateAt(nextGoal, now)
+
+	// Machine-readable formats emit just the goal (json = the raw object, csv =
+	// one row), skipping the update banner so the output stays parseable.
+	switch outputFormat {
+	case "json":
+		b, err := json.MarshalIndent(nextGoal, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	case "csv":
+		var buf strings.Builder
+		w := csv.NewWriter(&buf)
+		w.Write([]string{"slug", "baremin", "due"})
+		w.Write([]string{nextGoal.Slug, nextGoal.Baremin, timeframe})
+		w.Flush()
+		if err := w.Error(); err != nil {
+			return err
+		}
+		fmt.Print(buf.String())
+		return nil
+	}
 
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
