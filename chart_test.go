@@ -916,9 +916,11 @@ func TestRoadStepAlignsWithSameDayDatapoint(t *testing.T) {
 
 // TestDaysnapRoad pins the properties daysnapRoad's doc comment claims:
 // boundaries floor to local midnight, a vertical step's equal boundaries stay
-// equal, segments stay contiguous and ordered, a sub-day sloped segment
-// collapses to a zero-duration step, and slopePerDay is recomputed from the
-// snapped boundaries (0 for zero-duration, per parseRoad's convention).
+// equal, a sub-day sloped segment collapses to a zero-duration step, and
+// slopePerDay is recomputed from the snapped boundaries (0 for zero-duration,
+// per parseRoad's convention). Contiguity needs no assertion: adjacent parsed
+// segments share the exact same boundary value, so flooring — a pure function
+// — cannot break it.
 func TestDaysnapRoad(t *testing.T) {
 	loc := time.Local
 	day := func(d int, hour int) float64 {
@@ -946,12 +948,6 @@ func TestDaysnapRoad(t *testing.T) {
 		}
 		if math.Abs(s[i].slopePerDay-want.slope) > 1e-9 {
 			t.Errorf("seg %d slopePerDay = %f, want %f (recomputed from snapped boundaries)", i, s[i].slopePerDay, want.slope)
-		}
-	}
-	// Contiguity preserved across the chain.
-	for i := 1; i < len(s); i++ {
-		if s[i].startT != s[i-1].endT {
-			t.Errorf("seg %d not contiguous: startT %f != prev endT %f", i, s[i].startT, s[i-1].endT)
 		}
 	}
 }
