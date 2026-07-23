@@ -867,3 +867,53 @@ func TestAsciiRound(t *testing.T) {
 		}
 	}
 }
+
+// TestRoadStepAlignsWithSameDayDatapoint guards the derailment picture: a
+// derailment writes a vertical road step at a mid-day knot time (Beeminder
+// stores knot times at the goal deadline's time-of-day) plus a datapoint whose
+// daystamp is that same day. Beeminder day-snaps both onto one day grid so the
+// two risers overlap; buzz must land the road's value change in the same
+// column as the datapoint node (daysnapRoad + right-edge sampling), or the
+// chart draws two separate vertical lines a few columns apart.
+func TestRoadStepAlignsWithSameDayDatapoint(t *testing.T) {
+	loc := time.Local
+	start := time.Date(2026, 7, 13, 0, 0, 0, 0, loc)
+	end := start.AddDate(0, 0, 10)
+
+	stepDay := start.AddDate(0, 0, 7)
+	stepAt := float64(stepDay.Add(11 * time.Hour).Unix()) // mid-day derail knot
+
+	r, err := parseRoad([][]*float64{
+		roadallRow(float64(start.Unix()), fptr(30), nil),
+		roadallRow(stepAt, nil, fptr(30)),
+		roadallRow(stepAt, fptr(10091), nil), // vertical derail step
+		roadallRow(float64(end.AddDate(0, 0, 300).Unix()), nil, fptr(30)),
+	}, "d")
+	if err != nil || len(r) == 0 {
+		t.Fatalf("derail road parse: err=%v len=%d", err, len(r))
+	}
+	r = daysnapRoad(r, loc)
+
+	for _, width := range []int{70, 71} { // 71: step day lands exactly on a column instant
+		roadValues := roadValuesForTimeframe(r, start, end, width)
+
+		// The datapoint the derailment wrote, bucketed to its daystamp's midnight.
+		processed := []timedValue{
+			{timestamp: start.Unix(), value: 0},
+			{timestamp: stepDay.Unix(), value: 9881},
+		}
+		_, nodes := datapointSeries(processed, start, end, width)
+		nodeCol := nodes[len(nodes)-1]
+
+		stepCol := -1
+		for i, v := range roadValues {
+			if v > 5000 {
+				stepCol = i
+				break
+			}
+		}
+		if stepCol != nodeCol {
+			t.Errorf("width %d: road step first shows in column %d, datapoint node in column %d — risers won't overlap", width, stepCol, nodeCol)
+		}
+	}
+}

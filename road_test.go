@@ -228,15 +228,17 @@ func TestRoadValuesForTimeframe(t *testing.T) {
 		t.Fatalf("validRoad parse: err=%v len=%d", err, len(r))
 	}
 
+	// Each column samples its RIGHT edge (see roadValuesForTimeframe): with
+	// 11 columns over days 0..10 at 1/day, column i holds the value at day i+1.
 	values := roadValuesForTimeframe(r, roadDay(0), roadDay(10), 11)
 	if len(values) != 11 {
 		t.Fatalf("want 11 values, got %d", len(values))
 	}
-	if values[0] < -0.5 || values[0] > 0.5 {
-		t.Errorf("first sample = %f, want ~0", values[0])
+	if values[0] < 0.5 || values[0] > 1.5 {
+		t.Errorf("first sample = %f, want ~1 (right edge of column 0)", values[0])
 	}
 	if values[10] < 9.5 || values[10] > 10.5 {
-		t.Errorf("last sample = %f, want ~10", values[10])
+		t.Errorf("last sample = %f, want ~10 (past the road end holds flat)", values[10])
 	}
 
 	// numPoints == 1 must not divide by (numPoints-1): one sample at startTime.
