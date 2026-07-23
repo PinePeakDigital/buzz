@@ -1,6 +1,8 @@
 package main
 
 import (
+	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -905,15 +907,51 @@ func TestRoadStepAlignsWithSameDayDatapoint(t *testing.T) {
 		_, nodes := datapointSeries(processed, start, end, width)
 		nodeCol := nodes[len(nodes)-1]
 
-		stepCol := -1
-		for i, v := range roadValues {
-			if v > 5000 {
-				stepCol = i
-				break
-			}
-		}
+		stepCol := slices.IndexFunc(roadValues, func(v float64) bool { return v > 5000 })
 		if stepCol != nodeCol {
 			t.Errorf("width %d: road step first shows in column %d, datapoint node in column %d — risers won't overlap", width, stepCol, nodeCol)
+		}
+	}
+}
+
+// TestDaysnapRoad pins the properties daysnapRoad's doc comment claims:
+// boundaries floor to local midnight, a vertical step's equal boundaries stay
+// equal, segments stay contiguous and ordered, a sub-day sloped segment
+// collapses to a zero-duration step, and slopePerDay is recomputed from the
+// snapped boundaries (0 for zero-duration, per parseRoad's convention).
+func TestDaysnapRoad(t *testing.T) {
+	loc := time.Local
+	day := func(d int, hour int) float64 {
+		return float64(time.Date(2026, 7, 1+d, hour, 0, 0, 0, loc).Unix())
+	}
+	midnight := func(d int) float64 { return day(d, 0) }
+
+	r := road{
+		// sloped, mid-day boundaries spanning days 0..2
+		{startT: day(0, 11), startV: 0, endV: 4, endT: day(2, 11), slopePerDay: 2},
+		// vertical step at a mid-day instant
+		{startT: day(2, 11), startV: 4, endV: 100, endT: day(2, 11), slopePerDay: 0},
+		// sub-day sloped segment: 11:00 → 20:00 same day
+		{startT: day(2, 11), startV: 100, endV: 103, endT: day(2, 20), slopePerDay: 8},
+	}
+	s := daysnapRoad(r, loc)
+
+	for i, want := range []struct{ startT, endT, slope float64 }{
+		{midnight(0), midnight(2), 2},
+		{midnight(2), midnight(2), 0},
+		{midnight(2), midnight(2), 0}, // sub-day segment collapsed to a step
+	} {
+		if s[i].startT != want.startT || s[i].endT != want.endT {
+			t.Errorf("seg %d boundaries = (%f, %f), want (%f, %f)", i, s[i].startT, s[i].endT, want.startT, want.endT)
+		}
+		if math.Abs(s[i].slopePerDay-want.slope) > 1e-9 {
+			t.Errorf("seg %d slopePerDay = %f, want %f (recomputed from snapped boundaries)", i, s[i].slopePerDay, want.slope)
+		}
+	}
+	// Contiguity preserved across the chain.
+	for i := 1; i < len(s); i++ {
+		if s[i].startT != s[i-1].endT {
+			t.Errorf("seg %d not contiguous: startT %f != prev endT %f", i, s[i].startT, s[i-1].endT)
 		}
 	}
 }
