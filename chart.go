@@ -53,6 +53,13 @@ func renderGoalChart(goal Goal, width int) string {
 		return "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Padding(0, 2).
 			Render("The bright red line wasn't populated for this goal.") + "\n"
 	}
+	// Snap road knots onto the same local-midnight day grid the datapoints are
+	// bucketed on, mirroring beebrain (stampIn dayparses road rows and data to
+	// one day grid). Beeminder stores knot times mid-day (deadline-aligned), so
+	// without this a road step and a same-day datapoint — e.g. a derailment's
+	// road jump and its #DERAIL datapoint — draw risers several columns apart
+	// instead of overlapping as they do on Beeminder's own graph.
+	brightLine = daysnapRoad(brightLine, startTime.Location())
 
 	chartWidth := width - 10 // leave room for padding and axis labels
 	if chartWidth < minChartWidth {
@@ -602,8 +609,20 @@ func renderXAxis(start, end time.Time, gutter, chartWidth int) string {
 	return strings.TrimRight(string(tickRow), " ") + "\n" + strings.TrimRight(string(labelRow), " ")
 }
 
-// roadValuesForTimeframe samples a parsed bright red line at numPoints evenly
-// distributed instants across [startTime, endTime] — one per chart column.
+// roadValuesForTimeframe samples a parsed bright red line into numPoints
+// chart columns spanning [startTime, endTime].
+//
+// Each column is sampled at its RIGHT edge (the next column's instant): a
+// column stands for the time span up to the next column, and datapointSeries
+// assigns a day to the column at-or-before it (int truncation). Sampling the
+// right edge makes a day-snapped road knot change value in that same column,
+// so a road riser and a same-day data riser land in the same column instead
+// of one apart.
+//
+// The last column has no next column; its sample is clamped to endTime so the
+// rightmost column — the one read as "now" — never shows a value extrapolated
+// a column-width past the window's end (real roads almost always keep running
+// past now, so an unclamped sample would be visibly in the future).
 func roadValuesForTimeframe(r road, startTime, endTime time.Time, numPoints int) []float64 {
 	values := make([]float64, numPoints)
 	if numPoints == 1 {
@@ -613,8 +632,44 @@ func roadValuesForTimeframe(r road, startTime, endTime time.Time, numPoints int)
 
 	duration := endTime.Sub(startTime)
 	for i := 0; i < numPoints; i++ {
-		t := startTime.Add(time.Duration(float64(duration) * float64(i) / float64(numPoints-1)))
+		t := startTime.Add(time.Duration(float64(duration) * float64(i+1) / float64(numPoints-1)))
+		if t.After(endTime) {
+			t = endTime
+		}
 		values[i] = r.valueAt(t)
 	}
 	return values
+}
+
+// daysnapRoad floors every segment boundary to local midnight in loc, putting
+// road knots on the same day grid the datapoints are bucketed on (beebrain's
+// daysnap equivalent). Flooring is monotone, so segment order is preserved;
+// a vertical step's two equal boundaries stay equal, and a sub-day segment
+// collapsing to zero duration is handled by valueAt like any vertical step.
+//
+// slopePerDay is recomputed from the snapped boundaries (0 for zero-duration
+// steps, matching parseRoad's vertical-step convention): valueAt's before-start
+// extrapolation branch reads it directly, so leaving the pre-snap slope in
+// place would extrapolate along a slope inconsistent with the segment's own
+// snapped endpoints.
+func daysnapRoad(r road, loc *time.Location) road {
+	snapped := make(road, len(r))
+	for i, seg := range r {
+		seg.startT = floorUnixToDay(seg.startT, loc)
+		seg.endT = floorUnixToDay(seg.endT, loc)
+		if seg.endT == seg.startT {
+			seg.slopePerDay = 0
+		} else {
+			seg.slopePerDay = (seg.endV - seg.startV) / (seg.endT - seg.startT) * 86400.0
+		}
+		snapped[i] = seg
+	}
+	return snapped
+}
+
+// floorUnixToDay floors a unix-seconds instant to midnight of its calendar day
+// in loc.
+func floorUnixToDay(t float64, loc *time.Location) float64 {
+	d := time.Unix(int64(t), 0).In(loc)
+	return float64(time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, loc).Unix())
 }

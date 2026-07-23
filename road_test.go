@@ -228,15 +228,32 @@ func TestRoadValuesForTimeframe(t *testing.T) {
 		t.Fatalf("validRoad parse: err=%v len=%d", err, len(r))
 	}
 
+	// Each column samples its RIGHT edge (see roadValuesForTimeframe): with
+	// 11 columns over days 0..10 at 1/day, column i holds the value at day i+1.
 	values := roadValuesForTimeframe(r, roadDay(0), roadDay(10), 11)
 	if len(values) != 11 {
 		t.Fatalf("want 11 values, got %d", len(values))
 	}
-	if values[0] < -0.5 || values[0] > 0.5 {
-		t.Errorf("first sample = %f, want ~0", values[0])
+	if values[0] < 0.5 || values[0] > 1.5 {
+		t.Errorf("first sample = %f, want ~1 (right edge of column 0)", values[0])
 	}
 	if values[10] < 9.5 || values[10] > 10.5 {
-		t.Errorf("last sample = %f, want ~10", values[10])
+		t.Errorf("last sample = %f, want ~10 (past the road end holds flat)", values[10])
+	}
+
+	// A road that keeps running past the window end (the normal case — real
+	// roads extend to the goal date, far past "now") must NOT leak into the
+	// last column: its sample is clamped to endTime, not one column-width
+	// beyond it. validRoad can't catch this — it ends exactly at the window
+	// end, so the overshoot lands in valueAt's hold-flat branch and returns
+	// the right value by coincidence.
+	long, _ := parseRoad([][]*float64{
+		roadallRow(roadUnix(0), fptr(0), nil),
+		roadallRow(roadUnix(40), nil, fptr(1)),
+	}, "d")
+	clamped := roadValuesForTimeframe(long, roadDay(0), roadDay(10), 11)
+	if want := long.valueAt(roadDay(10)); math.Abs(clamped[10]-want) > 1e-9 {
+		t.Errorf("last sample = %f, want %f (clamped to endTime, not extrapolated past it)", clamped[10], want)
 	}
 
 	// numPoints == 1 must not divide by (numPoints-1): one sample at startTime.
