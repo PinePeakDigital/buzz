@@ -145,9 +145,16 @@ func clearScreen() {
 
 // displayNextGoalWithTimestamp displays the next goal with a timestamp and refresh info
 func displayNextGoalWithTimestamp() {
-	fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
+	// Machine-readable formats skip the timestamp header and refresh footer so
+	// each watch iteration stays parseable (raw json/csv, no surrounding chrome).
+	table := outputFormat == "" || outputFormat == "table"
+	if table {
+		fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
+	}
 	if err := displayNextGoal(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 	}
-	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
+	if table {
+		fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
+	}
 }

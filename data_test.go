@@ -57,7 +57,7 @@ func TestRunDataCommand(t *testing.T) {
 			t.Fatalf("expected exit 0, got %d (stderr: %s)", code, errb.String())
 		}
 		var dps []Datapoint
-		if err := json.Unmarshal([]byte(out.String()), &dps); err != nil {
+		if err := json.Unmarshal(out.Bytes(), &dps); err != nil {
 			t.Fatalf("json output not valid: %v\n%s", err, out.String())
 		}
 		if len(dps) != 2 {
