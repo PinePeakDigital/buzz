@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -80,6 +81,25 @@ func displayNextGoal() error {
 	// Format the output: "goalslug baremin timeframe"
 	timeframe := FormatGoalDueDateAt(nextGoal, now)
 
+	// Machine-readable formats emit just the goal (json = the raw object, csv =
+	// one row), skipping the update banner so the output stays parseable.
+	switch outputFormat {
+	case "json":
+		b, err := json.MarshalIndent(nextGoal, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(b))
+		return nil
+	case "csv":
+		out, err := encodeCSV([]string{"slug", "baremin", "due"}, [][]string{{nextGoal.Slug, nextGoal.Baremin, timeframe}})
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+		return nil
+	}
+
 	// Output the terse summary
 	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
 
@@ -125,9 +145,16 @@ func clearScreen() {
 
 // displayNextGoalWithTimestamp displays the next goal with a timestamp and refresh info
 func displayNextGoalWithTimestamp() {
-	fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
+	// Machine-readable formats skip the timestamp header and refresh footer so
+	// each watch iteration stays parseable (raw json/csv, no surrounding chrome).
+	table := outputFormat == "" || outputFormat == "table"
+	if table {
+		fmt.Printf("[%s]\n", time.Now().Format("2006-01-02 15:04:05"))
+	}
 	if err := displayNextGoal(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", redactError(err))
 	}
-	fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
+	if table {
+		fmt.Printf("\nRefreshing every %dm... (Press Ctrl+C to exit)\n", int(RefreshInterval.Minutes()))
+	}
 }

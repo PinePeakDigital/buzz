@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -151,7 +152,7 @@ func TestRunListCommand(t *testing.T) {
 		}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, false, &out, &errOut)
+		code := runListCommand(context.Background(), client, false, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -175,7 +176,7 @@ func TestRunListCommand(t *testing.T) {
 		}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out, &errOut)
+		code := runListCommand(context.Background(), client, true, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -195,7 +196,7 @@ func TestRunListCommand(t *testing.T) {
 		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return nil, nil }}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, false, &out, &errOut)
+		code := runListCommand(context.Background(), client, false, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
@@ -208,12 +209,75 @@ func TestRunListCommand(t *testing.T) {
 		client := &FakeClient{FetchArchivedGoalsFunc: func() ([]Goal, error) { return nil, nil }}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out, &errOut)
+		code := runListCommand(context.Background(), client, true, "table", &out, &errOut)
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
 		if got := out.String(); !strings.Contains(got, "No archived goals found.") {
 			t.Errorf("expected empty-archived message, got:\n%s", got)
+		}
+	})
+
+	t.Run("json format skips the human header", func(t *testing.T) {
+		client := &FakeClient{
+			FetchGoalsFunc: func() ([]Goal, error) {
+				return []Goal{{Slug: "apple"}, {Slug: "zebra"}}, nil
+			},
+		}
+
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, "json", &out, &errOut)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		got := out.String()
+		if strings.Contains(got, "Total goals") {
+			t.Errorf("json output should not contain the human header, got:\n%s", got)
+		}
+		var goals []Goal
+		if err := json.Unmarshal([]byte(got), &goals); err != nil {
+			t.Fatalf("json output not valid: %v\n%s", err, got)
+		}
+		if len(goals) != 2 || goals[0].Slug != "apple" {
+			t.Errorf("json roundtrip mismatch: %+v", goals)
+		}
+	})
+
+	t.Run("json format emits [] for empty goals", func(t *testing.T) {
+		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return nil, nil }}
+
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, "json", &out, &errOut)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		if got := out.String(); got != "[]\n" {
+			t.Errorf("empty json = %q, want %q", got, "[]\n")
+		}
+	})
+
+	t.Run("csv format emits header plus one row per goal", func(t *testing.T) {
+		client := &FakeClient{
+			FetchGoalsFunc: func() ([]Goal, error) {
+				return []Goal{{Slug: "apple"}, {Slug: "zebra"}}, nil
+			},
+		}
+
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, "csv", &out, &errOut)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		got := out.String()
+		if !strings.HasPrefix(got, "Slug,Title,Units,Rate,Stakes\n") {
+			t.Errorf("csv missing expected header row, got:\n%s", got)
+		}
+		if strings.Contains(got, "Total goals") {
+			t.Errorf("csv output should not contain the human summary, got:\n%s", got)
+		}
+		lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+		if len(lines) != 3 { // header + 2 goals
+			t.Errorf("expected 3 csv lines (header + 2 goals), got %d:\n%s", len(lines), got)
 		}
 	})
 
@@ -225,7 +289,7 @@ func TestRunListCommand(t *testing.T) {
 		}
 
 		var out, errOut bytes.Buffer
-		code := runListCommand(context.Background(), client, true, &out, &errOut)
+		code := runListCommand(context.Background(), client, true, "table", &out, &errOut)
 		if code != 1 {
 			t.Fatalf("expected exit code 1, got %d", code)
 		}

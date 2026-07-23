@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	// Embed the IANA timezone database so time.LoadLocation works on systems
 	// without system tzdata (e.g. Windows, minimal containers). The schedule
@@ -17,6 +18,14 @@ import (
 
 // version is set via ldflags during build
 var version = "dev"
+
+// outputFormat holds the global --format value ("table", "json", or "csv"),
+// set once in main from the CLI. The list-style read commands, `data`, and
+// `next` honor it; other commands ignore it (like --no-color).
+var outputFormat = "table"
+
+// validFormats are the accepted --format values.
+var validFormats = map[string]bool{"table": true, "json": true, "csv": true}
 
 func printHelp() {
 	fmt.Println("buzz - A terminal user interface for Beeminder")
@@ -68,6 +77,7 @@ func printHelp() {
 	fmt.Println("  buzz help                         Show this help message")
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
+	fmt.Println("  --format <table|json|csv>         Output format for the list commands, data, and next (default: table)")
 	fmt.Println("  --no-color                        Disable colored output")
 	fmt.Println("  -h, --help                        Show this help message")
 	fmt.Println("  -v, --version                     Show version information")
@@ -96,6 +106,34 @@ func parseNoColorFlag(args []string) (noColor bool, filteredArgs []string) {
 	return noColor, filteredArgs
 }
 
+// parseFormatFlag extracts a global --format <value> (or --format=<value>) flag
+// from args, returning the chosen format ("table" when absent) and args with
+// the flag removed. A missing or unknown value is an error.
+func parseFormatFlag(args []string) (format string, filteredArgs []string, err error) {
+	format = "table"
+	filteredArgs = []string{args[0]} // Keep program name
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--format":
+			if i+1 >= len(args) {
+				return "", nil, fmt.Errorf("--format requires a value (table, json, or csv)")
+			}
+			format = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--format="):
+			format = strings.TrimPrefix(arg, "--format=")
+		default:
+			filteredArgs = append(filteredArgs, arg)
+			continue
+		}
+		if !validFormats[format] {
+			return "", nil, fmt.Errorf("invalid --format value %q (want table, json, or csv)", format)
+		}
+	}
+	return format, filteredArgs, nil
+}
+
 func main() {
 	// Check for global --no-color flag before processing other commands
 	noColor, filteredArgs := parseNoColorFlag(os.Args)
@@ -105,6 +143,16 @@ func main() {
 	if noColor {
 		lipgloss.SetColorProfile(termenv.Ascii)
 	}
+
+	// Extract the global --format flag before command dispatch, mirroring
+	// --no-color. Handlers read outputFormat; unknown values fail fast.
+	format, formatFiltered, err := parseFormatFlag(os.Args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		os.Exit(2)
+	}
+	os.Args = formatFiltered
+	outputFormat = format
 
 	// Check for CLI arguments
 	if len(os.Args) > 1 {

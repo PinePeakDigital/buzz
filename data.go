@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,8 +18,9 @@ func handleDataCommand() {
 	if !ok {
 		os.Exit(1)
 	}
-	code := runDataCommand(os.Args[2:], client, os.Stdout, os.Stderr)
-	if code == 0 {
+	code := runDataCommand(os.Args[2:], client, outputFormat, os.Stdout, os.Stderr)
+	if code == 0 && outputFormat == "table" {
+		// Skip the update banner for json/csv so it never corrupts machine output.
 		fmt.Print(getUpdateMessage())
 	}
 	os.Exit(code)
@@ -27,7 +29,7 @@ func handleDataCommand() {
 // runDataCommand is the testable core of `buzz data`. It expects a single
 // <goalslug> argument and prints that goal's datapoints one per line as
 // "date  value  comment", oldest-first by default or newest-first with --desc.
-func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int {
+func runDataCommand(args []string, client Client, format string, stdout, stderr io.Writer) int {
 	const usage = "Usage: buzz data [--asc|--desc] <goalslug>"
 
 	// Parse flags on either side of the positional slug (as `view` does), so
@@ -81,11 +83,6 @@ func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int 
 		return 1
 	}
 
-	if len(goal.Datapoints) == 0 {
-		fmt.Fprintf(stdout, "No datapoints found for goal: %s\n", goalSlug)
-		return 0
-	}
-
 	// The API's datapoint order isn't guaranteed; sort by timestamp so the
 	// output is deterministic. Default oldest-first; --desc flips to newest-first.
 	dps := append([]Datapoint(nil), goal.Datapoints...)
@@ -96,6 +93,23 @@ func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int 
 		return dps[i].Timestamp < dps[j].Timestamp
 	})
 
+	// Machine-readable formats emit valid output even when empty ([] / header
+	// row), so they run before the human "No datapoints" short-circuit.
+	if format != "table" {
+		rendered, err := renderDatapointsAs(format, dps)
+		if err != nil {
+			fmt.Fprintf(stderr, "Error: %s\n", redactError(err))
+			return 1
+		}
+		fmt.Fprint(stdout, rendered)
+		return 0
+	}
+
+	if len(dps) == 0 {
+		fmt.Fprintf(stdout, "No datapoints found for goal: %s\n", goalSlug)
+		return 0
+	}
+
 	dates, values, maxValueLen := formatDatapointRows(dps)
 	for i, dp := range dps {
 		if dp.Comment != "" {
@@ -105,6 +119,31 @@ func runDataCommand(args []string, client Client, stdout, stderr io.Writer) int 
 		}
 	}
 	return 0
+}
+
+// renderDatapointsAs renders datapoints as json (the raw datapoint objects) or
+// csv (date, value, comment — matching the human table's columns). The date and
+// value formatting mirror the text output so all three formats agree.
+func renderDatapointsAs(format string, dps []Datapoint) (string, error) {
+	switch format {
+	case "json":
+		if dps == nil {
+			dps = []Datapoint{} // marshal an empty list as [] rather than null
+		}
+		b, err := json.MarshalIndent(dps, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(b) + "\n", nil
+	case "csv":
+		rows := make([][]string, len(dps))
+		for i, dp := range dps {
+			rows[i] = []string{datapointDate(dp), fmt.Sprintf("%.6g", dp.Value), dp.Comment}
+		}
+		return encodeCSV([]string{"date", "value", "comment"}, rows)
+	default:
+		return "", fmt.Errorf("unknown format %q (want table, json, or csv)", format)
+	}
 }
 
 // formatDatapointRows renders per-datapoint date and value strings (parallel to
