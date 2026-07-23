@@ -1,6 +1,8 @@
 package main
 
 import (
+	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -864,6 +866,88 @@ func TestAsciiRound(t *testing.T) {
 	for _, c := range cases {
 		if got := asciiRound(c.in); got != c.want {
 			t.Errorf("asciiRound(%v) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestRoadStepAlignsWithSameDayDatapoint guards the derailment picture: a
+// derailment writes a vertical road step at a mid-day knot time (Beeminder
+// stores knot times at the goal deadline's time-of-day) plus a datapoint whose
+// daystamp is that same day. Beeminder day-snaps both onto one day grid so the
+// two risers overlap; buzz must land the road's value change in the same
+// column as the datapoint node (daysnapRoad + right-edge sampling), or the
+// chart draws two separate vertical lines a few columns apart.
+func TestRoadStepAlignsWithSameDayDatapoint(t *testing.T) {
+	loc := time.Local
+	start := time.Date(2026, 7, 13, 0, 0, 0, 0, loc)
+	end := start.AddDate(0, 0, 10)
+
+	stepDay := start.AddDate(0, 0, 7)
+	stepAt := float64(stepDay.Add(11 * time.Hour).Unix()) // mid-day derail knot
+
+	r, err := parseRoad([][]*float64{
+		roadallRow(float64(start.Unix()), fptr(30), nil),
+		roadallRow(stepAt, nil, fptr(30)),
+		roadallRow(stepAt, fptr(10091), nil), // vertical derail step
+		roadallRow(float64(end.AddDate(0, 0, 300).Unix()), nil, fptr(30)),
+	}, "d")
+	if err != nil || len(r) == 0 {
+		t.Fatalf("derail road parse: err=%v len=%d", err, len(r))
+	}
+	r = daysnapRoad(r, loc)
+
+	for _, width := range []int{70, 71} { // 71: step day lands exactly on a column instant
+		roadValues := roadValuesForTimeframe(r, start, end, width)
+
+		// The datapoint the derailment wrote, bucketed to its daystamp's midnight.
+		processed := []timedValue{
+			{timestamp: start.Unix(), value: 0},
+			{timestamp: stepDay.Unix(), value: 9881},
+		}
+		_, nodes := datapointSeries(processed, start, end, width)
+		nodeCol := nodes[len(nodes)-1]
+
+		stepCol := slices.IndexFunc(roadValues, func(v float64) bool { return v > 5000 })
+		if stepCol != nodeCol {
+			t.Errorf("width %d: road step first shows in column %d, datapoint node in column %d — risers won't overlap", width, stepCol, nodeCol)
+		}
+	}
+}
+
+// TestDaysnapRoad pins the properties daysnapRoad's doc comment claims:
+// boundaries floor to local midnight, a vertical step's equal boundaries stay
+// equal, a sub-day sloped segment collapses to a zero-duration step, and
+// slopePerDay is recomputed from the snapped boundaries (0 for zero-duration,
+// per parseRoad's convention). Contiguity needs no assertion: adjacent parsed
+// segments share the exact same boundary value, so flooring — a pure function
+// — cannot break it.
+func TestDaysnapRoad(t *testing.T) {
+	loc := time.Local
+	day := func(d int, hour int) float64 {
+		return float64(time.Date(2026, 7, 1+d, hour, 0, 0, 0, loc).Unix())
+	}
+	midnight := func(d int) float64 { return day(d, 0) }
+
+	r := road{
+		// sloped, mid-day boundaries spanning days 0..2
+		{startT: day(0, 11), startV: 0, endV: 4, endT: day(2, 11), slopePerDay: 2},
+		// vertical step at a mid-day instant
+		{startT: day(2, 11), startV: 4, endV: 100, endT: day(2, 11), slopePerDay: 0},
+		// sub-day sloped segment: 11:00 → 20:00 same day
+		{startT: day(2, 11), startV: 100, endV: 103, endT: day(2, 20), slopePerDay: 8},
+	}
+	s := daysnapRoad(r, loc)
+
+	for i, want := range []struct{ startT, endT, slope float64 }{
+		{midnight(0), midnight(2), 2},
+		{midnight(2), midnight(2), 0},
+		{midnight(2), midnight(2), 0}, // sub-day segment collapsed to a step
+	} {
+		if s[i].startT != want.startT || s[i].endT != want.endT {
+			t.Errorf("seg %d boundaries = (%f, %f), want (%f, %f)", i, s[i].startT, s[i].endT, want.startT, want.endT)
+		}
+		if math.Abs(s[i].slopePerDay-want.slope) > 1e-9 {
+			t.Errorf("seg %d slopePerDay = %f, want %f (recomputed from snapped boundaries)", i, s[i].slopePerDay, want.slope)
 		}
 	}
 }
