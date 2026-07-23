@@ -60,7 +60,15 @@ func handleTomorrowCommand() {
 		return v
 	}
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
-	bareminFor := func(g Goal) string { return viewFor(g).markedBaremin() }
+	// The "(!)" marker is a table-only annotation whose explanatory legend is
+	// suppressed for machine formats — so json/csv get the raw baremin, keeping
+	// the value parseable rather than leaking "(!) +5" into a numeric column.
+	bareminFor := func(g Goal) string {
+		if outputFormat != "table" {
+			return viewFor(g).baremin
+		}
+		return viewFor(g).markedBaremin()
+	}
 	losedateFor := func(g Goal) int64 { return viewFor(g).losedate }
 	// Explain the "(!)" marker, but only when a flagged goal is actually shown.
 	legendFor := func(goals []Goal) string { return tomorrowLegend(goals, viewFor) }

@@ -76,6 +76,18 @@ func TestRunDataCommand(t *testing.T) {
 			t.Errorf("empty json = %q, want %q", got, "[]\n")
 		}
 	})
+
+	t.Run("csv format emits header plus one row per datapoint", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		code := runDataCommand([]string{"g"}, &FakeClient{FetchGoalWithDatapointsFunc: twoPoints}, "csv", &out, &errb)
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d (stderr: %s)", code, errb.String())
+		}
+		want := "date,value,comment\n2024-01-01,3,first\n2024-01-02,12.5,later\n"
+		if got := out.String(); got != want {
+			t.Errorf("csv output = %q, want %q", got, want)
+		}
+	})
 }
 
 // TestRenderDatapointsAs covers the --format json/csv output for `buzz data`:

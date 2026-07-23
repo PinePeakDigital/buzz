@@ -256,6 +256,31 @@ func TestRunListCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("csv format emits header plus one row per goal", func(t *testing.T) {
+		client := &FakeClient{
+			FetchGoalsFunc: func() ([]Goal, error) {
+				return []Goal{{Slug: "apple"}, {Slug: "zebra"}}, nil
+			},
+		}
+
+		var out, errOut bytes.Buffer
+		code := runListCommand(context.Background(), client, false, "csv", &out, &errOut)
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+		got := out.String()
+		if !strings.HasPrefix(got, "Slug,Title,Units,Rate,Stakes\n") {
+			t.Errorf("csv missing expected header row, got:\n%s", got)
+		}
+		if strings.Contains(got, "Total goals") {
+			t.Errorf("csv output should not contain the human summary, got:\n%s", got)
+		}
+		lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+		if len(lines) != 3 { // header + 2 goals
+			t.Errorf("expected 3 csv lines (header + 2 goals), got %d:\n%s", len(lines), got)
+		}
+	})
+
 	t.Run("fetch error returns exit code 1", func(t *testing.T) {
 		client := &FakeClient{
 			FetchArchivedGoalsFunc: func() ([]Goal, error) {
