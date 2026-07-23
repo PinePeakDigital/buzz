@@ -77,12 +77,12 @@ type reviewModel struct {
 	ctx      context.Context     // cancelled when the TUI exits; cancels in-flight fetches
 	client   Client              // Beeminder API seam; injected so tests can drive detail fetches with a fake
 	config   *Config             // credentials for browser-URL/detail rendering (not API calls — those go through client)
-	current  int            // current goal index
-	width    int            // terminal width
-	height   int            // terminal height
-	err      string         // error message to display
-	viewport viewport.Model // scrollable pane for the goal content (keeps tall goals reachable on short terminals)
-	ready    bool           // viewport has been sized by a WindowSizeMsg
+	current  int                 // current goal index
+	width    int                 // terminal width
+	height   int                 // terminal height
+	err      string              // error message to display
+	viewport viewport.Model      // scrollable pane for the goal content (keeps tall goals reachable on short terminals)
+	ready    bool                // viewport has been sized by a WindowSizeMsg
 }
 
 // initialReviewModel creates a new review model. The first goal's details fetch
