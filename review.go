@@ -59,6 +59,7 @@ func handleReviewCommand() {
 
 	// Launch the interactive review TUI
 	model := initialReviewModel(goals, config)
+	model.client = client // use the client built above; the constructor's default is discarded
 	model.ctx = ctx
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
@@ -74,24 +75,29 @@ type reviewModel struct {
 	inFlight map[string]struct{} // slugs with a detail fetch currently in flight (dedup)
 	loading  bool                // a detail fetch for the current goal is in flight
 	ctx      context.Context     // cancelled when the TUI exits; cancels in-flight fetches
-	config   *Config
-	current  int            // current goal index
-	width    int            // terminal width
-	height   int            // terminal height
-	err      string         // error message to display
-	viewport viewport.Model // scrollable pane for the goal content (keeps tall goals reachable on short terminals)
-	ready    bool           // viewport has been sized by a WindowSizeMsg
+	client   Client              // Beeminder API seam; injected so tests can drive detail fetches with a fake
+	config   *Config             // credentials for browser-URL/detail rendering (not API calls — those go through client)
+	current  int                 // current goal index
+	width    int                 // terminal width
+	height   int                 // terminal height
+	err      string              // error message to display
+	viewport viewport.Model      // scrollable pane for the goal content (keeps tall goals reachable on short terminals)
+	ready    bool                // viewport has been sized by a WindowSizeMsg
 }
 
 // initialReviewModel creates a new review model. The first goal's details fetch
 // is dispatched by Init; because Init can't persist model state (it returns only
 // a Cmd), the constructor pre-marks that goal as in-flight and loading here.
+//
+// The client defaults to the real HTTP client for config; handleReviewCommand
+// and tests can override m.client to inject a fake before the TUI runs.
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
 	m := reviewModel{
 		goals:    goals,
 		details:  make(map[string]*Goal),
 		inFlight: make(map[string]struct{}),
 		ctx:      context.Background(), // overridden with a cancellable ctx by handleReviewCommand
+		client:   NewHTTPClient(config),
 		config:   config,
 		current:  0,
 		loading:  len(goals) > 0,
@@ -111,10 +117,12 @@ type goalDetailsMsg struct {
 
 // fetchGoalDetailsCmd fetches one goal's full details (datapoints + road) in the
 // background so the TUI opens immediately and navigation stays responsive. The
-// context lets the fetch be cancelled when the user quits.
-func fetchGoalDetailsCmd(ctx context.Context, config *Config, slug string) tea.Cmd {
+// context lets the fetch be cancelled when the user quits. The fetch goes through
+// the injected Client seam so the review TUI is testable with a fake, like every
+// other command.
+func fetchGoalDetailsCmd(ctx context.Context, client Client, slug string) tea.Cmd {
 	return func() tea.Msg {
-		goal, err := NewHTTPClient(config).FetchGoalWithDatapoints(ctx, slug)
+		goal, err := client.FetchGoalWithDatapoints(ctx, slug)
 		return goalDetailsMsg{slug: slug, goal: goal, err: err}
 	}
 }
@@ -138,7 +146,7 @@ func (m *reviewModel) ensureDetails() tea.Cmd {
 		return nil // already fetching this goal; just keep showing the spinner
 	}
 	m.inFlight[slug] = struct{}{}
-	return fetchGoalDetailsCmd(m.ctx, m.config, slug)
+	return fetchGoalDetailsCmd(m.ctx, m.client, slug)
 }
 
 func (m reviewModel) Init() tea.Cmd {
@@ -146,7 +154,7 @@ func (m reviewModel) Init() tea.Cmd {
 	if len(m.goals) == 0 {
 		return nil
 	}
-	return fetchGoalDetailsCmd(m.ctx, m.config, m.goals[0].Slug)
+	return fetchGoalDetailsCmd(m.ctx, m.client, m.goals[0].Slug)
 }
 
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

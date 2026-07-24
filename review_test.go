@@ -82,6 +82,83 @@ func TestReviewModelInit(t *testing.T) {
 	}
 }
 
+// TestReviewModelInitFetchesThroughClient proves the review TUI's lazy detail
+// fetch runs through the injected Client seam (not a hardwired NewHTTPClient),
+// so it is testable with a fake like every other command. Executing the Cmd
+// Init returns must invoke the fake and surface its goal via a goalDetailsMsg;
+// feeding that back through Update must cache the details.
+func TestReviewModelInitFetchesThroughClient(t *testing.T) {
+	config := &Config{Username: "u", AuthToken: "t"}
+	m := initialReviewModel([]Goal{{Slug: "g1"}}, config)
+
+	var fetched []string
+	m.client = &FakeClient{
+		FetchGoalWithDatapointsFunc: func(slug string) (*Goal, error) {
+			fetched = append(fetched, slug)
+			return &Goal{Slug: slug, Datapoints: []Datapoint{{Value: 1}}}, nil
+		},
+	}
+
+	cmd := m.Init()
+	if cmd == nil {
+		t.Fatal("expected Init() to return a fetch command")
+	}
+	msg := cmd() // executes the fetch against the injected fake
+	if len(fetched) != 1 || fetched[0] != "g1" {
+		t.Fatalf("expected fake to be called for g1, got %v", fetched)
+	}
+	dm, ok := msg.(goalDetailsMsg)
+	if !ok {
+		t.Fatalf("expected goalDetailsMsg, got %T", msg)
+	}
+	if dm.err != nil || dm.goal == nil || len(dm.goal.Datapoints) != 1 {
+		t.Fatalf("fake goal did not flow through the seam: %+v", dm)
+	}
+
+	updated, _ := m.Update(dm)
+	m = updated.(reviewModel)
+	if _, ok := m.details["g1"]; !ok {
+		t.Error("expected fetched details to be cached after the message")
+	}
+}
+
+// TestReviewModelInitFetchThroughClientError mirrors the success test for the
+// failure branch: a fetch error from the injected client must surface as a
+// goalDetailsMsg carrying the error (not a cached goal), and feeding that back
+// through Update must set the on-screen error and clear loading. This branch is
+// only reachable through the seam now that the fetch no longer builds its own
+// HTTP client.
+func TestReviewModelInitFetchThroughClientError(t *testing.T) {
+	config := &Config{Username: "u", AuthToken: "t"}
+	m := initialReviewModel([]Goal{{Slug: "g1"}}, config)
+	m.client = &FakeClient{
+		FetchGoalWithDatapointsFunc: func(string) (*Goal, error) {
+			return nil, fmt.Errorf("boom")
+		},
+	}
+
+	msg := m.Init()() // execute the fetch Cmd against the failing fake
+	dm, ok := msg.(goalDetailsMsg)
+	if !ok {
+		t.Fatalf("expected goalDetailsMsg, got %T", msg)
+	}
+	if dm.err == nil || dm.goal != nil {
+		t.Fatalf("expected an error message with no goal, got %+v", dm)
+	}
+
+	updated, _ := m.Update(dm)
+	m = updated.(reviewModel)
+	if m.loading {
+		t.Error("expected loading cleared after a failed fetch")
+	}
+	if !strings.Contains(m.err, "Failed to load goal details") {
+		t.Errorf("expected surfaced fetch error, got %q", m.err)
+	}
+	if _, ok := m.details["g1"]; ok {
+		t.Error("expected no cached details after a failed fetch")
+	}
+}
+
 func TestReviewModelNavigationForward(t *testing.T) {
 	goals := []Goal{
 		{Slug: "goal1", Title: "First Goal"},
