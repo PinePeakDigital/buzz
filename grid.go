@@ -129,7 +129,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 	if goal.PledgeCap != nil && *goal.PledgeCap > 0 && *goal.PledgeCap != goal.Pledge {
 		pledgeDisplay = fmt.Sprintf("$%.2f / $%.2f", goal.Pledge, *goal.PledgeCap)
 	}
-	content := "Goal Details\n\n" + formatArchiveBanner(goal)
+	content := "Goal Details\n\n" + formatArchiveBanner(goal, time.Now())
 	content += fmt.Sprintf("Slug: %s\n"+
 		"Title: %s\n"+
 		"Pledge: %s\n"+

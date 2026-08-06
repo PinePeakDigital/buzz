@@ -949,13 +949,18 @@ func TestFormatGoalDetailsWithDatapoints(t *testing.T) {
 }
 
 func TestFormatArchiveBanner(t *testing.T) {
-	// archivedate set -> banner with the scheduled date; unset -> nothing.
-	archiving := formatGoalDetails(&Goal{Slug: "s", Archivedate: 1786075200}, &Config{Username: "u"}, time.Now())
-	if !strings.Contains(archiving, "Scheduled for archive on") {
-		t.Errorf("expected archive banner, got:\n%s", archiving)
+	now := time.Unix(1786075200, 0) // reference clock
+	// Future archivedate -> banner with the scheduled date.
+	future := formatArchiveBanner(&Goal{Archivedate: now.Unix() + 86400}, now)
+	if !strings.Contains(future, "Scheduled for archive on") {
+		t.Errorf("expected archive banner, got:\n%s", future)
 	}
-	if got := formatArchiveBanner(&Goal{Slug: "s"}); got != "" {
+	// Unset -> nothing. Past date (already-archived goal) -> nothing.
+	if got := formatArchiveBanner(&Goal{}, now); got != "" {
 		t.Errorf("expected no banner when archivedate unset, got %q", got)
+	}
+	if got := formatArchiveBanner(&Goal{Archivedate: now.Unix() - 86400}, now); got != "" {
+		t.Errorf("expected no banner for past archivedate, got %q", got)
 	}
 }
 
