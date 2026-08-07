@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 )
 
 // handleListCommand outputs a summary list of goals with slug, title, units,
@@ -129,6 +130,10 @@ func runListCommand(ctx context.Context, client Client, archived bool, format st
 
 	// Print summary header
 	fmt.Fprintf(out, "Total %s: %d\n\n", noun, len(goals))
+	// Human table only: flag goals scheduled for archive on the slug. Left the
+	// Cell above clean so csv slugs stay plain.
+	now := time.Now()
+	table.Columns[0].Cell = func(g Goal) string { return archiveMarker(g, now) + g.Slug }
 	fmt.Fprint(out, table.Render(goals))
 
 	return 0

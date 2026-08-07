@@ -509,7 +509,7 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 // shows up the same way everywhere. now gates on a still-upcoming date so an
 // already-archived goal (reachable by slug) doesn't show a past-dated warning.
 func formatArchiveBanner(goal *Goal, now time.Time) string {
-	if goal.Archivedate <= 0 || goal.Archivedate <= now.Unix() {
+	if !goal.ScheduledForArchive(now) {
 		return ""
 	}
 	when := time.Unix(goal.Archivedate, 0).Format("Mon Jan 2, 2006")

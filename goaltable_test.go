@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -72,6 +73,52 @@ func TestTableRenderNoHeader(t *testing.T) {
 	want := "short       +1\nwider-slug  +0.5\n"
 	if got != want {
 		t.Errorf("no-header render mismatch\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestArchiveMarker checks the slug marker gates on a still-future archivedate:
+// future -> prefixed, unset or past/now -> plain.
+func TestArchiveMarker(t *testing.T) {
+	now := time.Unix(1_000_000_000, 0)
+	cases := map[string]struct {
+		archivedate int64
+		want        string
+	}{
+		"future":  {now.Unix() + 86400, "(A) "},
+		"unset":   {0, ""},
+		"past":    {now.Unix() - 86400, ""},
+		"exactly": {now.Unix(), ""}, // boundary: not strictly future
+	}
+	for name, c := range cases {
+		if got := archiveMarker(Goal{Archivedate: c.archivedate}, now); got != c.want {
+			t.Errorf("%s: archiveMarker = %q, want %q", name, got, c.want)
+		}
+	}
+}
+
+// TestTableArchiveMarkerAlignment guards that the slug marker doesn't knock the
+// next column out of alignment: the marked and unmarked rows must line up.
+func TestTableArchiveMarkerAlignment(t *testing.T) {
+	now := time.Unix(1_000_000_000, 0)
+	tbl := Table{Columns: []Column{
+		{Cell: func(g Goal) string { return archiveMarker(g, now) + g.Slug }},
+		{Cell: func(g Goal) string { return g.Baremin }},
+	}}
+	goals := []Goal{
+		{Slug: "abc", Archivedate: now.Unix() + 86400, Baremin: "+1"}, // marked
+		{Slug: "xyz", Baremin: "+2"},                                  // plain
+	}
+	lines := strings.Split(strings.TrimRight(tbl.Render(goals), "\n"), "\n")
+	if !strings.HasPrefix(lines[0], "(A) abc") {
+		t.Errorf("marked row = %q, want (A) prefix", lines[0])
+	}
+	if strings.HasPrefix(lines[1], "(A)") {
+		t.Errorf("unscheduled row = %q, want no marker", lines[1])
+	}
+	// Equal total width => the Baremin column lines up in both rows.
+	if len(lines[0]) != len(lines[1]) {
+		t.Errorf("rows misaligned: %q (w=%d) vs %q (w=%d)",
+			lines[0], len(lines[0]), lines[1], len(lines[1]))
 	}
 }
 

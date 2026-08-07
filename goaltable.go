@@ -5,7 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// archiveMarker is the display-only prefix a table's slug cell gets when the
+// goal is scheduled for archive. Table output only — the Cell functions feed
+// csv (and stay clean slugs); json already carries the raw archivedate. The
+// marker is ASCII (like the tomorrow view's "(!)" — #325/ADR-0003) so it has a
+// known display width and never shifts the goaltable's column alignment; "(A)"
+// rather than "(!)" so it never collides with the malformed-road marker that
+// shares the filtered views. The detail-view banner uses ⚠ (no column there).
+func archiveMarker(g Goal, now time.Time) string {
+	if g.ScheduledForArchive(now) {
+		return "(A) "
+	}
+	return ""
+}
 
 // goaltable renders a list of goals as a column-aligned text table. The
 // pipeline every list command was reimplementing —

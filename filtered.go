@@ -238,6 +238,10 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		return
 	}
 
+	// Human table only: flag goals scheduled for archive on the slug (csv/json
+	// above keep the clean Cell).
+	now := time.Now()
+	table.Columns[0].Cell = func(g Goal) string { return archiveMarker(g, now) + g.Slug }
 	fmt.Print(table.Render(filteredGoals))
 
 	if legendFor != nil {

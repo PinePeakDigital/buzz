@@ -281,6 +281,25 @@ func TestRunListCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("scheduled-for-archive goal: table slug marked, csv slug clean", func(t *testing.T) {
+		// Far-future archivedate so ScheduledForArchive is true against the real
+		// clock runListCommand samples internally.
+		scheduled := []Goal{{Slug: "apple", Archivedate: 4102444800}, {Slug: "zebra"}}
+		client := &FakeClient{FetchGoalsFunc: func() ([]Goal, error) { return scheduled, nil }}
+
+		var tblOut, errOut bytes.Buffer
+		runListCommand(context.Background(), client, false, "table", &tblOut, &errOut)
+		if !strings.Contains(tblOut.String(), "(A) apple") {
+			t.Errorf("table should mark the scheduled goal, got:\n%s", tblOut.String())
+		}
+
+		var csvOut bytes.Buffer
+		runListCommand(context.Background(), client, false, "csv", &csvOut, &errOut)
+		if strings.Contains(csvOut.String(), "(A)") {
+			t.Errorf("csv slug must stay clean (no marker), got:\n%s", csvOut.String())
+		}
+	})
+
 	t.Run("fetch error returns exit code 1", func(t *testing.T) {
 		client := &FakeClient{
 			FetchArchivedGoalsFunc: func() ([]Goal, error) {
