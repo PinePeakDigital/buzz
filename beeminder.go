@@ -13,6 +13,7 @@ type Goal struct {
 	Fineprint   string                `json:"fineprint"` // User-provided description of what they're committing to
 	GoalType    string                `json:"goal_type"` // Goal type (hustler, biker, fatloser, gainer, inboxer, drinker)
 	Losedate    int64                 `json:"losedate"`
+	Archivedate int64                 `json:"archivedate"` // Unix time the goal is scheduled to be archived; 0/null when not scheduled
 	Pledge      float64               `json:"pledge"`
 	PledgeCap   *float64              `json:"pledge_cap"` // Pointer to handle null values from API
 	Safebuf     int                   `json:"safebuf"`

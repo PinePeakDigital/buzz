@@ -503,11 +503,25 @@ func formatRecentDatapoints(datapoints []Datapoint) string {
 	return output
 }
 
+// formatArchiveBanner returns a one-line warning banner when the goal is
+// scheduled for archive (Beeminder sets archivedate to the Unix time it will be
+// archived), or "" otherwise. Shared by every full goal view so the warning
+// shows up the same way everywhere. now gates on a still-upcoming date so an
+// already-archived goal (reachable by slug) doesn't show a past-dated warning.
+func formatArchiveBanner(goal *Goal, now time.Time) string {
+	if goal.Archivedate <= 0 || goal.Archivedate <= now.Unix() {
+		return ""
+	}
+	when := time.Unix(goal.Archivedate, 0).Format("Mon Jan 2, 2006")
+	banner := fmt.Sprintf("⚠ Scheduled for archive on %s", when)
+	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208")).Render(banner) + "\n"
+}
+
 // formatGoalDetails formats the goal details in a consistent way for both view
 // and review commands. now is the reference clock for the 7-day forecast; pass
 // time.Now() in production.
 func formatGoalDetails(goal *Goal, config *Config, now time.Time) string {
-	var details string
+	details := formatArchiveBanner(goal, now)
 
 	// Field order follows issue #229: the goal's commitment (rate, autoratchet)
 	// first, then urgency (limsum, deadline, due time), then stakes (pledge),
