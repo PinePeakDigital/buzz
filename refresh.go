@@ -9,7 +9,7 @@ import (
 
 // handleRefreshCommand refreshes autodata for a goal.
 func handleRefreshCommand() {
-	client, ok := loadClient(os.Stderr)
+	_, client, ok := loadClient(os.Stderr)
 	if !ok {
 		os.Exit(1)
 	}

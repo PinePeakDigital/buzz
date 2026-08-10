@@ -24,19 +24,10 @@ func handleListCommand() {
 		return
 	}
 
-	// Load config
-	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz auth login' to authenticate.")
+	_, client, ok := loadClient(os.Stderr)
+	if !ok {
 		os.Exit(1)
 	}
-
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
 	code = runListCommand(context.Background(), client, archived, outputFormat, os.Stdout, os.Stderr)
 	if code == 0 && outputFormat == "table" {
 		// Check for updates and display message if available. Skipped for json/csv
@@ -137,7 +128,7 @@ func runListCommand(ctx context.Context, client Client, archived bool, format st
 	// list isn't row-coloured, so the dot gets its own orange (matching the
 	// detail-view banner).
 	now := time.Now()
-	archiveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+	archiveStyle := lipgloss.NewStyle().Foreground(archiveColor)
 	table.Columns[0].Cell = func(g Goal) string { return g.Slug + archiveDot(g, now, archiveStyle) }
 	fmt.Fprint(out, table.Render(goals))
 

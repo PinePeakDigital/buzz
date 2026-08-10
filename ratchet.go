@@ -56,18 +56,10 @@ func handleRatchetCommand() {
 
 	skipConfirm := *yes || *yesShort
 
-	if !ConfigExists() {
-		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz auth login' to authenticate.")
+	_, client, ok := loadClient(os.Stderr)
+	if !ok {
 		os.Exit(1)
 	}
-
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
 
 	if !skipConfirm {
 		// Fetch the current goal only when we need to show the confirmation

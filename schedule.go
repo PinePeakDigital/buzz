@@ -277,9 +277,9 @@ func displayTimeline(w io.Writer, slots []timeSlot, archiving map[string]bool) {
 	treeStyle := lipgloss.NewStyle()
 	archiveStyle := lipgloss.NewStyle()
 	if colorProfile != termenv.Ascii {
-		timeStyle = timeStyle.Foreground(lipgloss.Color("6"))         // Cyan for time labels
-		treeStyle = treeStyle.Foreground(lipgloss.Color("8"))         // Gray for tree structure (├─ and │)
-		archiveStyle = archiveStyle.Foreground(lipgloss.Color("208")) // Orange for archive-scheduled slugs (matches the list dot / banner)
+		timeStyle = timeStyle.Foreground(lipgloss.Color("6")) // Cyan for time labels
+		treeStyle = treeStyle.Foreground(lipgloss.Color("8")) // Gray for tree structure (├─ and │)
+		archiveStyle = archiveStyle.Foreground(archiveColor)  // Orange for archive-scheduled slugs (shared archiveColor; see goaltable.go)
 	}
 
 	// Determine terminal width once; it doesn't change across slots.
