@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -49,8 +50,8 @@ func handleScheduleCommand() {
 	// Display hourly density overview
 	displayHourlyDensity(hourCounts)
 
-	// Display detailed timeline
-	displayTimeline(timeSlots)
+	// Display detailed timeline, colouring slugs scheduled for archive.
+	displayTimeline(os.Stdout, timeSlots, archivingSlugs(goals, time.Now()))
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())
@@ -115,6 +116,19 @@ func extractTimeSlots(goals []Goal, loc *time.Location) []timeSlot {
 	})
 
 	return slots
+}
+
+// archivingSlugs returns the set of slugs whose goal is scheduled for archive as
+// of now — the timeline colours these. Extracted from handleScheduleCommand so
+// the selection is unit-testable, matching archiveDot / formatArchiveBanner.
+func archivingSlugs(goals []Goal, now time.Time) map[string]bool {
+	set := make(map[string]bool)
+	for _, g := range goals {
+		if g.ScheduledForArchive(now) {
+			set[g.Slug] = true
+		}
+	}
+	return set
 }
 
 // displayHourlyDensity displays a compact bar chart showing goals per hour
@@ -249,18 +263,23 @@ func displayHourlyDensity(hourCounts []int) {
 	fmt.Println()
 }
 
-// displayTimeline displays a vertical timeline listing all goals grouped by deadline time
-func displayTimeline(slots []timeSlot) {
-	fmt.Println("TIMELINE")
-	fmt.Println("────────────────────────────────────────────────")
+// displayTimeline displays a vertical timeline listing all goals grouped by
+// deadline time. Slugs present in archiving (goals scheduled for archive) are
+// coloured to match the archive indication elsewhere; wrapping is measured on
+// the plain slug so the colour bytes never shift the layout. Writes to w.
+func displayTimeline(w io.Writer, slots []timeSlot, archiving map[string]bool) {
+	fmt.Fprintln(w, "TIMELINE")
+	fmt.Fprintln(w, "────────────────────────────────────────────────")
 
 	// Define styles for timeline elements (disabled if --no-color)
 	colorProfile := lipgloss.ColorProfile()
 	timeStyle := lipgloss.NewStyle()
 	treeStyle := lipgloss.NewStyle()
+	archiveStyle := lipgloss.NewStyle()
 	if colorProfile != termenv.Ascii {
-		timeStyle = timeStyle.Foreground(lipgloss.Color("6")) // Cyan for time labels
-		treeStyle = treeStyle.Foreground(lipgloss.Color("8")) // Gray for tree structure (├─ and │)
+		timeStyle = timeStyle.Foreground(lipgloss.Color("6"))         // Cyan for time labels
+		treeStyle = treeStyle.Foreground(lipgloss.Color("8"))         // Gray for tree structure (├─ and │)
+		archiveStyle = archiveStyle.Foreground(lipgloss.Color("208")) // Orange for archive-scheduled slugs (matches the list dot / banner)
 	}
 
 	// Determine terminal width once; it doesn't change across slots.
@@ -288,30 +307,35 @@ func displayTimeline(slots []timeSlot) {
 		line.WriteString(prefix)
 		current := 0
 		for _, goal := range slot.goals {
+			// Colour the slug when archive-scheduled, but measure the plain slug —
+			// the ANSI bytes have zero display width and must not affect wrapping.
+			display := goal
+			if archiving[goal] {
+				display = archiveStyle.Render(goal)
+			}
 			// Determine separator
 			sep := ""
 			if current > 0 {
 				// Add comma+space before this goal if there's already content on this line
 				sep = ", "
 			}
-			chunk := sep + goal
-			if current+len(chunk) > available && current > 0 {
+			if current+len(sep)+len(goal) > available && current > 0 {
 				// Always add trailing comma when wrapping (more content follows)
 				line.WriteString(",")
-				fmt.Println(line.String())
+				fmt.Fprintln(w, line.String())
 				// start new wrapped line with indent matching prefix width
 				// Use vertical line to show continuation
 				line.Reset()
 				// Time column width (5 chars) + space + vertical continuation (styled)
 				line.WriteString("      " + treeStyle.Render("│") + "  ")
 				// Add the goal that didn't fit
-				line.WriteString(goal)
+				line.WriteString(display)
 				current = len(goal)
 				continue
 			}
-			line.WriteString(chunk)
-			current += len(chunk)
+			line.WriteString(sep + display)
+			current += len(sep) + len(goal)
 		}
-		fmt.Println(line.String())
+		fmt.Fprintln(w, line.String())
 	}
 }
