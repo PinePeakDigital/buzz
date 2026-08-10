@@ -165,19 +165,10 @@ func sortGoalsByDisplayedLosedate(goals []Goal, losedateFor func(Goal) int64) {
 // empty string prints nothing. The tomorrow view uses it to explain its "(!)"
 // malformed-bright-red-line marker only when a flagged goal is actually shown.
 func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool, bareminFor func(Goal) string, losedateFor func(Goal) int64, legendFor func([]Goal) string) {
-	// Load config
-	if !ConfigExists() {
-		fmt.Println("Error: No configuration found. Please run 'buzz auth login' to authenticate.")
+	_, client, ok := loadClient(os.Stderr)
+	if !ok {
 		os.Exit(1)
 	}
-
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Printf("Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
 
 	// Fetch goals
 	goals, err := client.FetchGoals(context.Background())

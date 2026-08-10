@@ -12,7 +12,7 @@ import (
 
 // handleChargeCommand creates a charge for the authenticated user.
 func handleChargeCommand() {
-	client, ok := loadClient(os.Stderr)
+	_, client, ok := loadClient(os.Stderr)
 	if !ok {
 		os.Exit(1)
 	}

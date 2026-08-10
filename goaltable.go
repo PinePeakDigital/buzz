@@ -10,6 +10,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// archiveColor is the orange used to mark goals scheduled for archive — the
+// banner (goaldetail.go), the list dot (list.go), and the timeline slug
+// (schedule.go) all reference it so the marker's colour lives in one place.
+// It happens to equal UrgencyDueToday's 208 today, but that is coincidence, not
+// coupling: archive isn't an urgency level, so this stays independent of the
+// urgency palette (urgency-coloured views like the filtered list deliberately
+// pass an unstyled dot and defer to the row colour instead).
+var archiveColor = lipgloss.Color("208")
+
 // archiveDot returns a trailing " •" marking a goal scheduled for archive, or ""
 // otherwise. Table output only — the Cell functions feed csv (slugs stay clean)
 // and json already carries the raw archivedate. The bullet is a *suffix* so it

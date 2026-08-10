@@ -77,19 +77,10 @@ func handleViewCommand() {
 
 	goalSlug := positional[0]
 
-	// Load config
-	if !ConfigExists() {
-		fmt.Fprintln(os.Stderr, "Error: No configuration found. Please run 'buzz auth login' to authenticate.")
+	config, client, ok := loadClient(os.Stderr)
+	if !ok {
 		os.Exit(1)
 	}
-
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %s\n", redactError(err))
-		os.Exit(1)
-	}
-
-	client := NewHTTPClient(config)
 
 	// If --web flag is present, open in browser and exit
 	if webFlag {
