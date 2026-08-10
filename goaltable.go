@@ -5,7 +5,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
+
+// archiveDot returns a trailing " •" marking a goal scheduled for archive, or ""
+// otherwise. Table output only — the Cell functions feed csv (slugs stay clean)
+// and json already carries the raw archivedate. The bullet is a *suffix* so it
+// never shifts the slug's left edge (the "(A) " prefix did, ruining alignment),
+// and Render measures display width so the multibyte glyph — and any colour on
+// it — stays aligned. style colours the dot: an orange style for the plain
+// `buzz list`; an unstyled one for the urgency-coloured filtered views, so the
+// dot inherits the row colour rather than resetting it mid-line.
+func archiveDot(g Goal, now time.Time, style lipgloss.Style) string {
+	if !g.ScheduledForArchive(now) {
+		return ""
+	}
+	return " " + style.Render("•")
+}
 
 // goaltable renders a list of goals as a column-aligned text table. The
 // pipeline every list command was reimplementing —
@@ -56,15 +74,15 @@ func (t Table) Render(goals []Goal) string {
 	if t.ShowHeader {
 		// Seed widths from header lengths so the header row never gets clipped.
 		for i, c := range t.Columns {
-			widths[i] = len(c.Header)
+			widths[i] = lipgloss.Width(c.Header)
 		}
 	}
 	for i, g := range goals {
 		row := make([]string, len(t.Columns))
 		for j, c := range t.Columns {
 			row[j] = c.Cell(g)
-			if len(row[j]) > widths[j] {
-				widths[j] = len(row[j])
+			if w := lipgloss.Width(row[j]); w > widths[j] {
+				widths[j] = w
 			}
 		}
 		cells[i] = row
@@ -160,14 +178,17 @@ func encodeCSV(headers []string, rows [][]string) (string, error) {
 }
 
 // padRow joins cells with two-space separators, left-padding every column
-// except the last to its measured width.
+// except the last to its measured width. Padding is by display width (via
+// lipgloss.Width), not byte length, so a cell carrying ANSI colour or a
+// multibyte glyph (the archive dot) still aligns; fmt's %-*s pads by bytes and
+// would misalign it.
 func padRow(cells []string, widths []int) string {
 	parts := make([]string, len(cells))
 	for i, cell := range cells {
 		if i == len(cells)-1 {
 			parts[i] = cell
 		} else {
-			parts[i] = fmt.Sprintf("%-*s", widths[i], cell)
+			parts[i] = cell + strings.Repeat(" ", widths[i]-lipgloss.Width(cell))
 		}
 	}
 	return strings.Join(parts, "  ")

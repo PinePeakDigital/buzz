@@ -42,6 +42,15 @@ type Goal struct {
 	Datapoints  []Datapoint           `json:"datapoints,omitempty"`
 }
 
+// ScheduledForArchive reports whether the goal has an archive date still in the
+// future. Beeminder sets Archivedate to the Unix time a goal will be archived;
+// gating on now (not just presence) means an already-archived goal reachable by
+// slug doesn't read as "scheduled". Shared by the detail banner and the list
+// marker so both agree.
+func (g Goal) ScheduledForArchive(now time.Time) bool {
+	return g.Archivedate > 0 && g.Archivedate > now.Unix()
+}
+
 // DuebyEntry is one entry in a goal's `dueby` map, keyed by daystamp.
 // Beeminder pre-rounds FormattedDelta and FormattedTotal to the goal's
 // configured Display Precision, so honouring those strings avoids the

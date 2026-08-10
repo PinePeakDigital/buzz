@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Filtered list views: `buzz all`, `buzz today`, `buzz tomorrow`, `buzz due`,
@@ -238,6 +240,12 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 		return
 	}
 
+	// Human table only: flag goals scheduled for archive with a trailing dot
+	// (csv/json above keep the clean Cell). These views colour the whole row by
+	// urgency, so the dot is left unstyled — it inherits the row colour instead
+	// of resetting it mid-line, and still marks the goal by its presence.
+	now := time.Now()
+	table.Columns[0].Cell = func(g Goal) string { return g.Slug + archiveDot(g, now, lipgloss.NewStyle()) }
 	fmt.Print(table.Render(filteredGoals))
 
 	if legendFor != nil {

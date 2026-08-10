@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // handleListCommand outputs a summary list of goals with slug, title, units,
@@ -129,6 +132,13 @@ func runListCommand(ctx context.Context, client Client, archived bool, format st
 
 	// Print summary header
 	fmt.Fprintf(out, "Total %s: %d\n\n", noun, len(goals))
+	// Human table only: flag goals scheduled for archive with a coloured dot
+	// after the slug. Left the Cell above clean so csv slugs stay plain. buzz
+	// list isn't row-coloured, so the dot gets its own orange (matching the
+	// detail-view banner).
+	now := time.Now()
+	archiveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+	table.Columns[0].Cell = func(g Goal) string { return g.Slug + archiveDot(g, now, archiveStyle) }
 	fmt.Fprint(out, table.Render(goals))
 
 	return 0
