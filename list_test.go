@@ -289,14 +289,14 @@ func TestRunListCommand(t *testing.T) {
 
 		var tblOut, errOut bytes.Buffer
 		runListCommand(context.Background(), client, false, "table", &tblOut, &errOut)
-		if !strings.Contains(tblOut.String(), "(A) apple") {
-			t.Errorf("table should mark the scheduled goal, got:\n%s", tblOut.String())
+		if !strings.Contains(tblOut.String(), "apple •") {
+			t.Errorf("table should mark the scheduled goal with a dot, got:\n%s", tblOut.String())
 		}
 
 		var csvOut bytes.Buffer
 		runListCommand(context.Background(), client, false, "csv", &csvOut, &errOut)
-		if strings.Contains(csvOut.String(), "(A)") {
-			t.Errorf("csv slug must stay clean (no marker), got:\n%s", csvOut.String())
+		if strings.Contains(csvOut.String(), "•") {
+			t.Errorf("csv slug must stay clean (no dot), got:\n%s", csvOut.String())
 		}
 	})
 

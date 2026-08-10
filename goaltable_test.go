@@ -76,32 +76,35 @@ func TestTableRenderNoHeader(t *testing.T) {
 	}
 }
 
-// TestArchiveMarker checks the slug marker gates on a still-future archivedate:
-// future -> prefixed, unset or past/now -> plain.
-func TestArchiveMarker(t *testing.T) {
+// TestArchiveDot checks the slug dot gates on a still-future archivedate:
+// future -> trailing " •", unset or past/now -> nothing.
+func TestArchiveDot(t *testing.T) {
 	now := time.Unix(1_000_000_000, 0)
+	plain := lipgloss.NewStyle()
 	cases := map[string]struct {
 		archivedate int64
 		want        string
 	}{
-		"future":  {now.Unix() + 86400, "(A) "},
+		"future":  {now.Unix() + 86400, " •"},
 		"unset":   {0, ""},
 		"past":    {now.Unix() - 86400, ""},
 		"exactly": {now.Unix(), ""}, // boundary: not strictly future
 	}
 	for name, c := range cases {
-		if got := archiveMarker(Goal{Archivedate: c.archivedate}, now); got != c.want {
-			t.Errorf("%s: archiveMarker = %q, want %q", name, got, c.want)
+		if got := archiveDot(Goal{Archivedate: c.archivedate}, now, plain); got != c.want {
+			t.Errorf("%s: archiveDot = %q, want %q", name, got, c.want)
 		}
 	}
 }
 
-// TestTableArchiveMarkerAlignment guards that the slug marker doesn't knock the
-// next column out of alignment: the marked and unmarked rows must line up.
-func TestTableArchiveMarkerAlignment(t *testing.T) {
+// TestTableArchiveDotAlignment guards that the trailing dot (multibyte, and in
+// production coloured) doesn't knock the next column out of alignment: the
+// marked and unmarked rows must line up. Byte-length padding would misalign it.
+func TestTableArchiveDotAlignment(t *testing.T) {
 	now := time.Unix(1_000_000_000, 0)
+	orange := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
 	tbl := Table{Columns: []Column{
-		{Cell: func(g Goal) string { return archiveMarker(g, now) + g.Slug }},
+		{Cell: func(g Goal) string { return g.Slug + archiveDot(g, now, orange) }},
 		{Cell: func(g Goal) string { return g.Baremin }},
 	}}
 	goals := []Goal{
@@ -109,16 +112,17 @@ func TestTableArchiveMarkerAlignment(t *testing.T) {
 		{Slug: "xyz", Baremin: "+2"},                                  // plain
 	}
 	lines := strings.Split(strings.TrimRight(tbl.Render(goals), "\n"), "\n")
-	if !strings.HasPrefix(lines[0], "(A) abc") {
-		t.Errorf("marked row = %q, want (A) prefix", lines[0])
+	if !strings.Contains(lines[0], "abc •") {
+		t.Errorf("marked row = %q, want slug + dot", lines[0])
 	}
-	if strings.HasPrefix(lines[1], "(A)") {
-		t.Errorf("unscheduled row = %q, want no marker", lines[1])
+	if strings.Contains(lines[1], "•") {
+		t.Errorf("unscheduled row = %q, want no dot", lines[1])
 	}
-	// Equal total width => the Baremin column lines up in both rows.
-	if len(lines[0]) != len(lines[1]) {
+	// Equal display width => the Baremin column lines up in both rows, even
+	// though the marked cell carries extra bytes (glyph + any colour codes).
+	if lipgloss.Width(lines[0]) != lipgloss.Width(lines[1]) {
 		t.Errorf("rows misaligned: %q (w=%d) vs %q (w=%d)",
-			lines[0], len(lines[0]), lines[1], len(lines[1]))
+			lines[0], lipgloss.Width(lines[0]), lines[1], lipgloss.Width(lines[1]))
 	}
 }
 
@@ -152,6 +156,41 @@ func TestTableRenderColorize(t *testing.T) {
 	if strings.ReplaceAll(overdueLine, "overdue", "") == strings.ReplaceAll(distantLine, "distant", "") {
 		t.Errorf("colourised rows for different urgencies are identical; expected different ANSI wrappers\noverdue: %q\ndistant: %q",
 			overdueLine, distantLine)
+	}
+}
+
+// TestTableColorizeArchiveDot guards the filtered-view interaction: in a
+// Colorize table (today/tomorrow/…), the plain archive dot must sit INSIDE the
+// row's colour span — an empty-style dot that emitted its own reset would blank
+// the urgency colour for the rest of the row — and must not break alignment.
+func TestTableColorizeArchiveDot(t *testing.T) {
+	orig := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(orig) })
+
+	now := time.Unix(1_000_000_000, 0)
+	tbl := Table{
+		Colorize: true,
+		Columns: []Column{
+			{Cell: func(g Goal) string { return g.Slug + archiveDot(g, now, lipgloss.NewStyle()) }},
+			{Cell: func(g Goal) string { return g.Baremin }},
+		},
+	}
+	marked := Goal{Slug: "arch", Safebuf: 0, Archivedate: now.Unix() + 86400, Baremin: "+1"}
+	plain := Goal{Slug: "keep", Safebuf: 0, Baremin: "+2"}
+	out := tbl.Render([]Goal{marked, plain})
+
+	markedLine, _, _ := strings.Cut(out, "\n")
+	if !strings.Contains(markedLine, "•") {
+		t.Fatalf("marked row missing dot: %q", markedLine)
+	}
+	if before, _, _ := strings.Cut(markedLine, "•"); strings.Contains(before, "\x1b[0m") {
+		t.Errorf("colour reset before the dot; row colour would break mid-line: %q", markedLine)
+	}
+	plainLine, _, _ := strings.Cut(strings.SplitN(out, "\n", 2)[1], "\n")
+	if lipgloss.Width(markedLine) != lipgloss.Width(plainLine) {
+		t.Errorf("colourised rows misaligned: %q (w=%d) vs %q (w=%d)",
+			markedLine, lipgloss.Width(markedLine), plainLine, lipgloss.Width(plainLine))
 	}
 }
 
