@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // TestExtractTimeSlots tests the extraction and grouping of time slots from goals
@@ -322,9 +328,87 @@ func TestDisplayTimeline(t *testing.T) {
 				}
 			}()
 
-			displayTimeline(tt.slots)
+			displayTimeline(io.Discard, tt.slots, nil)
 			tt.verify(t)
 		})
+	}
+}
+
+// TestDisplayTimelineArchiveColor asserts archive-scheduled slugs are coloured
+// (orange 208) in the timeline while others stay plain, and that the colour
+// bytes don't shift wrapping — the wrap point is measured on the plain slug.
+func TestDisplayTimelineArchiveColor(t *testing.T) {
+	orig := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(orig) })
+
+	orange := "\x1b[38;5;208m" // SGR prefix Color("208") renders under TrueColor
+	slots := []timeSlot{{hour: 9, minute: 0, goals: []string{"archer", "keeper"}}}
+
+	var buf bytes.Buffer
+	displayTimeline(&buf, slots, map[string]bool{"archer": true})
+	out := buf.String()
+
+	// "archer" is archive-scheduled -> wrapped in the orange SGR; "keeper" is not.
+	if !strings.Contains(out, orange+"archer") {
+		t.Errorf("expected archer coloured orange, got:\n%q", out)
+	}
+	if strings.Contains(out, orange+"keeper") {
+		t.Errorf("expected keeper to stay plain, got:\n%q", out)
+	}
+
+	// No archiving set (nil) -> no orange anywhere, even for the same slugs.
+	buf.Reset()
+	displayTimeline(&buf, slots, nil)
+	if strings.Contains(buf.String(), orange) {
+		t.Errorf("expected no archive colour when nothing scheduled, got:\n%q", buf.String())
+	}
+}
+
+// TestArchivingSlugs verifies the archive-scheduled slug set: future-dated in,
+// unset/past out, empty goals -> empty (non-nil) set.
+func TestArchivingSlugs(t *testing.T) {
+	now := time.Unix(1_000_000_000, 0)
+	goals := []Goal{
+		{Slug: "sched", Archivedate: now.Unix() + 86400},
+		{Slug: "plain"},
+		{Slug: "past", Archivedate: now.Unix() - 86400},
+	}
+	got := archivingSlugs(goals, now)
+	if !got["sched"] || got["plain"] || got["past"] {
+		t.Errorf("archivingSlugs = %v, want only {sched}", got)
+	}
+	if empty := archivingSlugs(nil, now); empty == nil || len(empty) != 0 {
+		t.Errorf("expected empty non-nil set for no goals, got %v", empty)
+	}
+}
+
+// TestDisplayTimelineWrapUnaffectedByColor guards the core invariant of the
+// colouring change: the ANSI colour bytes must not shift where lines wrap. It
+// renders the same wrapping slot with and without the archive colour and asserts
+// the layouts are byte-identical once ANSI is stripped.
+func TestDisplayTimelineWrapUnaffectedByColor(t *testing.T) {
+	orig := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(orig) })
+
+	// Enough goals to overflow the 80-col fallback width and force wrapping,
+	// with archiving slugs among those near the wrap boundary.
+	goals := []string{"alpha", "bravo", "charlie", "delta", "echo", "foxtrot",
+		"golf", "hotel", "india", "juliet", "kilo", "lima"}
+	slot := []timeSlot{{hour: 9, minute: 0, goals: goals}}
+
+	var colored, plain bytes.Buffer
+	displayTimeline(&colored, slot, map[string]bool{"golf": true, "kilo": true})
+	displayTimeline(&plain, slot, nil)
+
+	strip := regexp.MustCompile("\x1b\\[[0-9;]*m")
+	if got, want := strip.ReplaceAllString(colored.String(), ""), strip.ReplaceAllString(plain.String(), ""); got != want {
+		t.Errorf("colour shifted the layout:\ncolored (stripped):\n%s\nplain:\n%s", got, want)
+	}
+	// Sanity: the colour really is applied in the coloured render.
+	if !strings.Contains(colored.String(), "\x1b[38;5;208mgolf") {
+		t.Errorf("expected golf coloured orange, got:\n%q", colored.String())
 	}
 }
 
