@@ -42,6 +42,23 @@ type Goal struct {
 	Datapoints  []Datapoint           `json:"datapoints,omitempty"`
 }
 
+// hydrateFrom merges the fields that a per-goal detail fetch adds onto a goal
+// built from the bulk list endpoint (which omits them): the datapoints plus the
+// chart's road/window/cumulative/good-side inputs. Merging rather than replacing
+// keeps the summary fields (title, limsum, deadline, …) intact even if a detail
+// response is ever sparse. This is the single place that answers "which fields
+// does the detail fetch add?" — callers that stitch summary + detail use it so a
+// new chart-relevant field is added once, not copied in lockstep.
+func (g *Goal) hydrateFrom(detail *Goal) {
+	g.Datapoints = detail.Datapoints
+	g.Roadall = detail.Roadall
+	g.Tmin = detail.Tmin
+	g.Tmax = detail.Tmax
+	g.Initday = detail.Initday
+	g.Kyoom = detail.Kyoom
+	g.Yaw = detail.Yaw
+}
+
 // ScheduledForArchive reports whether the goal has an archive date still in the
 // future. Beeminder sets Archivedate to the Unix time a goal will be archived;
 // gating on now (not just presence) means an already-archived goal reachable by

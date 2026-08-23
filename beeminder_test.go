@@ -2641,3 +2641,29 @@ func TestFetchGoalsWithDatapointsManyGoals(t *testing.T) {
 		}
 	}
 }
+
+func TestHydrateFrom(t *testing.T) {
+	// Summary goal from the bulk list: has title/limsum, lacks chart fields.
+	g := Goal{Slug: "weight", Title: "Lose weight", Limsum: "+2 in 3 days", Kyoom: false}
+	detail := &Goal{
+		Slug:       "weight",
+		Title:      "SHOULD NOT WIN", // summary field must survive the merge
+		Datapoints: []Datapoint{{Value: 1}},
+		Roadall:    [][]*float64{{nil, nil, nil}},
+		Tmin:       "2020-01-01",
+		Tmax:       "2020-12-31",
+		Initday:    12345,
+		Kyoom:      true,
+		Yaw:        1,
+	}
+
+	g.hydrateFrom(detail)
+
+	if g.Title != "Lose weight" {
+		t.Errorf("summary Title clobbered: got %q", g.Title)
+	}
+	if len(g.Datapoints) != 1 || !g.Kyoom || g.Yaw != 1 || g.Initday != 12345 ||
+		g.Tmin != "2020-01-01" || g.Tmax != "2020-12-31" || g.Roadall == nil {
+		t.Errorf("detail fields not merged: %+v", g)
+	}
+}

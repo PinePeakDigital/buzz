@@ -406,16 +406,9 @@ func (c *HTTPClient) FetchGoalsWithDatapoints(ctx context.Context) ([]Goal, erro
 					// failing the entire review.
 					continue
 				}
-				goals[i].Datapoints = goalWithDatapoints.Datapoints
-				// Retain the per-goal fields the bulk list endpoint omits
-				// but the review chart needs (road, graph window, cumulative
-				// flag, good side).
-				goals[i].Roadall = goalWithDatapoints.Roadall
-				goals[i].Tmin = goalWithDatapoints.Tmin
-				goals[i].Tmax = goalWithDatapoints.Tmax
-				goals[i].Initday = goalWithDatapoints.Initday
-				goals[i].Kyoom = goalWithDatapoints.Kyoom
-				goals[i].Yaw = goalWithDatapoints.Yaw
+				// Merge in the detail-only fields the bulk list omits;
+				// see Goal.hydrateFrom for which fields and why.
+				goals[i].hydrateFrom(goalWithDatapoints)
 			}
 		}()
 	}
