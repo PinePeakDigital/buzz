@@ -281,19 +281,11 @@ func (m reviewModel) contentView() string {
 		return ""
 	}
 
-	// Start from the bulk summary goal, then merge in only the fields the
-	// per-goal detail fetch adds (datapoints + the chart's road/window inputs).
-	// Merging rather than replacing keeps the summary fields (title, limsum,
-	// deadline, …) intact even if a detail response is ever sparse.
+	// Start from the bulk summary goal, then merge in the detail-only fields;
+	// see Goal.hydrateFrom for which fields and why it merges rather than replaces.
 	goal := m.goals[m.current]
 	if d, ok := m.details[goal.Slug]; ok {
-		goal.Datapoints = d.Datapoints
-		goal.Roadall = d.Roadall
-		goal.Tmin = d.Tmin
-		goal.Tmax = d.Tmax
-		goal.Initday = d.Initday
-		goal.Kyoom = d.Kyoom
-		goal.Yaw = d.Yaw
+		goal.hydrateFrom(d)
 	}
 
 	// Create the goal details view
