@@ -33,7 +33,8 @@ func renderGoalChart(goal Goal, width int) string {
 		return ""
 	}
 
-	startTime, endTime := chartTimeframe(goal, time.Now())
+	now := time.Now()
+	startTime, endTime := chartTimeframe(goal, now)
 
 	processed := processDatapoints(goal, startTime, endTime)
 	if len(processed) == 0 {
@@ -70,7 +71,7 @@ func renderGoalChart(goal Goal, width int) string {
 	}
 
 	roadValues := roadValuesForTimeframe(brightLine, startTime, endTime, chartWidth)
-	datapointValues, nodeCols := datapointSeries(processed, startTime, endTime, chartWidth)
+	datapointValues, nodeCols := datapointSeries(processed, startTime, endTime, now, chartWidth)
 
 	var chart strings.Builder
 	chart.WriteString("\n")
@@ -152,7 +153,9 @@ func chartTimeframe(goal Goal, now time.Time) (start, end time.Time) {
 		start = t
 	}
 
-	end = defEnd
+	// With no explicit tmax the window runs a couple of weeks past the data, as
+	// Beeminder's own graphs do (futureEnd); an explicit tmax is taken literally.
+	end = futureEnd(start, defEnd)
 	if t, err := time.ParseInLocation("2006-01-02", goal.Tmax, time.Local); err == nil {
 		// Extend to the last second of the Tmax calendar day. Build it as the
 		// start of the next day minus one second (not +24h) so DST transitions —
@@ -169,7 +172,8 @@ func chartTimeframe(goal Goal, now time.Time) (start, end time.Time) {
 //
 // The default start is the goal's own start (initday) — the date the bright red
 // line begins — so the whole goal is charted, matching Beeminder's own default
-// of showing all of a goal's data. The default end is now.
+// of showing all of a goal's data. The default end is now; chartTimeframe then
+// extends it into the future via futureEnd.
 //
 // When initday is unavailable, it falls back to the last 30 days, widened back
 // to the most recent datapoint if that predates the window — otherwise a goal
@@ -199,6 +203,24 @@ func defaultTimeframe(goal Goal, now time.Time) (start, end time.Time) {
 		end = last
 	}
 	return start, end
+}
+
+// futureEnd extends a window end past today so the bright red line is charted a
+// couple of weeks into the future, the way Beeminder's own graphs do — a chart
+// that stops at today hides exactly the part a review is about: where the line
+// is heading.
+//
+// The amount mirrors beebrain's setDefaultRange (beebrain.js):
+//
+//	tmax = daysnap((1 + years/2) * 2*AKH + tcur)
+//
+// AKH is the one-week akrasia horizon, so that's two weeks past the last
+// datapoint, plus another week for each year of the goal's history — long goals
+// get more future room so the horizon isn't a sliver at the right edge. The end
+// is snapped to local midnight, matching beebrain's daysnap.
+func futureEnd(start, end time.Time) time.Time {
+	years := int(end.Sub(start).Hours() / 24 / 365.25) // beebrain's DIY = 365.25
+	return startOfDay(end, end.Location()).AddDate(0, 0, 14+7*years)
 }
 
 // lastDatapointTime returns the timestamp of the goal's most recent datapoint.
@@ -331,23 +353,12 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 // The second return value is the distinct columns carrying an actual datapoint
 // (the staircase's nodes, ascending) — as opposed to the gap-fill columns
 // between them. overlayDatapointMarkers dots these nodes on sparse charts.
-func datapointSeries(processed []timedValue, startTime, endTime time.Time, chartWidth int) ([]float64, []int) {
+func datapointSeries(processed []timedValue, startTime, endTime, now time.Time, chartWidth int) ([]float64, []int) {
 	values := make([]float64, chartWidth)
 	hasDatapoint := make([]bool, chartWidth)
-	duration := endTime.Sub(startTime).Seconds()
 
 	for _, dp := range processed {
-		col := 0
-		if duration > 0 {
-			progress := time.Unix(dp.timestamp, 0).Sub(startTime).Seconds() / duration
-			col = int(progress * float64(chartWidth-1))
-		}
-		if col < 0 {
-			col = 0
-		}
-		if col >= chartWidth {
-			col = chartWidth - 1
-		}
+		col := chartColumn(time.Unix(dp.timestamp, 0), startTime, endTime, chartWidth)
 		// processed is time-sorted, so a later datapoint correctly overwrites
 		// an earlier one sharing a column.
 		values[col] = dp.value
@@ -370,8 +381,19 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 	for i := 0; i < firstDP; i++ {
 		values[i] = values[firstDP]
 	}
-	for i := lastDP + 1; i < chartWidth; i++ {
+	// Hold the last value forward only as far as today — beebrain's flatline
+	// datapoint runs the data line to `asof` and no further. Beyond that the
+	// window is future: only the bright red line runs there, so those columns are
+	// NaN, which asciigraph leaves blank.
+	flatlineTo := chartWidth - 1
+	if col := chartColumn(now, startTime, endTime, chartWidth); col > lastDP && col < flatlineTo {
+		flatlineTo = col
+	}
+	for i := lastDP + 1; i <= flatlineTo; i++ {
 		values[i] = values[lastDP]
+	}
+	for i := flatlineTo + 1; i < chartWidth; i++ {
+		values[i] = math.NaN()
 	}
 
 	prevDP := firstDP
@@ -394,6 +416,22 @@ func datapointSeries(processed []timedValue, startTime, endTime time.Time, chart
 		}
 	}
 	return values, nodes
+}
+
+// chartColumn maps an instant onto one of chartWidth evenly-spaced columns
+// spanning [startTime, endTime], clamped to the plot.
+func chartColumn(t, startTime, endTime time.Time, chartWidth int) int {
+	col := 0
+	if duration := endTime.Sub(startTime).Seconds(); duration > 0 {
+		col = int(t.Sub(startTime).Seconds() / duration * float64(chartWidth-1))
+	}
+	if col < 0 {
+		return 0
+	}
+	if col >= chartWidth {
+		return chartWidth - 1
+	}
+	return col
 }
 
 // markerGlyph is the dot drawn on each datapoint node of a sparse chart,
@@ -437,6 +475,9 @@ func overlayDatapointMarkers(graph string, nodeCols []int, datapointValues, road
 	minimum, maximum := math.Inf(1), math.Inf(-1)
 	for _, series := range [][]float64{roadValues, datapointValues} {
 		for _, v := range series {
+			if math.IsNaN(v) {
+				continue // asciigraph skips NaN gaps in its own min/max
+			}
 			minimum = math.Min(minimum, v)
 			maximum = math.Max(maximum, v)
 		}
