@@ -994,4 +994,116 @@ func TestDatapointSeriesStopsAtToday(t *testing.T) {
 			t.Errorf("future col %d = %v, want NaN (blank)", i, got[i])
 		}
 	}
+
+	// A future-dated datapoint still gets drawn — the line runs at least to its
+	// last datapoint — and goes blank after it rather than at today.
+	future, _ := datapointSeries([]timedValue{
+		{timestamp: start.Unix(), value: 3},
+		{timestamp: start.AddDate(0, 0, 8).Unix(), value: 9},
+	}, start, end, now, 11)
+	if future[8] != 9 {
+		t.Errorf("future-dated datapoint col 8 = %v, want 9 (drawn, not blanked at today)", future[8])
+	}
+	if !math.IsNaN(future[9]) {
+		t.Errorf("col after the last datapoint = %v, want NaN", future[9])
+	}
+}
+
+// TestRenderGoalChartLeavesFutureBlank is the end-to-end guard for the future
+// window: a goal tracked right up to today must render its blue data line only
+// in the past columns, while the red bright red line keeps climbing through the
+// future columns. Asserted on the rendered plot because the flatline cut-off is
+// easy to get subtly wrong per-column (a wide window puts today's midnight
+// aggregate and now in the SAME column, which an over-eager guard reads as
+// "nothing to blank" and runs the data line to the right edge).
+func TestRenderGoalChartLeavesFutureBlank(t *testing.T) {
+	now := time.Now()
+	start := now.AddDate(-2, 0, 0) // 2 years of history → wide, multi-day columns
+	var dps []Datapoint
+	for d := start; !d.After(now); d = d.AddDate(0, 0, 1) {
+		dps = append(dps, Datapoint{Timestamp: d.Unix(), Value: 1.0})
+	}
+	goal := Goal{
+		Slug: "tracked-today", Yaw: 1, Kyoom: true,
+		Initday:    start.Unix(),
+		Datapoints: dps,
+		Runits:     "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(start.Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.AddDate(1, 0, 0).Unix()), nil, fptr(1.0)),
+		},
+		// No Tmin/Tmax → the default window, which runs past today.
+	}
+
+	chart := renderGoalChart(goal, 100)
+	if chart == "" {
+		t.Fatal("expected a chart")
+	}
+	// The rightmost plot column is ~4 weeks in the future (2 years of history →
+	// 14 + 7*2 days). Only the red series may reach it.
+	const red, blue = "\x1b[91m", "\x1b[94m"
+	lastCols := lastPlotColumnGlyphs(t, chart)
+	if !strings.Contains(lastCols, red) {
+		t.Errorf("bright red line missing from the future columns:\n%s", chart)
+	}
+	if strings.Contains(lastCols, blue) {
+		t.Errorf("data line runs into the future columns; it must stop at today:\n%s", chart)
+	}
+}
+
+// lastPlotColumnGlyphs returns the glyph in the plot's final column of every
+// row that reaches it, each prefixed with the SGR colour in force there, so a
+// test can ask which series make it to the right-hand edge of the window.
+func lastPlotColumnGlyphs(t *testing.T, chart string) string {
+	t.Helper()
+	var rows []string
+	width := 0
+	for _, line := range strings.Split(chart, "\n") {
+		plain := ansiPattern.ReplaceAllString(line, "")
+		if !strings.ContainsAny(plain, "\u2524\u253c") { // plot rows carry the y-axis gutter rune
+			continue
+		}
+		rows = append(rows, line)
+		if n := len([]rune(strings.TrimRight(plain, " "))); n > width {
+			width = n
+		}
+	}
+	var out strings.Builder
+	for _, line := range rows {
+		out.WriteString(sgrSuffix(line, width-1))
+	}
+	return out.String()
+}
+
+// sgrSuffix returns the tail of an ANSI-coloured line from visible column
+// `from` onward, prefixed with the SGR code in force at that column so the
+// caller can tell which series colours it.
+func sgrSuffix(line string, from int) string {
+	var b strings.Builder
+	active, col := "", 0
+	runes := []rune(line)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\x1b' {
+			var esc strings.Builder
+			for ; i < len(runes); i++ {
+				esc.WriteRune(runes[i])
+				if runes[i] == 'm' {
+					break
+				}
+			}
+			active = esc.String()
+			if col >= from {
+				b.WriteString(active)
+			}
+			continue
+		}
+		if col == from {
+			b.WriteString(active)
+		}
+		if col >= from && runes[i] != ' ' {
+			b.WriteRune(runes[i])
+		}
+		col++
+	}
+	return b.String()
 }

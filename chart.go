@@ -25,9 +25,9 @@ const (
 // renderGoalChart renders an ASCII chart of a goal's progress: the goal's
 // datapoints (blue) against its bright red line (red), over the goal's graph
 // window — the user-set tmin/tmax axis limits where present, otherwise the
-// goal's full history (initday..now). See chartTimeframe and defaultTimeframe
-// for the exact window resolution. It returns "" when there is nothing
-// chartable (no datapoints, or none inside the window).
+// goal's full history plus a couple of weeks of future room. See chartTimeframe
+// and defaultTimeframe for the exact window resolution. It returns "" when
+// there is nothing chartable (no datapoints, or none inside the window).
 func renderGoalChart(goal Goal, width int) string {
 	if len(goal.Datapoints) == 0 {
 		return ""
@@ -137,7 +137,7 @@ func renderGoalChart(goal Goal, width int) string {
 // chartTimeframe resolves the [start, end] window to chart from the goal's
 // tmin/tmax (the graph axis limits the user set, parsed in the user's local
 // zone), each falling back to defaultTimeframe independently when absent or
-// unparseable.
+// unparseable — the end then extended into the future by futureEnd.
 //
 // tmin and tmax are resolved separately rather than all-or-nothing because
 // Beeminder force-nulls tmax once it falls into the past (gen_graph/writer.rb
@@ -219,7 +219,9 @@ func defaultTimeframe(goal Goal, now time.Time) (start, end time.Time) {
 // get more future room so the horizon isn't a sliver at the right edge. The end
 // is snapped to local midnight, matching beebrain's daysnap.
 func futureEnd(start, end time.Time) time.Time {
-	years := int(end.Sub(start).Hours() / 24 / 365.25) // beebrain's DIY = 365.25
+	// max(0, ...): an inverted window (a tmin set past the end) would otherwise
+	// produce negative "years" and pull the end backwards instead of forwards.
+	years := max(0, int(end.Sub(start).Hours()/24/365.25)) // beebrain's DIY = 365.25
 	return startOfDay(end, end.Location()).AddDate(0, 0, 14+7*years)
 }
 
@@ -271,10 +273,11 @@ type timedValue struct {
 func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 	loc := startTime.Location()
 
-	// Drop datapoints after the window end (including future-dated ones) before
-	// bucketing. This matches Beeminder — which filters data to "now" (asof)
-	// before aggregating — and stops a day's aggregate from absorbing same-day
-	// points logged after endTime when the window ends mid-day.
+	// Drop datapoints after the window end before bucketing, so a day's aggregate
+	// can't absorb same-day points logged after endTime when the window ends
+	// mid-day. Points between now and the end are kept and plotted: beebrain
+	// splits those into a separate "ghosty" future series (fuda) rather than
+	// hiding them, and a single ASCII line has no ghost styling to borrow.
 	endUnix := endTime.Unix()
 	inRange := make([]Datapoint, 0, len(goal.Datapoints))
 	for _, dp := range goal.Datapoints {
@@ -337,8 +340,10 @@ func processDatapoints(goal Goal, startTime, endTime time.Time) []timedValue {
 
 // datapointSeries maps processed datapoints onto chartWidth evenly-spaced
 // columns and fills the gaps: each datapoint lands in the column matching its
-// position in the timeframe, and columns before the first / after the last hold
-// that endpoint's value.
+// position in the timeframe, and columns before the first hold that endpoint's
+// value. Columns after the last hold its value too, but only as far as now —
+// beyond that the window is future, where only the bright red line belongs, so
+// those columns are NaN (blank).
 //
 // Interior gaps are filled with a step-after staircase: each datapoint's value
 // is held across the gap until the next datapoint's column, where the line jumps.
@@ -385,10 +390,11 @@ func datapointSeries(processed []timedValue, startTime, endTime, now time.Time, 
 	// datapoint runs the data line to `asof` and no further. Beyond that the
 	// window is future: only the bright red line runs there, so those columns are
 	// NaN, which asciigraph leaves blank.
-	flatlineTo := chartWidth - 1
-	if col := chartColumn(now, startTime, endTime, chartWidth); col > lastDP && col < flatlineTo {
-		flatlineTo = col
-	}
+	// max, not min: today's aggregate sits at local midnight, so on a wide window
+	// (a column spanning several days) it shares a column with now — and a
+	// future-dated datapoint sits past now entirely. The line always runs at
+	// least to its last datapoint.
+	flatlineTo := max(lastDP, chartColumn(now, startTime, endTime, chartWidth))
 	for i := lastDP + 1; i <= flatlineTo; i++ {
 		values[i] = values[lastDP]
 	}
@@ -661,9 +667,9 @@ func renderXAxis(start, end time.Time, gutter, chartWidth int) string {
 // of one apart.
 //
 // The last column has no next column; its sample is clamped to endTime so the
-// rightmost column — the one read as "now" — never shows a value extrapolated
-// a column-width past the window's end (real roads almost always keep running
-// past now, so an unclamped sample would be visibly in the future).
+// rightmost column never shows a value extrapolated a column-width past the
+// window's own end (real roads almost always keep running past it, so an
+// unclamped sample would be visibly beyond what the chart claims to show).
 func roadValuesForTimeframe(r road, startTime, endTime time.Time, numPoints int) []float64 {
 	values := make([]float64, numPoints)
 	if numPoints == 1 {
