@@ -344,9 +344,10 @@ func TestRenderGoalChartStaleGoalStillCharts(t *testing.T) {
 
 func TestChartTimeframeDefaultsStartToInitday(t *testing.T) {
 	// With no user-set tmin/tmax, the window defaults to the goal's start
-	// (initday) through now, charting the whole goal — matching Beeminder's
-	// default of showing all data. initday carries a midday (deadline-aligned)
-	// instant, which must be floored to the start of its local day.
+	// (initday) through a couple of weeks past now, charting the whole goal —
+	// matching Beeminder's default of showing all data plus future room. initday
+	// carries a midday (deadline-aligned) instant, which must be floored to the
+	// start of its local day.
 	now := time.Date(2026, 6, 10, 23, 0, 0, 0, time.Local)
 	initday := time.Date(2024, 1, 15, 16, 30, 0, 0, time.Local)
 	goal := Goal{Slug: "wholehistory", Initday: initday.Unix()}
@@ -356,8 +357,11 @@ func TestChartTimeframeDefaultsStartToInitday(t *testing.T) {
 	if !start.Equal(wantStart) {
 		t.Errorf("start = %s, want goal-start day floored to local midnight %s", start, wantStart)
 	}
-	if !end.Equal(now) {
-		t.Errorf("end = %s, want now %s", end, now)
+	// 2 years of history → 14 + 7*2 days past now, snapped to local midnight
+	// (beebrain's (1+years/2)*2*AKH).
+	wantEnd := time.Date(2026, 7, 8, 0, 0, 0, 0, time.Local)
+	if !end.Equal(wantEnd) {
+		t.Errorf("end = %s, want %s (now + 28d of future room)", end, wantEnd)
 	}
 }
 
@@ -448,9 +452,11 @@ func TestChartTimeframeHonorsTminWithoutTmax(t *testing.T) {
 	if !start.Equal(wantStart) {
 		t.Errorf("start = %s, want explicit tmin %s", start, wantStart)
 	}
-	// With no tmax and no datapoints, the end falls back to now.
-	if !end.Equal(now) {
-		t.Errorf("end = %s, want fallback to now %s", end, now)
+	// With no tmax and no datapoints, the end falls back to now plus the future
+	// room Beeminder leaves (14d + 7d per year of history; tmin is ~1 year back).
+	wantEnd := time.Date(2026, 7, 1, 0, 0, 0, 0, time.Local)
+	if !end.Equal(wantEnd) {
+		t.Errorf("end = %s, want %s (now + 21d of future room)", end, wantEnd)
 	}
 }
 
@@ -686,7 +692,7 @@ func TestDatapointSeriesStep(t *testing.T) {
 	got, _ := datapointSeries([]timedValue{
 		{timestamp: start.Unix(), value: 0},
 		{timestamp: end.Unix(), value: 100},
-	}, start, end, 11)
+	}, start, end, end, 11)
 	if len(got) != 11 {
 		t.Fatalf("expected 11 columns, got %d", len(got))
 	}
@@ -702,7 +708,7 @@ func TestDatapointSeriesStep(t *testing.T) {
 	// A single datapoint fills the whole row with its value (no gaps, no NaN).
 	single, _ := datapointSeries([]timedValue{
 		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 7},
-	}, start, end, 11)
+	}, start, end, end, 11)
 	for i, v := range single {
 		if v != 7 {
 			t.Errorf("single datapoint flat-fill: col %d = %v, want 7", i, v)
@@ -725,7 +731,7 @@ func TestDatapointSeriesCumulativeSteps(t *testing.T) {
 	got, _ := datapointSeries([]timedValue{
 		{timestamp: start.Unix(), value: 0},
 		{timestamp: start.AddDate(0, 0, 5).Unix(), value: 1},
-	}, start, end, 11)
+	}, start, end, end, 11)
 	if len(got) != 11 {
 		t.Fatalf("expected 11 columns, got %d", len(got))
 	}
@@ -782,7 +788,7 @@ func TestGoalChartMarkers(t *testing.T) {
 	// replaceCellGlyph) would still leave a stray one, so assert the exact count.
 	// Derive the expected node count from the same pipeline renderGoalChart uses.
 	start, end := chartTimeframe(goal, time.Now())
-	_, nodes := datapointSeries(processDatapoints(goal, start, end), start, end, width-10)
+	_, nodes := datapointSeries(processDatapoints(goal, start, end), start, end, end, width-10)
 	if got := strings.Count(sparse, string(markerGlyph)); got != len(nodes) {
 		t.Errorf("marker count = %d, want one per node (%d):\n%s", got, len(nodes), sparse)
 	}
@@ -904,7 +910,7 @@ func TestRoadStepAlignsWithSameDayDatapoint(t *testing.T) {
 			{timestamp: start.Unix(), value: 0},
 			{timestamp: stepDay.Unix(), value: 9881},
 		}
-		_, nodes := datapointSeries(processed, start, end, width)
+		_, nodes := datapointSeries(processed, start, end, end, width)
 		nodeCol := nodes[len(nodes)-1]
 
 		stepCol := slices.IndexFunc(roadValues, func(v float64) bool { return v > 5000 })
@@ -950,4 +956,154 @@ func TestDaysnapRoad(t *testing.T) {
 			t.Errorf("seg %d slopePerDay = %f, want %f (recomputed from snapped boundaries)", i, s[i].slopePerDay, want.slope)
 		}
 	}
+}
+
+// TestFutureEndExtendsPastToday pins beebrain's default x-axis end
+// (setDefaultRange: tmax = daysnap((1+years/2)*2*AKH + tcur)): two weeks past
+// today, plus another week per year of goal history.
+func TestFutureEndExtendsPastToday(t *testing.T) {
+	end := time.Date(2026, 6, 10, 12, 0, 0, 0, time.Local)
+	for _, tc := range []struct {
+		years, days int
+	}{{0, 14}, {1, 21}, {3, 35}} {
+		start := end.AddDate(-tc.years, 0, -1) // just over `years` of history
+		want := time.Date(2026, 6, 10, 0, 0, 0, 0, time.Local).AddDate(0, 0, tc.days)
+		if got := futureEnd(start, end); !got.Equal(want) {
+			t.Errorf("%d years of history: futureEnd = %s, want %s", tc.years, got, want)
+		}
+	}
+}
+
+// TestDatapointSeriesStopsAtToday guards that the data line flatlines to today
+// and stops there (NaN columns after it, which asciigraph leaves blank) rather
+// than running to the right edge of the now-future-extended window — only the
+// bright red line belongs in the future part of the chart.
+func TestDatapointSeriesStopsAtToday(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	now := start.AddDate(0, 0, 5)
+	end := start.AddDate(0, 0, 10)
+
+	got, _ := datapointSeries([]timedValue{{timestamp: start.Unix(), value: 3}}, start, end, now, 11)
+	for i := 0; i <= 5; i++ {
+		if got[i] != 3 {
+			t.Errorf("col %d = %v, want the value flatlined to today (3)", i, got[i])
+		}
+	}
+	for i := 6; i < 11; i++ {
+		if !math.IsNaN(got[i]) {
+			t.Errorf("future col %d = %v, want NaN (blank)", i, got[i])
+		}
+	}
+
+	// A future-dated datapoint still gets drawn — the line runs at least to its
+	// last datapoint — and goes blank after it rather than at today.
+	future, _ := datapointSeries([]timedValue{
+		{timestamp: start.Unix(), value: 3},
+		{timestamp: start.AddDate(0, 0, 8).Unix(), value: 9},
+	}, start, end, now, 11)
+	if future[8] != 9 {
+		t.Errorf("future-dated datapoint col 8 = %v, want 9 (drawn, not blanked at today)", future[8])
+	}
+	if !math.IsNaN(future[9]) {
+		t.Errorf("col after the last datapoint = %v, want NaN", future[9])
+	}
+}
+
+// TestRenderGoalChartLeavesFutureBlank is the end-to-end guard for the future
+// window: a goal tracked right up to today must render its blue data line only
+// in the past columns, while the red bright red line keeps climbing through the
+// future columns. Asserted on the rendered plot because the flatline cut-off is
+// easy to get subtly wrong per-column (a wide window puts today's midnight
+// aggregate and now in the SAME column, which an over-eager guard reads as
+// "nothing to blank" and runs the data line to the right edge).
+func TestRenderGoalChartLeavesFutureBlank(t *testing.T) {
+	now := time.Now()
+	start := now.AddDate(-2, 0, 0) // 2 years of history → wide, multi-day columns
+	var dps []Datapoint
+	for d := start; !d.After(now); d = d.AddDate(0, 0, 1) {
+		dps = append(dps, Datapoint{Timestamp: d.Unix(), Value: 1.0})
+	}
+	goal := Goal{
+		Slug: "tracked-today", Yaw: 1, Kyoom: true,
+		Initday:    start.Unix(),
+		Datapoints: dps,
+		Runits:     "d",
+		Roadall: [][]*float64{
+			roadallRow(float64(start.Unix()), fptr(0.0), nil),
+			roadallRow(float64(now.AddDate(1, 0, 0).Unix()), nil, fptr(1.0)),
+		},
+		// No Tmin/Tmax → the default window, which runs past today.
+	}
+
+	chart := renderGoalChart(goal, 100)
+	if chart == "" {
+		t.Fatal("expected a chart")
+	}
+	// The rightmost plot column is ~4 weeks in the future (2 years of history →
+	// 14 + 7*2 days). Only the red series may reach it.
+	const red, blue = "\x1b[91m", "\x1b[94m"
+	lastCols := lastPlotColumnGlyphs(t, chart)
+	if !strings.Contains(lastCols, red) {
+		t.Errorf("bright red line missing from the future columns:\n%s", chart)
+	}
+	if strings.Contains(lastCols, blue) {
+		t.Errorf("data line runs into the future columns; it must stop at today:\n%s", chart)
+	}
+}
+
+// lastPlotColumnGlyphs returns the glyph in the plot's final column of every
+// row that reaches it, each prefixed with the SGR colour in force there, so a
+// test can ask which series make it to the right-hand edge of the window.
+func lastPlotColumnGlyphs(t *testing.T, chart string) string {
+	t.Helper()
+	var rows []string
+	width := 0
+	for _, line := range strings.Split(chart, "\n") {
+		plain := ansiPattern.ReplaceAllString(line, "")
+		if !strings.ContainsAny(plain, "\u2524\u253c") { // plot rows carry the y-axis gutter rune
+			continue
+		}
+		rows = append(rows, line)
+		if n := len([]rune(strings.TrimRight(plain, " "))); n > width {
+			width = n
+		}
+	}
+	var out strings.Builder
+	for _, line := range rows {
+		out.WriteString(sgrSuffix(line, width-1))
+	}
+	return out.String()
+}
+
+// sgrSuffix returns the tail of an ANSI-coloured line from visible column
+// `from` onward, prefixed with the SGR code in force at that column so the
+// caller can tell which series colours it.
+func sgrSuffix(line string, from int) string {
+	var b strings.Builder
+	active, col := "", 0
+	runes := []rune(line)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\x1b' {
+			var esc strings.Builder
+			for ; i < len(runes); i++ {
+				esc.WriteRune(runes[i])
+				if runes[i] == 'm' {
+					break
+				}
+			}
+			active = esc.String()
+			if col >= from {
+				b.WriteString(active)
+			}
+			continue
+		}
+		if col == from {
+			b.WriteString(active)
+		}
+		if col >= from && runes[i] != ' ' {
+			b.WriteRune(runes[i])
+		}
+		col++
+	}
+	return b.String()
 }
