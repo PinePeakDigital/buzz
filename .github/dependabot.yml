@@ -10,9 +10,14 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      actions-all:
+      actions-minor-patch:
         applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+      actions-major:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
       actions-security:
         applies-to: security-updates
         patterns: ["*"]
@@ -23,9 +28,14 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      gomod-all:
+      gomod-minor-patch:
         applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+      gomod-major:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
       gomod-security:
         applies-to: security-updates
         patterns: ["*"]
@@ -36,9 +46,14 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      npm-all:
+      npm-minor-patch:
         applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+      npm-major:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
       npm-security:
         applies-to: security-updates
         patterns: ["*"]
