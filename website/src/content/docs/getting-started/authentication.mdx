@@ -53,11 +53,20 @@ buzz auth logout bob     # remove an account
 Logging in again as a username you already have refreshes that account's token
 in place.
 
-Where the same goal slug exists on more than one account, commands that name a
-goal ask you to say which, and accept a `username/slug` qualifier:
+Where the same goal slug exists on more than one account, buzz shows it
+qualified (`alice/read`, `bob/read`) instead of twice over as `read`, and
+commands that name a goal accept the same qualifier:
 
 ```bash
 buzz add alice/read 30
+```
+
+To act as one account for a whole command, use the global `--account` flag —
+it scopes reads and writes alike:
+
+```bash
+buzz --account bob today
+buzz --account bob add read 30
 ```
 
 The **primary** account — the first one you authenticated as — is the one used

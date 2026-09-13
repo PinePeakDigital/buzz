@@ -246,3 +246,81 @@ func TestGoalURLUsesTheOwningAccount(t *testing.T) {
 		t.Errorf("got %q, want the primary's page", got)
 	}
 }
+
+func TestAccountFilterNarrowsToOneAccount(t *testing.T) {
+	config := &Config{Username: "alice", AuthToken: "a", Accounts: []Account{{Username: "bob", AuthToken: "b"}}}
+
+	// Unfiltered, several accounts fan out.
+	if _, ok := newClient(config).(*multiClient); !ok {
+		t.Fatal("no filter should build a multiClient")
+	}
+
+	t.Setenv("HOME", t.TempDir()) // accountFilter is global; restore it below.
+	defer func() { accountFilter = "" }()
+
+	accountFilter = "bob"
+	c, ok := newClient(config).(*HTTPClient)
+	if !ok {
+		t.Fatal("--account should narrow to a single-account client")
+	}
+	if c.config.Username != "bob" || c.config.AuthToken != "b" {
+		t.Fatalf("got %+v, want bob's credentials", c.config)
+	}
+	if err := config.checkAccounts(); err != nil {
+		t.Fatalf("a configured account should pass: %v", err)
+	}
+
+	accountFilter = "carol"
+	err := config.checkAccounts()
+	if err == nil || !strings.Contains(err.Error(), "alice, bob") {
+		t.Fatalf("an unconfigured --account should be rejected and list the real ones, got %v", err)
+	}
+}
+
+func TestAmbiguousSlugsAreQualifiedForDisplayAndRouting(t *testing.T) {
+	m, _, _ := twoAccounts(
+		[]Goal{{ID: "1", Slug: "read"}, {ID: "2", Slug: "solo"}},
+		[]Goal{{ID: "3", Slug: "read"}},
+	)
+	goals, err := m.FetchGoals(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]string{"1": "alice/read", "2": "solo", "3": "bob/read"}
+	for _, g := range goals {
+		if got := g.DisplaySlug(); got != want[g.ID] {
+			t.Errorf("goal %s: display %q, want %q", g.ID, got, want[g.ID])
+		}
+		// Routing always qualifies, so a same-slug goal reaches its own account.
+		if g.routeSlug() != g.Account+"/"+g.Slug {
+			t.Errorf("goal %s: routeSlug %q should be account-qualified", g.ID, g.routeSlug())
+		}
+	}
+}
+
+func TestFullyOverlappingAccountsDoNotDoubleGoals(t *testing.T) {
+	shared := []Goal{{ID: "1", Slug: "read"}, {ID: "2", Slug: "walk"}}
+	m, _, _ := twoAccounts(shared, shared)
+
+	goals, err := m.FetchGoals(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(goals) != len(shared) {
+		t.Fatalf("two accounts seeing the identical goal set should merge to %d, got %d", len(shared), len(goals))
+	}
+	for _, g := range goals {
+		if g.ambiguous {
+			t.Errorf("goal %s is the same goal, not two goals sharing a slug", g.ID)
+		}
+	}
+}
+
+// A single-account setup stamps no Account, so nothing is qualified anywhere.
+func TestSingleAccountGoalsStayBare(t *testing.T) {
+	g := Goal{Slug: "read"}
+	if g.DisplaySlug() != "read" || g.routeSlug() != "read" {
+		t.Errorf("single-account goals should stay bare, got %q / %q", g.DisplaySlug(), g.routeSlug())
+	}
+}

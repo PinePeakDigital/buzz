@@ -233,7 +233,7 @@ func handleAddDatapoint(m model) (tea.Model, tea.Cmd) {
 	if m.appModel.mode == modeGoalDetail {
 		// Try to get the last datapoint value, default to "1" if it fails
 		defaultValue := "1"
-		if lastValue, err := m.appModel.client.GetLastDatapointValue(m.appModel.ctx, m.appModel.modalGoal.Slug); err == nil && lastValue != 0 {
+		if lastValue, err := m.appModel.client.GetLastDatapointValue(m.appModel.ctx, m.appModel.modalGoal.routeSlug()); err == nil && lastValue != 0 {
 			defaultValue = fmt.Sprintf("%.1f", lastValue)
 		}
 		m.appModel.startDatapointInput(newDatapointForm(defaultValue))
@@ -413,7 +413,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 
 		// Set submitting state and submit datapoint asynchronously
 		m.appModel.datapoint.submitting = true
-		return m, submitDatapointCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug,
+		return m, submitDatapointCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.routeSlug(),
 			timestamp, m.appModel.datapoint.value(), m.appModel.datapoint.comment())
 	} else if m.appModel.mode == modeBrowse {
 		// Show goal details modal (existing functionality)
@@ -432,7 +432,7 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 			}
 
 			// Load detailed goal information including datapoints
-			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
+			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.routeSlug())
 		}
 	}
 	return m, nil
@@ -486,7 +486,7 @@ func handleNavigationLeft(m model) (tea.Model, tea.Cmd) {
 			m.appModel.cursor--
 			m.appModel.openGoalDetail(&m.appModel.goals[m.appModel.cursor])
 			// Load detailed goal information including datapoints
-			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
+			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.routeSlug())
 		}
 	} else if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
@@ -514,7 +514,7 @@ func handleNavigationRight(m model) (tea.Model, tea.Cmd) {
 			m.appModel.cursor++
 			m.appModel.openGoalDetail(&m.appModel.goals[m.appModel.cursor])
 			// Load detailed goal information including datapoints
-			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug)
+			return m, loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.routeSlug())
 		}
 	} else if m.appModel.mode == modeBrowse {
 		displayGoals := m.appModel.getDisplayGoals()
@@ -640,7 +640,7 @@ func handleMouseClick(m model, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 		// Load detailed goal information
 		return m, tea.Batch(
-			loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.Slug),
+			loadGoalDetailsCmd(m.appModel.ctx, m.appModel.client, m.appModel.modalGoal.routeSlug()),
 			navigationTimeoutCmd(navigationTimeout),
 		)
 	}

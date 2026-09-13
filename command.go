@@ -26,8 +26,8 @@ func loadClient(stderr io.Writer) (*Config, Client, bool) {
 		fmt.Fprintf(stderr, "Error: Failed to load config: %s\n", redactError(err))
 		return nil, nil, false
 	}
-	if !config.hasCredentials() {
-		fmt.Fprintln(stderr, "Error: No accounts configured. Please run 'buzz auth login' to authenticate.")
+	if err := config.checkAccounts(); err != nil {
+		fmt.Fprintf(stderr, "Error: %s\n", err)
 		return nil, nil, false
 	}
 	return config, newClient(config), true

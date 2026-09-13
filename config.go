@@ -66,6 +66,28 @@ func (c *Config) hasCredentials() bool {
 	return len(c.accountConfigs()) > 0
 }
 
+// checkAccounts validates the config against the global --account filter. It is
+// the single gate every entry point runs before building a client, so an
+// unconfigured --account username is rejected once, up front, rather than
+// silently widening to act as every account.
+func (c *Config) checkAccounts() error {
+	configs := c.accountConfigs()
+	if len(configs) == 0 {
+		return fmt.Errorf("no accounts configured. Please run 'buzz auth login' to authenticate")
+	}
+	if accountFilter == "" {
+		return nil
+	}
+	names := make([]string, len(configs))
+	for i, cfg := range configs {
+		names[i] = cfg.Username
+		if cfg.Username == accountFilter {
+			return nil
+		}
+	}
+	return fmt.Errorf("no such account: %s (configured: %s)", accountFilter, strings.Join(names, ", "))
+}
+
 // setAccount adds a login, or replaces the stored token if that username is
 // already configured. Re-authenticating as a user you already have is a token
 // refresh, not a second copy of the same account.

@@ -15,6 +15,17 @@ import (
 // The single-account path is byte-for-byte the behaviour buzz has always had.
 func newClient(config *Config) Client {
 	configs := config.accountConfigs()
+	// The global --account filter narrows to one account. Config.checkAccounts
+	// has already rejected an unconfigured name at every entry point, so a
+	// non-matching filter here can only be a programming error; fall through to
+	// the unfiltered client rather than guessing.
+	if accountFilter != "" {
+		for _, c := range configs {
+			if c.Username == accountFilter {
+				return NewHTTPClient(c)
+			}
+		}
+	}
 	if len(configs) <= 1 {
 		// Zero accounts means an unauthenticated config; callers gate on
 		// Config.hasCredentials before getting here, so build the same client
@@ -85,6 +96,7 @@ func (m *multiClient) fetchAll(fetch func(Client) ([]Goal, error)) ([][]Goal, er
 func merge(accounts []accountClient, per [][]Goal) []Goal {
 	var merged []Goal
 	seen := make(map[string]bool)
+	bySlug := make(map[string][]int)
 	for i, goals := range per {
 		for _, g := range goals {
 			key := g.ID
@@ -97,6 +109,17 @@ func merge(accounts []accountClient, per [][]Goal) []Goal {
 			seen[key] = true
 			g.Account = accounts[i].username
 			merged = append(merged, g)
+			bySlug[g.Slug] = append(bySlug[g.Slug], len(merged)-1)
+		}
+	}
+	// A slug two accounts both use can't identify a goal on its own, so mark
+	// every copy of it for the display and routing paths.
+	for _, idxs := range bySlug {
+		if len(idxs) < 2 {
+			continue
+		}
+		for _, i := range idxs {
+			merged[i].ambiguous = true
 		}
 	}
 	return merged

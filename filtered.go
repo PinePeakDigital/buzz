@@ -207,7 +207,7 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	table := Table{
 		Colorize: true,
 		Columns: []Column{
-			{Header: "Slug", Cell: func(g Goal) string { return g.Slug }},
+			{Header: "Slug", Cell: func(g Goal) string { return g.DisplaySlug() }},
 			{Header: "Baremin", Cell: func(g Goal) string { return bareminFor(g) }},
 			{Header: "Due", Cell: func(g Goal) string {
 				if IsEndValueReached(g) {
@@ -236,7 +236,7 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	// urgency, so the dot is left unstyled — it inherits the row colour instead
 	// of resetting it mid-line, and still marks the goal by its presence.
 	now := time.Now()
-	table.Columns[0].Cell = func(g Goal) string { return g.Slug + archiveDot(g, now, lipgloss.NewStyle()) }
+	table.Columns[0].Cell = func(g Goal) string { return g.DisplaySlug() + archiveDot(g, now, lipgloss.NewStyle()) }
 	fmt.Print(table.Render(filteredGoals))
 
 	if legendFor != nil {

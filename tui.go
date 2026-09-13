@@ -121,9 +121,16 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.appModel.inGoalModal() && m.appModel.modalGoal != nil && msg.goal != nil {
-			// Update the modal goal with the detailed information
+			// Update the modal goal with the detailed information. A detail
+			// fetch returns the owning account's raw goal, which carries no
+			// Account/ambiguous marking — only a multi-account listing stamps
+			// those — so carry them across the replace or the modal's URL
+			// reverts to the primary account's page.
 			if m.appModel.modalGoal.Slug == msg.goal.Slug {
-				m.appModel.modalGoal = msg.goal
+				detailed := *msg.goal
+				detailed.Account = m.appModel.modalGoal.Account
+				detailed.ambiguous = m.appModel.modalGoal.ambiguous
+				m.appModel.modalGoal = &detailed
 			}
 		}
 		return m, nil
