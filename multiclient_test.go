@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // twoAccounts builds a multiClient over two fakes whose goal listings are
@@ -467,5 +468,24 @@ func TestAccountLabelFollowsTheFilter(t *testing.T) {
 	accountFilter = "bob"
 	if got := accountLabel(config); got != "bob" {
 		t.Errorf("--account bob shows only bob's goals, so the header should say bob, got %q", got)
+	}
+}
+
+// TestArchivingSlugsMatchWhatTheTimelineStores: the schedule timeline stores
+// DisplaySlug and looks the archive set up by it, so both sides must agree —
+// a bare key here silently drops the colour from exactly the ambiguous goals.
+func TestArchivingSlugsMatchWhatTheTimelineStores(t *testing.T) {
+	soon := time.Now().Add(24 * time.Hour).Unix()
+	goals := []Goal{
+		{Slug: "read", Account: "alice", ambiguous: true, Archivedate: soon},
+		{Slug: "walk", Account: "alice"},
+	}
+
+	set := archivingSlugs(goals, time.Now())
+	if !set[goals[0].DisplaySlug()] {
+		t.Errorf("the timeline looks up %q; got set %v", goals[0].DisplaySlug(), set)
+	}
+	if set[goals[1].DisplaySlug()] {
+		t.Error("a goal not scheduled for archive should not be in the set")
 	}
 }

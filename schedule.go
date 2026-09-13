@@ -121,11 +121,15 @@ func extractTimeSlots(goals []Goal, loc *time.Location) []timeSlot {
 // archivingSlugs returns the set of slugs whose goal is scheduled for archive as
 // of now — the timeline colours these. Extracted from handleScheduleCommand so
 // the selection is unit-testable, matching archiveDot / formatArchiveBanner.
+//
+// Keyed on DisplaySlug because that is what the timeline stores and looks up; a
+// bare slug here would simply never match an account-qualified one, silently
+// dropping the colour from exactly the goals two accounts both name.
 func archivingSlugs(goals []Goal, now time.Time) map[string]bool {
 	set := make(map[string]bool)
 	for _, g := range goals {
 		if g.ScheduledForArchive(now) {
-			set[g.Slug] = true
+			set[g.DisplaySlug()] = true
 		}
 	}
 	return set

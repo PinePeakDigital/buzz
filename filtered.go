@@ -52,13 +52,17 @@ func handleTomorrowCommand() {
 	// roadall slope lookup). Caching by slug computes it once per goal. Both
 	// columns still derive from the same pair, so the bumped baremin and bumped
 	// losedate can't disagree (see goalByEndOfTomorrowAt).
+	//
+	// Keyed on routeSlug, not the bare slug: two accounts can each own a goal
+	// called "read", and sharing one cache entry would show the second goal the
+	// first one's bumped baremin and deadline.
 	views := make(map[string]tomorrowView)
 	viewFor := func(g Goal) tomorrowView {
-		if v, ok := views[g.Slug]; ok {
+		if v, ok := views[g.routeSlug()]; ok {
 			return v
 		}
 		v := goalByEndOfTomorrowAt(g, now)
-		views[g.Slug] = v
+		views[g.routeSlug()] = v
 		return v
 	}
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
