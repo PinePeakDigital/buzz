@@ -432,3 +432,40 @@ func TestModalIgnoresAnotherAccountsDetailResponse(t *testing.T) {
 		t.Errorf("another account's response must not land in this modal, got title %q", got.Title)
 	}
 }
+
+// TestCursorFindsTheRightSameSlugGoal pins the cursor/modal sync: opening the
+// second of two same-named goals must move the cursor to *that* one. Matching
+// on the bare slug stops at the first, after which left/right navigation in the
+// modal walks through the wrong account's neighbours.
+func TestCursorFindsTheRightSameSlugGoal(t *testing.T) {
+	m := &appModel{goals: []Goal{
+		{Slug: "read", Account: "alice", ambiguous: true},
+		{Slug: "walk", Account: "alice"},
+		{Slug: "read", Account: "bob", ambiguous: true},
+	}}
+
+	if got := m.indexOfGoal(&m.goals[2]); got != 2 {
+		t.Errorf("bob/read is at index 2, got %d", got)
+	}
+	if got := m.indexOfGoal(&m.goals[0]); got != 0 {
+		t.Errorf("alice/read is at index 0, got %d", got)
+	}
+	if got := m.indexOfGoal(&Goal{Slug: "gone", Account: "alice"}); got != -1 {
+		t.Errorf("a goal not in the list should report -1, got %d", got)
+	}
+}
+
+// TestAccountLabelFollowsTheFilter: with --account set, the grid header names
+// the account actually being shown, not every configured one.
+func TestAccountLabelFollowsTheFilter(t *testing.T) {
+	config := &Config{Username: "alice", AuthToken: "a", Accounts: []Account{{Username: "bob", AuthToken: "b"}}}
+	if got := accountLabel(config); got != "alice, bob" {
+		t.Errorf("unfiltered header should name every account, got %q", got)
+	}
+
+	t.Cleanup(func() { accountFilter = "" })
+	accountFilter = "bob"
+	if got := accountLabel(config); got != "bob" {
+		t.Errorf("--account bob shows only bob's goals, so the header should say bob, got %q", got)
+	}
+}

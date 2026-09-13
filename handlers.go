@@ -424,11 +424,8 @@ func handleEnterKey(m model) (tea.Model, tea.Cmd) {
 
 			// Update cursor to point to the goal in the original goals list
 			// This is necessary for left/right navigation in modal
-			for i, goal := range m.appModel.goals {
-				if goal.Slug == selected.Slug {
-					m.appModel.cursor = i
-					break
-				}
+			if i := m.appModel.indexOfGoal(selected); i >= 0 {
+				m.appModel.cursor = i
 			}
 
 			// Load detailed goal information including datapoints
@@ -631,11 +628,8 @@ func handleMouseClick(m model, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.appModel.openGoalDetail(&displayGoals[goalIndex])
 
 		// Update cursor to point to goal in original list (for left/right navigation)
-		for i, goal := range m.appModel.goals {
-			if goal.Slug == displayGoals[goalIndex].Slug {
-				m.appModel.cursor = i
-				break
-			}
+		if i := m.appModel.indexOfGoal(&displayGoals[goalIndex]); i >= 0 {
+			m.appModel.cursor = i
 		}
 
 		// Load detailed goal information

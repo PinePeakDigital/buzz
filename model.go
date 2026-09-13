@@ -179,6 +179,20 @@ func (m *appModel) filterGoals() []Goal {
 	return filtered
 }
 
+// indexOfGoal finds a goal's position in the full goals list, or -1. Identity is
+// routeSlug rather than the bare slug: two accounts can own goals with the same
+// name, and matching on the bare one points the cursor at whichever comes first
+// — after which left/right navigation in the modal walks off through the wrong
+// account's neighbours.
+func (m *appModel) indexOfGoal(goal *Goal) int {
+	for i := range m.goals {
+		if m.goals[i].routeSlug() == goal.routeSlug() {
+			return i
+		}
+	}
+	return -1
+}
+
 // getDisplayGoals returns the goals to display (either filtered or all)
 func (m *appModel) getDisplayGoals() []Goal {
 	return m.filterGoals()

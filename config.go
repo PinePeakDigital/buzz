@@ -131,6 +131,11 @@ func (c *Config) removeAccount(username string) bool {
 // several accounts the header would otherwise claim the goals belong to the
 // primary alone, when the grid is showing everyone's.
 func accountLabel(c *Config) string {
+	// --account scopes the whole session to one account, so that is whose goals
+	// the grid is showing — listing the others would misstate what's on screen.
+	if accountFilter != "" {
+		return accountFilter
+	}
 	configs := c.accountConfigs()
 	names := make([]string, len(configs))
 	for i, cfg := range configs {
