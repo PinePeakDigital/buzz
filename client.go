@@ -81,6 +81,23 @@ func getBaseURL(config *Config) string {
 	return config.BaseURL
 }
 
+// goalURL builds the browser URL for a goal page. account is the username that
+// owns the goal (Goal.Account), falling back to the config's primary username
+// for a goal that carries none (one built outside a listing). Without the
+// owning account a goal from a secondary account would link to the primary's
+// page — a 404, or worse, a different goal that happens to share the slug.
+func goalURL(config *Config, account, slug string) string {
+	if account == "" {
+		// --account scopes the session to one account, so a goal that carries
+		// none belongs to that account, not to the primary.
+		account = config.Username
+		if accountFilter != "" {
+			account = accountFilter
+		}
+	}
+	return fmt.Sprintf("%s/%s/%s", getBaseURL(config), url.PathEscape(account), url.PathEscape(slug))
+}
+
 func (c *HTTPClient) baseURL() string {
 	return getBaseURL(c.config)
 }

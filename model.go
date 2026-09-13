@@ -153,7 +153,7 @@ func initialAppModel(config *Config, ctx context.Context) appModel {
 	return appModel{
 		goals:         []Goal{},
 		config:        config,
-		client:        NewHTTPClient(config),
+		client:        newClient(config),
 		ctx:           ctx,
 		loading:       true,
 		refreshActive: true,
@@ -179,6 +179,20 @@ func (m *appModel) filterGoals() []Goal {
 	return filtered
 }
 
+// indexOfGoal finds a goal's position in the full goals list, or -1. Identity is
+// routeSlug rather than the bare slug: two accounts can own goals with the same
+// name, and matching on the bare one points the cursor at whichever comes first
+// — after which left/right navigation in the modal walks off through the wrong
+// account's neighbours.
+func (m *appModel) indexOfGoal(goal *Goal) int {
+	for i := range m.goals {
+		if m.goals[i].routeSlug() == goal.routeSlug() {
+			return i
+		}
+	}
+	return -1
+}
+
 // getDisplayGoals returns the goals to display (either filtered or all)
 func (m *appModel) getDisplayGoals() []Goal {
 	return m.filterGoals()
@@ -188,7 +202,10 @@ func initialModel(ctx context.Context) model {
 	// Check if config exists
 	if ConfigExists() {
 		config, err := LoadConfig()
-		if err == nil {
+		// checkAccounts, not just "it parsed": `buzz auth logout` of the last
+		// account leaves a valid but empty ~/.buzzrc, and starting the app with
+		// no credentials just fails every fetch instead of prompting.
+		if err == nil && config.checkAccounts() == nil {
 			// Config exists and is valid, go straight to app
 			return model{
 				state:                "app",

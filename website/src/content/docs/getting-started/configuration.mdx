@@ -9,6 +9,25 @@ buzz stores its configuration in `~/.buzzrc`, a JSON file created during
 [authentication](/getting-started/authentication/). Most users never need to edit
 it by hand, but a few optional settings live here.
 
+## Additional accounts (optional)
+
+`buzz auth login` manages these for you (see
+[multiple accounts](/getting-started/authentication/#multiple-accounts)), but
+they are plain JSON if you'd rather edit them directly. The top-level
+`username`/`auth_token` is the primary account; `accounts` holds any others:
+
+```json
+{
+  "username": "alice",
+  "auth_token": "alice_token",
+  "accounts": [
+    {"username": "bob", "auth_token": "bob_token"}
+  ]
+}
+```
+
+`log_file` and `base_url` are not per-account — they apply to every account.
+
 ## Logging (optional)
 
 buzz can log HTTP requests and responses to help with debugging and monitoring

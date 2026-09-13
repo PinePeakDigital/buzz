@@ -1195,6 +1195,36 @@ func TestGoalDetailsFieldOrderMinimal(t *testing.T) {
 	}
 }
 
+// TestReviewMultiAccountDetailsClearLoading pins the account-qualified slug
+// contract: with goals from more than one account, the fetch is dispatched for
+// (and the response keyed on) Goal.routeSlug. Comparing a bare slug against it
+// would leave the current goal stuck on "Loading…" forever, and would let two
+// accounts' same-named goals share one cache entry.
+func TestReviewMultiAccountDetailsClearLoading(t *testing.T) {
+	goals := []Goal{
+		{Slug: "read", Account: "alice", ambiguous: true},
+		{Slug: "read", Account: "bob", ambiguous: true},
+	}
+	m := initialReviewModel(goals, &Config{Username: "alice"})
+
+	updated, _ := m.Update(goalDetailsMsg{slug: "alice/read", goal: &Goal{Slug: "read", Title: "Alice reads"}})
+	m = updated.(reviewModel)
+
+	if m.loading {
+		t.Error("the current goal's details arrived; loading should be false")
+	}
+	if got, ok := m.details["alice/read"]; !ok || got.Title != "Alice reads" {
+		t.Errorf("details should be cached under the qualified slug, got %+v (present=%v)", got, ok)
+	}
+
+	// Bob's same-named goal must not collide with alice's cache entry.
+	updated, _ = m.Update(goalDetailsMsg{slug: "bob/read", goal: &Goal{Slug: "read", Title: "Bob reads"}})
+	m = updated.(reviewModel)
+	if m.details["alice/read"].Title != "Alice reads" || m.details["bob/read"].Title != "Bob reads" {
+		t.Errorf("same-named goals from two accounts must cache separately, got %+v", m.details)
+	}
+}
+
 func TestReviewGoalDetailsMsgCachesAndClearsLoading(t *testing.T) {
 	m := initialReviewModel([]Goal{{Slug: "g1"}, {Slug: "g2"}}, &Config{Username: "u"})
 	m.err = "stale error"

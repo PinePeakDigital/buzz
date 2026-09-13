@@ -24,8 +24,13 @@ type datapointSubmittedMsg struct {
 	err error
 }
 
-// goalDetailsLoadedMsg is sent when goal details with datapoints are loaded
+// goalDetailsLoadedMsg is sent when goal details with datapoints are loaded.
+// slug is the Goal.routeSlug the fetch was dispatched for — the response itself
+// carries only a bare slug, which two accounts can share, so without it a
+// late-arriving response for one account's goal cannot be told apart from the
+// goal currently on screen.
 type goalDetailsLoadedMsg struct {
+	slug string
 	goal *Goal
 	err  error
 }
@@ -78,7 +83,7 @@ func submitDatapointCmd(ctx context.Context, client Client, goalSlug, timestamp,
 func loadGoalDetailsCmd(ctx context.Context, client Client, goalSlug string) tea.Cmd {
 	return func() tea.Msg {
 		goal, err := client.FetchGoalWithDatapoints(ctx, goalSlug)
-		return goalDetailsLoadedMsg{goal: goal, err: err}
+		return goalDetailsLoadedMsg{slug: goalSlug, goal: goal, err: err}
 	}
 }
 

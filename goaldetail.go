@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,9 +164,7 @@ func formatGoalDetails(goal *Goal, config *Config, now time.Time) string {
 	}
 
 	// Generate and display goal URL
-	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goal.Slug))
-	details += fmt.Sprintf("URL:         %s\n", goalURL)
+	details += fmt.Sprintf("URL:         %s\n", goalURL(config, goal.Account, goal.Slug))
 
 	// Display autodata only if not empty
 	if goal.Autodata != "" {

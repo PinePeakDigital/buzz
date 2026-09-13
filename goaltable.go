@@ -151,8 +151,11 @@ func (t Table) RenderAs(format string, goals []Goal) (string, error) {
 	case "csv":
 		// ponytail: cells (baremin "+1", free-text comments) aren't sanitized for
 		// spreadsheet formula injection — it's the user's own data on their own
-		// machine, so they'd only be attacking themselves. Add ^[=+\-@] quoting if
-		// csv ever carries another account's data.
+		// machine, so they'd only be attacking themselves. Multi-account output
+		// (#265) does now mix accounts into one csv, but adding an account needs
+		// that account's own auth token, i.e. full write access to it already —
+		// same trust level, no new boundary. Add ^[=+\-@] quoting if csv ever
+		// carries data from an account the user does NOT control.
 		headers := make([]string, len(t.Columns))
 		for i, c := range t.Columns {
 			headers[i] = c.Header

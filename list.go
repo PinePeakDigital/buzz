@@ -91,7 +91,7 @@ func runListCommand(ctx context.Context, client Client, archived bool, format st
 	table := Table{
 		ShowHeader: true,
 		Columns: []Column{
-			{Header: "Slug", Cell: func(g Goal) string { return g.Slug }},
+			{Header: "Slug", Cell: func(g Goal) string { return g.DisplaySlug() }},
 			{Header: "Title", Cell: func(g Goal) string {
 				if g.Title == "" {
 					return "-"
@@ -129,7 +129,7 @@ func runListCommand(ctx context.Context, client Client, archived bool, format st
 	// detail-view banner).
 	now := time.Now()
 	archiveStyle := lipgloss.NewStyle().Foreground(archiveColor)
-	table.Columns[0].Cell = func(g Goal) string { return g.Slug + archiveDot(g, now, archiveStyle) }
+	table.Columns[0].Cell = func(g Goal) string { return g.DisplaySlug() + archiveDot(g, now, archiveStyle) }
 	fmt.Fprint(out, table.Render(goals))
 
 	return 0

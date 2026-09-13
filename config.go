@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,6 +16,135 @@ type Config struct {
 	AuthToken string `json:"auth_token"`
 	BaseURL   string `json:"base_url,omitempty"` // Optional base URL for API, defaults to https://www.beeminder.com
 	LogFile   string `json:"log_file,omitempty"` // Optional path to log file
+	// Accounts holds *additional* Beeminder logins beyond the primary
+	// Username/AuthToken above. Keeping the primary in its original top-level
+	// fields means every existing ~/.buzzrc keeps working untouched — there is
+	// no migration, and a single-account config is byte-identical to before.
+	Accounts []Account `json:"accounts,omitempty"`
+}
+
+// Account is one additional Beeminder login. BaseURL and LogFile are not
+// per-account: they configure how buzz talks to Beeminder and where it logs,
+// not who it talks as.
+type Account struct {
+	Username  string `json:"username"`
+	AuthToken string `json:"auth_token"`
+}
+
+// accountConfigs returns one *Config per configured account, primary first,
+// each carrying the shared BaseURL/LogFile. Every account therefore gets an
+// HTTPClient that behaves exactly as the single-account one always has.
+//
+// An unset primary is skipped rather than returned as a blank-credentialled
+// account, so a hand-written ~/.buzzrc that lists only "accounts" works, and a
+// config emptied by `buzz auth logout` of the last account returns nothing at
+// all. Duplicate usernames are dropped, keeping the invariant setAccount
+// maintains in memory — one entry per username — true for a hand-edited file
+// too; without this, a username listed twice makes every one of its goals look
+// ambiguous to multiClient, with no qualifier able to resolve it.
+func (c *Config) accountConfigs() []*Config {
+	var configs []*Config
+	seen := make(map[string]bool)
+	add := func(username, authToken string) {
+		// Both halves or neither: a username with no token builds a client that
+		// can only ever get 401s, and would still satisfy "some account is
+		// configured" at every entry point.
+		if username == "" || authToken == "" || seen[username] {
+			return
+		}
+		seen[username] = true
+		configs = append(configs, &Config{Username: username, AuthToken: authToken, BaseURL: c.BaseURL, LogFile: c.LogFile})
+	}
+	add(c.Username, c.AuthToken)
+	for _, a := range c.Accounts {
+		add(a.Username, a.AuthToken)
+	}
+	return configs
+}
+
+// hasCredentials reports whether any account is configured. `buzz auth logout`
+// of the last account leaves a valid, parseable ~/.buzzrc with nothing in it,
+// so "the file exists and parses" is no longer enough to mean "authenticated".
+func (c *Config) hasCredentials() bool {
+	return len(c.accountConfigs()) > 0
+}
+
+// checkAccounts validates the config against the global --account filter. It is
+// the single gate every entry point runs before building a client, so an
+// unconfigured --account username is rejected once, up front, rather than
+// silently widening to act as every account.
+func (c *Config) checkAccounts() error {
+	configs := c.accountConfigs()
+	if len(configs) == 0 {
+		return fmt.Errorf("no accounts configured. Please run 'buzz auth login' to authenticate")
+	}
+	if accountFilter == "" {
+		return nil
+	}
+	names := make([]string, len(configs))
+	for i, cfg := range configs {
+		names[i] = cfg.Username
+		if cfg.Username == accountFilter {
+			return nil
+		}
+	}
+	return fmt.Errorf("no such account: %s (configured: %s)", accountFilter, strings.Join(names, ", "))
+}
+
+// setAccount adds a login, or replaces the stored token if that username is
+// already configured. Re-authenticating as a user you already have is a token
+// refresh, not a second copy of the same account.
+func (c *Config) setAccount(username, authToken string) {
+	if c.Username == "" || c.Username == username {
+		c.Username, c.AuthToken = username, authToken
+		return
+	}
+	for i := range c.Accounts {
+		if c.Accounts[i].Username == username {
+			c.Accounts[i].AuthToken = authToken
+			return
+		}
+	}
+	c.Accounts = append(c.Accounts, Account{Username: username, AuthToken: authToken})
+}
+
+// removeAccount drops a login by username, promoting the first additional
+// account to primary if the primary itself is removed. Reports whether the
+// username was found.
+func (c *Config) removeAccount(username string) bool {
+	if c.Username == username {
+		if len(c.Accounts) == 0 {
+			c.Username, c.AuthToken = "", ""
+			return true
+		}
+		c.Username, c.AuthToken = c.Accounts[0].Username, c.Accounts[0].AuthToken
+		c.Accounts = c.Accounts[1:]
+		return true
+	}
+	for i, a := range c.Accounts {
+		if a.Username == username {
+			c.Accounts = append(c.Accounts[:i], c.Accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// accountLabel names the configured account(s) for the grid header. With
+// several accounts the header would otherwise claim the goals belong to the
+// primary alone, when the grid is showing everyone's.
+func accountLabel(c *Config) string {
+	// --account scopes the whole session to one account, so that is whose goals
+	// the grid is showing — listing the others would misstate what's on screen.
+	if accountFilter != "" {
+		return accountFilter
+	}
+	configs := c.accountConfigs()
+	names := make([]string, len(configs))
+	for i, cfg := range configs {
+		names[i] = cfg.Username
+	}
+	return strings.Join(names, ", ")
 }
 
 // getConfigPath returns the path to the config file

@@ -52,13 +52,17 @@ func handleTomorrowCommand() {
 	// roadall slope lookup). Caching by slug computes it once per goal. Both
 	// columns still derive from the same pair, so the bumped baremin and bumped
 	// losedate can't disagree (see goalByEndOfTomorrowAt).
+	//
+	// Keyed on routeSlug, not the bare slug: two accounts can each own a goal
+	// called "read", and sharing one cache entry would show the second goal the
+	// first one's bumped baremin and deadline.
 	views := make(map[string]tomorrowView)
 	viewFor := func(g Goal) tomorrowView {
-		if v, ok := views[g.Slug]; ok {
+		if v, ok := views[g.routeSlug()]; ok {
 			return v
 		}
 		v := goalByEndOfTomorrowAt(g, now)
-		views[g.Slug] = v
+		views[g.routeSlug()] = v
 		return v
 	}
 	filter := func(g Goal) bool { return isDueTomorrowFilterAt(g, now) }
@@ -207,7 +211,7 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	table := Table{
 		Colorize: true,
 		Columns: []Column{
-			{Header: "Slug", Cell: func(g Goal) string { return g.Slug }},
+			{Header: "Slug", Cell: func(g Goal) string { return g.DisplaySlug() }},
 			{Header: "Baremin", Cell: func(g Goal) string { return bareminFor(g) }},
 			{Header: "Due", Cell: func(g Goal) string {
 				if IsEndValueReached(g) {
@@ -236,7 +240,7 @@ func handleFilteredCommandWithDisplay(filterName string, filter func(Goal) bool,
 	// urgency, so the dot is left unstyled — it inherits the row colour instead
 	// of resetting it mid-line, and still marks the goal by its presence.
 	now := time.Now()
-	table.Columns[0].Cell = func(g Goal) string { return g.Slug + archiveDot(g, now, lipgloss.NewStyle()) }
+	table.Columns[0].Cell = func(g Goal) string { return g.DisplaySlug() + archiveDot(g, now, lipgloss.NewStyle()) }
 	fmt.Print(table.Render(filteredGoals))
 
 	if legendFor != nil {

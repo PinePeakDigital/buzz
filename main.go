@@ -27,6 +27,11 @@ var outputFormat = "table"
 // validFormats are the accepted --format values.
 var validFormats = map[string]bool{"table": true, "json": true, "csv": true}
 
+// accountFilter holds the global --account value: the one configured account
+// every command should act as, or "" for all of them. Applied in newClient, so
+// it scopes reads and writes alike without any per-command plumbing.
+var accountFilter = ""
+
 func printHelp() {
 	fmt.Println("buzz - A terminal user interface for Beeminder")
 	fmt.Println("")
@@ -78,6 +83,7 @@ func printHelp() {
 	fmt.Println("")
 	fmt.Println("GLOBAL OPTIONS:")
 	fmt.Println("  --format <table|json|csv>         Output format for the list commands, data, and next (default: table)")
+	fmt.Println("  --account <username>              Act as one configured account only (default: all of them)")
 	fmt.Println("  --no-color                        Disable colored output")
 	fmt.Println("  -h, --help                        Show this help message")
 	fmt.Println("  -v, --version                     Show version information")
@@ -134,6 +140,34 @@ func parseFormatFlag(args []string) (format string, filteredArgs []string, err e
 	return format, filteredArgs, nil
 }
 
+// parseAccountFlag extracts the global --account flag, mirroring --format. An
+// unconfigured username is rejected here rather than at first use, so a typo
+// can't quietly act as every account instead of the one named.
+func parseAccountFlag(args []string) (account string, filteredArgs []string, err error) {
+	filteredArgs = []string{args[0]} // Keep program name
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--account":
+			if i+1 >= len(args) {
+				return "", nil, fmt.Errorf("--account requires a username")
+			}
+			account = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--account="):
+			account = strings.TrimPrefix(arg, "--account=")
+			if account == "" {
+				// Otherwise "--account=" silently means "every account" — the
+				// opposite of what someone typing it intended.
+				return "", nil, fmt.Errorf("--account requires a username")
+			}
+		default:
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+	return account, filteredArgs, nil
+}
+
 func main() {
 	// Check for global --no-color flag before processing other commands
 	noColor, filteredArgs := parseNoColorFlag(os.Args)
@@ -153,6 +187,29 @@ func main() {
 	}
 	os.Args = formatFiltered
 	outputFormat = format
+
+	// Same for the global --account filter.
+	account, accountFiltered, err := parseAccountFlag(os.Args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		os.Exit(2)
+	}
+	os.Args = accountFiltered
+	accountFilter = account
+
+	// Validate the filter here, not at first use: a typo'd --account must not
+	// reach the TUI, whose "no usable account" branch prompts for credentials —
+	// asking a user who has perfectly good ones to re-authenticate. Commands
+	// still re-check via checkAccounts; this makes the message early and the
+	// same everywhere.
+	if accountFilter != "" && ConfigExists() {
+		if config, loadErr := LoadConfig(); loadErr == nil {
+			if err := config.checkAccounts(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+				os.Exit(2)
+			}
+		}
+	}
 
 	// Check for CLI arguments
 	if len(os.Args) > 1 {
@@ -245,7 +302,7 @@ func main() {
 	}
 }
 
-// loadConfigAndGoals loads configuration, constructs an HTTP client, and fetches
+// loadConfigAndGoals loads configuration, constructs the API client, and fetches
 // sorted goals from Beeminder. Returns the client so callers can make further API
 // calls without rebuilding it. Lives here because both next and schedule
 // commands use it.
@@ -258,8 +315,11 @@ func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	if err := config.checkAccounts(); err != nil {
+		return nil, nil, nil, err
+	}
 
-	client := NewHTTPClient(config)
+	client := newClient(config)
 	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to fetch goals: %w", err)

@@ -57,6 +57,23 @@ commands. This is useful for:
 - Screen readers or accessibility tools
 - Logging output to files
 
+### `--account`
+
+With [more than one account](/getting-started/authentication/#multiple-accounts)
+configured, every command shows goals from all of them. `--account <username>`
+narrows a single invocation to one:
+
+```bash
+buzz --account bob today
+buzz --account bob add read 30
+```
+
+It scopes reads and writes alike, and can be placed anywhere on the command
+line. An unconfigured username is rejected rather than silently ignored.
+
+To act on one goal without scoping the whole command, qualify its slug instead:
+`buzz add bob/read 30`.
+
 ## Urgency colors
 
 Commands that list goals color-code each one by deadline urgency, using the same

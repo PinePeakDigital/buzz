@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,14 +15,20 @@ import (
 // that the required fields are present, and persists it to the config file. It
 // is shared by the interactive TUI auth screen and the `buzz auth login`
 // command so both accept identical input and report identical errors.
+//
+// Credentials are merged into any existing config: a new username is added as
+// an additional account, a username already configured has its token refreshed,
+// and settings that aren't credentials (base_url, log_file) survive either way.
 func parseAndSaveCredentials(input string) (*Config, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, fmt.Errorf("please enter your credentials")
 	}
 
-	var config Config
-	if err := json.Unmarshal([]byte(input), &config); err != nil {
+	// Parse into Account, not Config: the pasted blob is credentials only, and
+	// decoding it as a Config would let it overwrite unrelated settings.
+	var creds Account
+	if err := json.Unmarshal([]byte(input), &creds); err != nil {
 		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
 
@@ -28,17 +36,42 @@ func parseAndSaveCredentials(input string) (*Config, error) {
 	// values (e.g. "username":"   ") are rejected rather than persisted, and
 	// store the trimmed values so stray surrounding whitespace never reaches
 	// the API.
-	config.Username = strings.TrimSpace(config.Username)
-	config.AuthToken = strings.TrimSpace(config.AuthToken)
-	if config.Username == "" || config.AuthToken == "" {
+	creds.Username = strings.TrimSpace(creds.Username)
+	creds.AuthToken = strings.TrimSpace(creds.AuthToken)
+	if creds.Username == "" || creds.AuthToken == "" {
 		return nil, fmt.Errorf("username and auth_token are required")
 	}
 
-	if err := SaveConfig(&config); err != nil {
+	config := &Config{}
+	if ConfigExists() {
+		existing, err := LoadConfig()
+		if err != nil {
+			// An unreadable config must not become a dead end: the TUI sends the
+			// user to the auth screen *because* the config won't load, so
+			// refusing to save would leave them no way back in. Start fresh —
+			// but only once the old file is safely aside, since SaveConfig
+			// truncates and the unreadable file may still hold recoverable
+			// accounts. A timestamped name so a second attempt can't clobber
+			// the first attempt's backup.
+			path, pathErr := getConfigPath()
+			if pathErr != nil {
+				return nil, fmt.Errorf("failed to locate config: %w", pathErr)
+			}
+			backup := fmt.Sprintf("%s.%d.bak", path, time.Now().Unix())
+			if renameErr := os.Rename(path, backup); renameErr != nil {
+				return nil, fmt.Errorf("existing config could not be read (%v) and could not be backed up: %w", err, renameErr)
+			}
+		} else {
+			config = existing
+		}
+	}
+	config.setAccount(creds.Username, creds.AuthToken)
+
+	if err := SaveConfig(config); err != nil {
 		return nil, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 type authModel struct {

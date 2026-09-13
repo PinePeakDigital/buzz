@@ -92,7 +92,7 @@ func displayNextGoal() error {
 		fmt.Println(string(b))
 		return nil
 	case "csv":
-		out, err := encodeCSV([]string{"slug", "baremin", "due"}, [][]string{{nextGoal.Slug, nextGoal.Baremin, timeframe}})
+		out, err := encodeCSV([]string{"slug", "baremin", "due"}, [][]string{{nextGoal.DisplaySlug(), nextGoal.Baremin, timeframe}})
 		if err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func displayNextGoal() error {
 	}
 
 	// Output the terse summary
-	fmt.Printf("%s %s %s\n", nextGoal.Slug, nextGoal.Baremin, timeframe)
+	fmt.Printf("%s %s %s\n", nextGoal.DisplaySlug(), nextGoal.Baremin, timeframe)
 
 	// Check for updates and display message if available
 	fmt.Print(getUpdateMessage())

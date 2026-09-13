@@ -11,7 +11,7 @@ import (
 // caller should exit non-zero). It returns the loaded Config too, since a few
 // commands (view, review) need it downstream; client-only callers discard it
 // with _. Extracting it means the credentialed commands stop repeating the
-// ConfigExists → LoadConfig → NewHTTPClient dance — and, by all going through
+// ConfigExists → LoadConfig → newClient dance — and, by all going through
 // this one stderr path, can't drift into printing the error to stdout.
 //
 // Distinct from loadConfigAndGoals (main.go), which *returns* wrapped errors
@@ -26,5 +26,9 @@ func loadClient(stderr io.Writer) (*Config, Client, bool) {
 		fmt.Fprintf(stderr, "Error: Failed to load config: %s\n", redactError(err))
 		return nil, nil, false
 	}
-	return config, NewHTTPClient(config), true
+	if err := config.checkAccounts(); err != nil {
+		fmt.Fprintf(stderr, "Error: %s\n", err)
+		return nil, nil, false
+	}
+	return config, newClient(config), true
 }

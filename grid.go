@@ -60,7 +60,7 @@ func RenderGrid(goals []Goal, width, height, scrollRow, cursor int, hasNavigated
 
 			// Format goal display
 			deltaValue := ParseBareminValue(goal.Baremin)
-			firstLine := formatGoalFirstLine(goal.Slug, goal.Pledge, goal.PledgeCap)
+			firstLine := formatGoalFirstLine(goal.DisplaySlug(), goal.Pledge, goal.PledgeCap)
 			secondLine := formatGoalSecondLine(deltaValue, FormatGoalDueDate(goal))
 			display := fmt.Sprintf("%s\n%s", firstLine, secondLine)
 
@@ -136,7 +136,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 		"Safe Buffer: %d days\n"+
 		"Due Date: %s\n"+
 		"Buffer Color: %s",
-		goal.Slug,
+		goal.DisplaySlug(),
 		goal.Title,
 		pledgeDisplay,
 		goal.Safebuf,

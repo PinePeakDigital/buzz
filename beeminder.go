@@ -8,6 +8,18 @@ import (
 
 // Goal represents a Beeminder goal with relevant fields
 type Goal struct {
+	// ID is Beeminder's own goal id. It is the identity used to recognise the
+	// same goal arriving from two different accounts (see multiclient.go).
+	ID string `json:"id"`
+	// Account is the buzz-configured username the goal was fetched as. Not an
+	// API field — it is stamped on by multiClient so a goal can be traced back
+	// to its account. Set on every goal that came from a listing; empty only on
+	// a goal built some other way (a raw detail fetch, or a test fixture).
+	Account string `json:"-"`
+	// ambiguous marks a goal whose slug another account also uses, so the bare
+	// slug can't identify it. Set by multiClient.merge, which is the only place
+	// that sees every account's goals at once.
+	ambiguous   bool
 	Slug        string                `json:"slug"`
 	Title       string                `json:"title"`
 	Fineprint   string                `json:"fineprint"` // User-provided description of what they're committing to
@@ -302,4 +314,26 @@ func IsDoLessGoal(goal Goal) bool {
 		return true
 	}
 	return false
+}
+
+// routeSlug is the name to hand the Client for this goal: qualified with its
+// owning account when that is known, so a slug more than one account uses still
+// routes to the right one without the caller disambiguating. multiClient strips
+// the qualifier before the request, so this is safe to use unconditionally —
+// including with one account, where it simply never disambiguates anything.
+func (g Goal) routeSlug() string {
+	if g.Account == "" {
+		return g.Slug
+	}
+	return g.Account + "/" + g.Slug
+}
+
+// DisplaySlug is the name to show for a goal: bare, except where another
+// account uses the same slug and showing it bare would render two different
+// goals identically. The qualified form matches what the user would type.
+func (g Goal) DisplaySlug() string {
+	if !g.ambiguous {
+		return g.Slug
+	}
+	return g.Account + "/" + g.Slug
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -77,7 +76,8 @@ type reviewModel struct {
 // is dispatched by Init; because Init can't persist model state (it returns only
 // a Cmd), the constructor pre-marks that goal as in-flight and loading here.
 //
-// The client defaults to the real HTTP client for config; handleReviewCommand
+// The client defaults to the real client for config (multi-account aware via
+// newClient); handleReviewCommand
 // and tests can override m.client to inject a fake before the TUI runs.
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
 	m := reviewModel{
@@ -85,13 +85,13 @@ func initialReviewModel(goals []Goal, config *Config) reviewModel {
 		details:  make(map[string]*Goal),
 		inFlight: make(map[string]struct{}),
 		ctx:      context.Background(), // overridden with a cancellable ctx by handleReviewCommand
-		client:   NewHTTPClient(config),
+		client:   newClient(config),
 		config:   config,
 		current:  0,
 		loading:  len(goals) > 0,
 	}
 	if len(goals) > 0 {
-		m.inFlight[goals[0].Slug] = struct{}{}
+		m.inFlight[goals[0].routeSlug()] = struct{}{}
 	}
 	return m
 }
@@ -108,6 +108,12 @@ type goalDetailsMsg struct {
 // context lets the fetch be cancelled when the user quits. The fetch goes through
 // the injected Client seam so the review TUI is testable with a fake, like every
 // other command.
+//
+// The slug used throughout is Goal.routeSlug — account-qualified when the goal
+// came from a multi-account listing. That is both what the Client needs to reach
+// the right account and what keeps two accounts' same-named goals in separate
+// cache entries. It is used unconditionally — with one account it qualifies
+// nothing apart, and multiClient strips the qualifier before the request.
 func fetchGoalDetailsCmd(ctx context.Context, client Client, slug string) tea.Cmd {
 	return func() tea.Msg {
 		goal, err := client.FetchGoalWithDatapoints(ctx, slug)
@@ -124,7 +130,7 @@ func (m *reviewModel) ensureDetails() tea.Cmd {
 		m.loading = false
 		return nil
 	}
-	slug := m.goals[m.current].Slug
+	slug := m.goals[m.current].routeSlug()
 	if _, ok := m.details[slug]; ok {
 		m.loading = false
 		return nil
@@ -142,7 +148,7 @@ func (m reviewModel) Init() tea.Cmd {
 	if len(m.goals) == 0 {
 		return nil
 	}
-	return fetchGoalDetailsCmd(m.ctx, m.client, m.goals[0].Slug)
+	return fetchGoalDetailsCmd(m.ctx, m.client, m.goals[0].routeSlug())
 }
 
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -171,7 +177,10 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		delete(m.inFlight, msg.slug)
 		// Cache the result regardless of which goal is now current (the user
 		// may have navigated on). Only touch loading/err for the current goal.
-		isCurrent := len(m.goals) > 0 && msg.slug == m.goals[m.current].Slug
+		// msg.slug is the routeSlug the fetch was dispatched for, so compare
+		// against the same form — a bare slug would never match it once goals
+		// come from more than one account.
+		isCurrent := len(m.goals) > 0 && msg.slug == m.goals[m.current].routeSlug()
 		if msg.err != nil {
 			if isCurrent {
 				m.loading = false
@@ -225,7 +234,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open current goal in browser
 			if m.current < len(m.goals) {
 				goal := m.goals[m.current]
-				if err := openBrowser(m.config, goal.Slug); err != nil {
+				if err := openBrowser(m.config, goal.Account, goal.Slug); err != nil {
 					m.err = fmt.Sprintf("Failed to open browser: %v", err)
 				} else {
 					m.err = "" // Clear any previous error
@@ -284,7 +293,7 @@ func (m reviewModel) contentView() string {
 	// Start from the bulk summary goal, then merge in the detail-only fields;
 	// see Goal.hydrateFrom for which fields and why it merges rather than replaces.
 	goal := m.goals[m.current]
-	if d, ok := m.details[goal.Slug]; ok {
+	if d, ok := m.details[goal.routeSlug()]; ok {
 		goal.hydrateFrom(d)
 	}
 
@@ -386,9 +395,8 @@ func (m reviewModel) helpView() string {
 }
 
 // openBrowser opens the goal page in the default browser
-func openBrowser(config *Config, goalSlug string) error {
-	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goalSlug))
+func openBrowser(config *Config, account, goalSlug string) error {
+	goalURL := goalURL(config, account, goalSlug)
 
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
