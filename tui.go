@@ -206,7 +206,7 @@ func (m model) viewApp() string {
 	displayGoals := m.appModel.getDisplayGoals()
 
 	// Render the grid and footer
-	grid := RenderGrid(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, m.appModel.config.Username, m.appModel.searchActive, m.appModel.searchQuery)
+	grid := RenderGrid(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.cursor, m.appModel.hasNavigated, accountLabel(m.appModel.config), m.appModel.searchActive, m.appModel.searchQuery)
 	footer := RenderFooter(displayGoals, m.appModel.width, m.appModel.height, m.appModel.scrollRow, m.appModel.refreshActive)
 
 	baseView := grid + footer

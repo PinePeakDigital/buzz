@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -44,11 +45,18 @@ func parseAndSaveCredentials(input string) (*Config, error) {
 	if ConfigExists() {
 		existing, err := LoadConfig()
 		if err != nil {
-			// Refuse rather than start fresh: overwriting a config we failed to
-			// read would silently drop the user's other accounts.
-			return nil, fmt.Errorf("failed to load existing config: %w", err)
+			// An unreadable config must not become a dead end: the TUI sends the
+			// user to the auth screen *because* the config won't load, so
+			// refusing to save would leave them no way back in. Start fresh, but
+			// move the old file aside first rather than destroying accounts that
+			// may still be recoverable from it. Best-effort — if the rename
+			// fails there is nothing useful to do but let the save replace it.
+			if path, pathErr := getConfigPath(); pathErr == nil {
+				_ = os.Rename(path, path+".bak")
+			}
+		} else {
+			config = existing
 		}
-		config = existing
 	}
 	config.setAccount(creds.Username, creds.AuthToken)
 

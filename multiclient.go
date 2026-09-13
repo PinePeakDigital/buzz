@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -14,7 +15,13 @@ import (
 // The single-account path is byte-for-byte the behaviour buzz has always had.
 func newClient(config *Config) Client {
 	configs := config.accountConfigs()
-	if len(configs) == 1 {
+	if len(configs) <= 1 {
+		// Zero accounts means an unauthenticated config; callers gate on
+		// Config.hasCredentials before getting here, so build the same client
+		// the single-account path always did and let the API reject it.
+		if len(configs) == 0 {
+			return NewHTTPClient(config)
+		}
 		return NewHTTPClient(configs[0])
 	}
 	accounts := make([]accountClient, len(configs))
@@ -100,7 +107,7 @@ func (m *multiClient) FetchGoals(ctx context.Context) ([]Goal, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.record(per)
+	m.record(per, false)
 	return merge(m.accounts, per), nil
 }
 
@@ -109,31 +116,46 @@ func (m *multiClient) FetchArchivedGoals(ctx context.Context) ([]Goal, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Archived goals stay reachable by slug (buzz view/data on an archived
+	// goal), so they belong in the routing index too — added to it, not
+	// replacing it, since a listing of archived goals says nothing about
+	// where the active ones live.
+	m.record(per, true)
 	return merge(m.accounts, per), nil
 }
 
-// record refreshes the slug -> accounts index from a full goal listing. Only
-// active goals populate it: a write aimed at an archived goal is a rare enough
-// case to leave to an explicit "username/slug".
-func (m *multiClient) record(per [][]Goal) {
-	owner := make(map[string][]int)
+// record rebuilds (or, with add, extends) the slug -> accounts index from a
+// goal listing. Each slug maps to the accounts that have a goal by that name;
+// an account is listed once per slug however many listings mention it.
+func (m *multiClient) record(per [][]Goal, add bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !add || m.owner == nil {
+		m.owner = make(map[string][]int)
+	}
 	for i, goals := range per {
 		for _, g := range goals {
-			owner[g.Slug] = append(owner[g.Slug], i)
+			if !slices.Contains(m.owner[g.Slug], i) {
+				m.owner[g.Slug] = append(m.owner[g.Slug], i)
+			}
 		}
 	}
-	m.mu.Lock()
-	m.owner = owner
-	m.mu.Unlock()
 }
 
-// index returns the slug -> accounts map, fetching goals once to build it if no
-// listing has happened yet this run.
-func (m *multiClient) index(ctx context.Context) (map[string][]int, error) {
+// index returns the slug -> accounts map, fetching goals to build it if no
+// listing has happened yet this run. refresh forces a re-fetch, which is how a
+// slug that appeared after the index was built (a goal created mid-session)
+// still finds its account instead of being misrouted.
+//
+// ponytail: only *active* goals are fetched to build the index — archived ones
+// land in it when something lists them, but are otherwise routed to the primary
+// account. Fetching both lists here would double every routing round trip to
+// serve a rare case; "username/slug" names the account explicitly meanwhile.
+func (m *multiClient) index(ctx context.Context, refresh bool) (map[string][]int, error) {
 	m.mu.Lock()
 	owner := m.owner
 	m.mu.Unlock()
-	if owner != nil {
+	if owner != nil && !refresh {
 		return owner, nil
 	}
 	if _, err := m.FetchGoals(ctx); err != nil {
@@ -159,21 +181,34 @@ func splitAccount(slug string) (account, bare string) {
 // datapoint to the wrong person's goal.
 func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, string, error) {
 	if account, bare := splitAccount(slug); account != "" {
-		for _, a := range m.accounts {
-			if a.username == account {
-				return a.client, bare, nil
-			}
+		c, err := m.clientByUsername(account)
+		if err != nil {
+			return nil, "", err
 		}
-		return nil, "", fmt.Errorf("no such account: %s (configured: %s)", account, strings.Join(m.usernames(), ", "))
+		return c, bare, nil
 	}
 
-	owner, err := m.index(ctx)
+	m.mu.Lock()
+	cached := m.owner != nil
+	m.mu.Unlock()
+
+	owner, err := m.index(ctx, false)
 	if err != nil {
 		return nil, "", err
 	}
+	// A *cached* index can simply be out of date — the goal may have been
+	// created since it was built. Rebuild once before concluding the slug is
+	// unknown, so a fresh goal isn't silently sent to the wrong account. An
+	// index just built above is already current; re-fetching it would only
+	// double the round trips.
+	if cached && len(owner[slug]) == 0 {
+		if owner, err = m.index(ctx, true); err != nil {
+			return nil, "", err
+		}
+	}
 	switch owners := owner[slug]; len(owners) {
 	case 0:
-		// Unknown slug: hand it to the primary account so the API's own
+		// Genuinely unknown: hand it to the primary account so the API's own
 		// "goal not found" is what the user sees.
 		return m.primary(), slug, nil
 	case 1:
@@ -187,6 +222,16 @@ func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, strin
 	}
 }
 
+// clientByUsername resolves an explicit account qualifier to its client.
+func (m *multiClient) clientByUsername(username string) (Client, error) {
+	for _, a := range m.accounts {
+		if a.username == username {
+			return a.client, nil
+		}
+	}
+	return nil, fmt.Errorf("no such account: %s (configured: %s)", username, strings.Join(m.usernames(), ", "))
+}
+
 func (m *multiClient) usernames() []string {
 	names := make([]string, len(m.accounts))
 	for i, a := range m.accounts {
@@ -197,6 +242,12 @@ func (m *multiClient) usernames() []string {
 
 // Account-scoped calls that name no goal: the primary account answers.
 
+// FetchUserTimezone returns the *primary* account's timezone.
+//
+// ponytail: `buzz schedule` applies this one timezone to every goal, so a
+// secondary account set to a different Beeminder timezone has its deadlines
+// rendered in the primary's. Give the callers that care a per-goal lookup
+// (keyed on Goal.Account) if anyone actually runs accounts across timezones.
 func (m *multiClient) FetchUserTimezone(ctx context.Context) (string, error) {
 	return m.primary().FetchUserTimezone(ctx)
 }
@@ -216,16 +267,11 @@ func (m *multiClient) CreateGoal(ctx context.Context, slug, title, goalType, gun
 	account, bare := splitAccount(slug)
 	client := m.primary()
 	if account != "" {
-		found := false
-		for _, a := range m.accounts {
-			if a.username == account {
-				client, found = a.client, true
-				break
-			}
+		c, err := m.clientByUsername(account)
+		if err != nil {
+			return nil, err
 		}
-		if !found {
-			return nil, fmt.Errorf("no such account: %s (configured: %s)", account, strings.Join(m.usernames(), ", "))
-		}
+		client = c
 	}
 	return client.CreateGoal(ctx, bare, title, goalType, gunits, goaldate, goalval, rate)
 }

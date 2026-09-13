@@ -84,7 +84,10 @@ func handleViewCommand() {
 
 	// If --web flag is present, open in browser and exit
 	if webFlag {
-		if err := openBrowser(config, goalSlug); err != nil {
+		// A "username/slug" qualifier names the account; without splitting it
+		// the "/" would be escaped into the slug and the URL would 404.
+		account, bare := splitAccount(goalSlug)
+		if err := openBrowser(config, account, bare); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to open browser: %s\n", redactError(err))
 			os.Exit(1)
 		}

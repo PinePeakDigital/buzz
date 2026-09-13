@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -77,7 +76,8 @@ type reviewModel struct {
 // is dispatched by Init; because Init can't persist model state (it returns only
 // a Cmd), the constructor pre-marks that goal as in-flight and loading here.
 //
-// The client defaults to the real HTTP client for config; handleReviewCommand
+// The client defaults to the real client for config (multi-account aware via
+// newClient); handleReviewCommand
 // and tests can override m.client to inject a fake before the TUI runs.
 func initialReviewModel(goals []Goal, config *Config) reviewModel {
 	m := reviewModel{
@@ -225,7 +225,7 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open current goal in browser
 			if m.current < len(m.goals) {
 				goal := m.goals[m.current]
-				if err := openBrowser(m.config, goal.Slug); err != nil {
+				if err := openBrowser(m.config, goal.Account, goal.Slug); err != nil {
 					m.err = fmt.Sprintf("Failed to open browser: %v", err)
 				} else {
 					m.err = "" // Clear any previous error
@@ -386,9 +386,8 @@ func (m reviewModel) helpView() string {
 }
 
 // openBrowser opens the goal page in the default browser
-func openBrowser(config *Config, goalSlug string) error {
-	baseURL := getBaseURL(config)
-	goalURL := fmt.Sprintf("%s/%s/%s", baseURL, url.PathEscape(config.Username), url.PathEscape(goalSlug))
+func openBrowser(config *Config, account, goalSlug string) error {
+	goalURL := goalURL(config, account, goalSlug)
 
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

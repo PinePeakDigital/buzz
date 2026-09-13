@@ -188,7 +188,10 @@ func initialModel(ctx context.Context) model {
 	// Check if config exists
 	if ConfigExists() {
 		config, err := LoadConfig()
-		if err == nil {
+		// hasCredentials, not just "it parsed": `buzz auth logout` of the last
+		// account leaves a valid but empty ~/.buzzrc, and starting the app with
+		// no credentials just fails every fetch instead of prompting.
+		if err == nil && config.hasCredentials() {
 			// Config exists and is valid, go straight to app
 			return model{
 				state:                "app",

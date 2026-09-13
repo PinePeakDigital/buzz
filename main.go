@@ -245,7 +245,7 @@ func main() {
 	}
 }
 
-// loadConfigAndGoals loads configuration, constructs an HTTP client, and fetches
+// loadConfigAndGoals loads configuration, constructs the API client, and fetches
 // sorted goals from Beeminder. Returns the client so callers can make further API
 // calls without rebuilding it. Lives here because both next and schedule
 // commands use it.
@@ -257,6 +257,9 @@ func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 	config, err := LoadConfig()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	if !config.hasCredentials() {
+		return nil, nil, nil, fmt.Errorf("no accounts configured. Please run 'buzz auth login' to authenticate")
 	}
 
 	client := newClient(config)

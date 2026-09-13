@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -33,12 +34,36 @@ type Account struct {
 // accountConfigs returns one *Config per configured account, primary first,
 // each carrying the shared BaseURL/LogFile. Every account therefore gets an
 // HTTPClient that behaves exactly as the single-account one always has.
+//
+// An unset primary is skipped rather than returned as a blank-credentialled
+// account, so a hand-written ~/.buzzrc that lists only "accounts" works, and a
+// config emptied by `buzz auth logout` of the last account returns nothing at
+// all. Duplicate usernames are dropped, keeping the invariant setAccount
+// maintains in memory — one entry per username — true for a hand-edited file
+// too; without this, a username listed twice makes every one of its goals look
+// ambiguous to multiClient, with no qualifier able to resolve it.
 func (c *Config) accountConfigs() []*Config {
-	configs := []*Config{{Username: c.Username, AuthToken: c.AuthToken, BaseURL: c.BaseURL, LogFile: c.LogFile}}
+	var configs []*Config
+	seen := make(map[string]bool)
+	add := func(username, authToken string) {
+		if username == "" || seen[username] {
+			return
+		}
+		seen[username] = true
+		configs = append(configs, &Config{Username: username, AuthToken: authToken, BaseURL: c.BaseURL, LogFile: c.LogFile})
+	}
+	add(c.Username, c.AuthToken)
 	for _, a := range c.Accounts {
-		configs = append(configs, &Config{Username: a.Username, AuthToken: a.AuthToken, BaseURL: c.BaseURL, LogFile: c.LogFile})
+		add(a.Username, a.AuthToken)
 	}
 	return configs
+}
+
+// hasCredentials reports whether any account is configured. `buzz auth logout`
+// of the last account leaves a valid, parseable ~/.buzzrc with nothing in it,
+// so "the file exists and parses" is no longer enough to mean "authenticated".
+func (c *Config) hasCredentials() bool {
+	return len(c.accountConfigs()) > 0
 }
 
 // setAccount adds a login, or replaces the stored token if that username is
@@ -78,6 +103,18 @@ func (c *Config) removeAccount(username string) bool {
 		}
 	}
 	return false
+}
+
+// accountLabel names the configured account(s) for the grid header. With
+// several accounts the header would otherwise claim the goals belong to the
+// primary alone, when the grid is showing everyone's.
+func accountLabel(c *Config) string {
+	configs := c.accountConfigs()
+	names := make([]string, len(configs))
+	for i, cfg := range configs {
+		names[i] = cfg.Username
+	}
+	return strings.Join(names, ", ")
 }
 
 // getConfigPath returns the path to the config file
