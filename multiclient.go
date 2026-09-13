@@ -10,31 +10,36 @@ import (
 	"sync"
 )
 
-// newClient builds the Client for a config: a plain HTTPClient when a single
-// account is configured, a multiClient fanning across all of them otherwise.
-// The single-account path is byte-for-byte the behaviour buzz has always had.
+// newClient builds the Client for a config: a multiClient over every configured
+// account, or over just the one named by the global --account filter.
+//
+// One account takes no more round trips than the plain HTTPClient ever did —
+// clientFor short-circuits when there is nothing to disambiguate — and going
+// through multiClient uniformly means the "username/slug" qualifier is
+// understood on every path. An HTTPClient handed a qualified slug would escape
+// the "/" into the slug itself and ask Beeminder for a goal named "alice%2Fread".
 func newClient(config *Config) Client {
 	configs := config.accountConfigs()
-	// The global --account filter narrows to one account. Config.checkAccounts
-	// has already rejected an unconfigured name at every entry point, so a
-	// non-matching filter here can only be a programming error; fall through to
-	// the unfiltered client rather than guessing.
+
+	// Config.checkAccounts has already rejected an unconfigured --account at
+	// every entry point, so a non-matching filter here can only be a
+	// programming error; fall through to the unfiltered client rather than
+	// silently acting as an account the user didn't name.
 	if accountFilter != "" {
 		for _, c := range configs {
 			if c.Username == accountFilter {
-				return NewHTTPClient(c)
+				configs = []*Config{c}
+				break
 			}
 		}
 	}
-	if len(configs) <= 1 {
-		// Zero accounts means an unauthenticated config; callers gate on
-		// Config.hasCredentials before getting here, so build the same client
-		// the single-account path always did and let the API reject it.
-		if len(configs) == 0 {
-			return NewHTTPClient(config)
-		}
-		return NewHTTPClient(configs[0])
+
+	// An unauthenticated config still builds a client; callers gate on
+	// Config.checkAccounts first, and the API rejects the empty credentials.
+	if len(configs) == 0 {
+		configs = []*Config{config}
 	}
+
 	accounts := make([]accountClient, len(configs))
 	for i, c := range configs {
 		accounts[i] = accountClient{username: c.Username, client: NewHTTPClient(c)}
@@ -49,7 +54,10 @@ type accountClient struct {
 	client   Client
 }
 
-// multiClient spreads the Client interface across several Beeminder accounts.
+// multiClient spreads the Client interface across the configured Beeminder
+// accounts. It is the only Client construction path — one account included,
+// where it is a thin pass-through that still understands the "username/slug"
+// qualifier.
 // Calls fall into three groups:
 //
 //   - listing the user's goals — fans out to every account and merges, dropping
@@ -58,8 +66,8 @@ type accountClient struct {
 //   - account-scoped odds and ends (timezone, charges, raw API) — the primary
 //     account, since there is no goal to route on.
 //
-// ponytail: accounts are queried sequentially. Two or three accounts is the
-// realistic case; fan out concurrently if someone with many accounts finds
+// ponytail: accounts are queried sequentially. One, two or three accounts is
+// the realistic case; fan out concurrently if someone with many accounts finds
 // startup slow.
 type multiClient struct {
 	accounts []accountClient
@@ -212,6 +220,13 @@ func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, strin
 			return nil, "", err
 		}
 		return c, bare, nil
+	}
+
+	// With one account there is nothing to disambiguate, so skip the index
+	// entirely. This is what keeps the ordinary single-account setup (and
+	// --account) paying no more round trips than a bare HTTPClient would.
+	if len(m.accounts) == 1 {
+		return m.accounts[0].client, slug, nil
 	}
 
 	m.mu.Lock()

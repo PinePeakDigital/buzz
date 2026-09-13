@@ -13,7 +13,8 @@ type Goal struct {
 	ID string `json:"id"`
 	// Account is the buzz-configured username the goal was fetched as. Not an
 	// API field — it is stamped on by multiClient so a goal can be traced back
-	// to its account. Empty for a single-account setup.
+	// to its account. Set on every goal that came from a listing; empty only on
+	// a goal built some other way (a raw detail fetch, or a test fixture).
 	Account string `json:"-"`
 	// ambiguous marks a goal whose slug another account also uses, so the bare
 	// slug can't identify it. Set by multiClient.merge, which is the only place
@@ -317,9 +318,9 @@ func IsDoLessGoal(goal Goal) bool {
 
 // routeSlug is the name to hand the Client for this goal: qualified with its
 // owning account when that is known, so a slug more than one account uses still
-// routes to the right one without the caller disambiguating. Bare in a
-// single-account setup, where Account is empty — which is every call the
-// HTTPClient has ever received.
+// routes to the right one without the caller disambiguating. multiClient strips
+// the qualifier before the request, so this is safe to use unconditionally —
+// including with one account, where it simply never disambiguates anything.
 func (g Goal) routeSlug() string {
 	if g.Account == "" {
 		return g.Slug

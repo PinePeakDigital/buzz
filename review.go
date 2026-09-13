@@ -112,7 +112,8 @@ type goalDetailsMsg struct {
 // The slug used throughout is Goal.routeSlug — account-qualified when the goal
 // came from a multi-account listing. That is both what the Client needs to reach
 // the right account and what keeps two accounts' same-named goals in separate
-// cache entries; in a single-account setup it is just the bare slug.
+// cache entries. It is used unconditionally — with one account it qualifies
+// nothing apart, and multiClient strips the qualifier before the request.
 func fetchGoalDetailsCmd(ctx context.Context, client Client, slug string) tea.Cmd {
 	return func() tea.Msg {
 		goal, err := client.FetchGoalWithDatapoints(ctx, slug)

@@ -14,13 +14,33 @@ func twoAccounts(alice, bob []Goal) (*multiClient, *FakeClient, *FakeClient) {
 	return &multiClient{accounts: []accountClient{{"alice", a}, {"bob", b}}}, a, b
 }
 
-func TestNewClientSingleAccountStaysHTTPClient(t *testing.T) {
-	if _, ok := newClient(&Config{Username: "alice", AuthToken: "t"}).(*HTTPClient); !ok {
-		t.Fatal("single-account config should build a plain *HTTPClient")
+func TestNewClientHoldsEveryConfiguredAccount(t *testing.T) {
+	one, ok := newClient(&Config{Username: "alice", AuthToken: "t"}).(*multiClient)
+	if !ok {
+		t.Fatal("newClient should always build a *multiClient")
 	}
+	if len(one.accounts) != 1 || one.accounts[0].username != "alice" {
+		t.Fatalf("got %v, want alice alone", one.usernames())
+	}
+
 	multi := &Config{Username: "alice", AuthToken: "t", Accounts: []Account{{Username: "bob", AuthToken: "u"}}}
-	if _, ok := newClient(multi).(*multiClient); !ok {
-		t.Fatal("two-account config should build a *multiClient")
+	two := newClient(multi).(*multiClient)
+	if len(two.accounts) != 2 {
+		t.Fatalf("got %v, want both accounts", two.usernames())
+	}
+}
+
+// A lone account must cost no more round trips than the plain HTTPClient did:
+// there is nothing to disambiguate, so routing must not fetch a goal listing.
+func TestSingleAccountRoutesWithoutAGoalListing(t *testing.T) {
+	unreachable := &FakeClient{} // every method errors if called
+	m := &multiClient{accounts: []accountClient{{"alice", unreachable}}}
+
+	for _, in := range []string{"read", "alice/read"} {
+		c, slug, err := m.clientFor(context.Background(), in)
+		if err != nil || slug != "read" || c != Client(unreachable) {
+			t.Errorf("clientFor(%q) = %q, %v; want the bare slug with no fetch", in, slug, err)
+		}
 	}
 }
 
@@ -173,8 +193,8 @@ func TestAccountConfigsSkipsBlankPrimaryAndDuplicates(t *testing.T) {
 	if len(cfgs) != 1 || cfgs[0].Username != "bob" {
 		t.Fatalf("a config with no primary should yield just its listed accounts, got %+v", cfgs)
 	}
-	if _, ok := newClient(onlyList).(*HTTPClient); !ok {
-		t.Fatal("one usable account should still build a plain *HTTPClient")
+	if c := newClient(onlyList).(*multiClient); len(c.accounts) != 1 || c.accounts[0].username != "bob" {
+		t.Fatalf("got %v, want bob alone", c.usernames())
 	}
 
 	// A username listed twice must collapse, or every one of its goals looks
@@ -250,9 +270,9 @@ func TestGoalURLUsesTheOwningAccount(t *testing.T) {
 func TestAccountFilterNarrowsToOneAccount(t *testing.T) {
 	config := &Config{Username: "alice", AuthToken: "a", Accounts: []Account{{Username: "bob", AuthToken: "b"}}}
 
-	// Unfiltered, several accounts fan out.
-	if _, ok := newClient(config).(*multiClient); !ok {
-		t.Fatal("no filter should build a multiClient")
+	// Unfiltered, every account is present.
+	if c := newClient(config).(*multiClient); len(c.accounts) != 2 {
+		t.Fatalf("no filter should hold both accounts, got %v", c.usernames())
 	}
 
 	// accountFilter is a package-level global; a leak would corrupt every other
@@ -260,12 +280,25 @@ func TestAccountFilterNarrowsToOneAccount(t *testing.T) {
 	t.Cleanup(func() { accountFilter = "" })
 
 	accountFilter = "bob"
-	c, ok := newClient(config).(*HTTPClient)
+	// Still a multiClient, but holding only bob — so a scoped command can be
+	// handed a qualified "bob/read" slug and have it understood.
+	m, ok := newClient(config).(*multiClient)
 	if !ok {
 		t.Fatal("--account should narrow to a single-account client")
 	}
-	if c.config.Username != "bob" || c.config.AuthToken != "b" {
-		t.Fatalf("got %+v, want bob's credentials", c.config)
+	if len(m.accounts) != 1 || m.accounts[0].username != "bob" {
+		t.Fatalf("got %+v, want bob alone", m.usernames())
+	}
+
+	// One account needs no goal listing to route, and accepts its own
+	// qualifier as well as a bare slug.
+	unreachable := &FakeClient{} // every method errors if called
+	m.accounts[0].client = unreachable
+	for _, in := range []string{"read", "bob/read"} {
+		c, slug, err := m.clientFor(context.Background(), in)
+		if err != nil || slug != "read" || c != Client(unreachable) {
+			t.Errorf("clientFor(%q) = %q, %v; want bare slug with no index fetch", in, slug, err)
+		}
 	}
 	if err := config.checkAccounts(); err != nil {
 		t.Fatalf("a configured account should pass: %v", err)
@@ -318,11 +351,34 @@ func TestFullyOverlappingAccountsDoNotDoubleGoals(t *testing.T) {
 	}
 }
 
-// A single-account setup stamps no Account, so nothing is qualified anywhere.
-func TestSingleAccountGoalsStayBare(t *testing.T) {
+// A goal carrying no account (built outside a listing) qualifies nothing.
+func TestUnstampedGoalsStayBare(t *testing.T) {
 	g := Goal{Slug: "read"}
 	if g.DisplaySlug() != "read" || g.routeSlug() != "read" {
-		t.Errorf("single-account goals should stay bare, got %q / %q", g.DisplaySlug(), g.routeSlug())
+		t.Errorf("an unstamped goal should stay bare, got %q / %q", g.DisplaySlug(), g.routeSlug())
+	}
+}
+
+// With one account a goal is still stamped, but nothing is ambiguous: the user
+// sees the bare slug, while routing carries the (harmless) qualifier.
+func TestOneAccountDisplaysBareButRoutesQualified(t *testing.T) {
+	m := &multiClient{accounts: []accountClient{{"alice", &FakeClient{
+		FetchGoalsFunc: func() ([]Goal, error) { return []Goal{{ID: "1", Slug: "read"}}, nil },
+	}}}}
+
+	goals, err := m.FetchGoals(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if goals[0].DisplaySlug() != "read" {
+		t.Errorf("one account has nothing to disambiguate, got %q", goals[0].DisplaySlug())
+	}
+	if goals[0].routeSlug() != "alice/read" {
+		t.Errorf("routing should carry the account, got %q", goals[0].routeSlug())
+	}
+	// ...and that qualifier round-trips back to the bare slug.
+	if _, slug, err := m.clientFor(context.Background(), goals[0].routeSlug()); err != nil || slug != "read" {
+		t.Errorf("routeSlug should resolve back to the bare slug, got %q, %v", slug, err)
 	}
 }
 
