@@ -15,6 +15,69 @@ type Config struct {
 	AuthToken string `json:"auth_token"`
 	BaseURL   string `json:"base_url,omitempty"` // Optional base URL for API, defaults to https://www.beeminder.com
 	LogFile   string `json:"log_file,omitempty"` // Optional path to log file
+	// Accounts holds *additional* Beeminder logins beyond the primary
+	// Username/AuthToken above. Keeping the primary in its original top-level
+	// fields means every existing ~/.buzzrc keeps working untouched — there is
+	// no migration, and a single-account config is byte-identical to before.
+	Accounts []Account `json:"accounts,omitempty"`
+}
+
+// Account is one additional Beeminder login. BaseURL and LogFile are not
+// per-account: they configure how buzz talks to Beeminder and where it logs,
+// not who it talks as.
+type Account struct {
+	Username  string `json:"username"`
+	AuthToken string `json:"auth_token"`
+}
+
+// accountConfigs returns one *Config per configured account, primary first,
+// each carrying the shared BaseURL/LogFile. Every account therefore gets an
+// HTTPClient that behaves exactly as the single-account one always has.
+func (c *Config) accountConfigs() []*Config {
+	configs := []*Config{{Username: c.Username, AuthToken: c.AuthToken, BaseURL: c.BaseURL, LogFile: c.LogFile}}
+	for _, a := range c.Accounts {
+		configs = append(configs, &Config{Username: a.Username, AuthToken: a.AuthToken, BaseURL: c.BaseURL, LogFile: c.LogFile})
+	}
+	return configs
+}
+
+// setAccount adds a login, or replaces the stored token if that username is
+// already configured. Re-authenticating as a user you already have is a token
+// refresh, not a second copy of the same account.
+func (c *Config) setAccount(username, authToken string) {
+	if c.Username == "" || c.Username == username {
+		c.Username, c.AuthToken = username, authToken
+		return
+	}
+	for i := range c.Accounts {
+		if c.Accounts[i].Username == username {
+			c.Accounts[i].AuthToken = authToken
+			return
+		}
+	}
+	c.Accounts = append(c.Accounts, Account{Username: username, AuthToken: authToken})
+}
+
+// removeAccount drops a login by username, promoting the first additional
+// account to primary if the primary itself is removed. Reports whether the
+// username was found.
+func (c *Config) removeAccount(username string) bool {
+	if c.Username == username {
+		if len(c.Accounts) == 0 {
+			c.Username, c.AuthToken = "", ""
+			return true
+		}
+		c.Username, c.AuthToken = c.Accounts[0].Username, c.Accounts[0].AuthToken
+		c.Accounts = c.Accounts[1:]
+		return true
+	}
+	for i, a := range c.Accounts {
+		if a.Username == username {
+			c.Accounts = append(c.Accounts[:i], c.Accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // getConfigPath returns the path to the config file

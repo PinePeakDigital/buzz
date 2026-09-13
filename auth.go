@@ -13,14 +13,20 @@ import (
 // that the required fields are present, and persists it to the config file. It
 // is shared by the interactive TUI auth screen and the `buzz auth login`
 // command so both accept identical input and report identical errors.
+//
+// Credentials are merged into any existing config: a new username is added as
+// an additional account, a username already configured has its token refreshed,
+// and settings that aren't credentials (base_url, log_file) survive either way.
 func parseAndSaveCredentials(input string) (*Config, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, fmt.Errorf("please enter your credentials")
 	}
 
-	var config Config
-	if err := json.Unmarshal([]byte(input), &config); err != nil {
+	// Parse into Account, not Config: the pasted blob is credentials only, and
+	// decoding it as a Config would let it overwrite unrelated settings.
+	var creds Account
+	if err := json.Unmarshal([]byte(input), &creds); err != nil {
 		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
 
@@ -28,17 +34,29 @@ func parseAndSaveCredentials(input string) (*Config, error) {
 	// values (e.g. "username":"   ") are rejected rather than persisted, and
 	// store the trimmed values so stray surrounding whitespace never reaches
 	// the API.
-	config.Username = strings.TrimSpace(config.Username)
-	config.AuthToken = strings.TrimSpace(config.AuthToken)
-	if config.Username == "" || config.AuthToken == "" {
+	creds.Username = strings.TrimSpace(creds.Username)
+	creds.AuthToken = strings.TrimSpace(creds.AuthToken)
+	if creds.Username == "" || creds.AuthToken == "" {
 		return nil, fmt.Errorf("username and auth_token are required")
 	}
 
-	if err := SaveConfig(&config); err != nil {
+	config := &Config{}
+	if ConfigExists() {
+		existing, err := LoadConfig()
+		if err != nil {
+			// Refuse rather than start fresh: overwriting a config we failed to
+			// read would silently drop the user's other accounts.
+			return nil, fmt.Errorf("failed to load existing config: %w", err)
+		}
+		config = existing
+	}
+	config.setAccount(creds.Username, creds.AuthToken)
+
+	if err := SaveConfig(config); err != nil {
 		return nil, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 type authModel struct {

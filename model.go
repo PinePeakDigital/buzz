@@ -153,7 +153,7 @@ func initialAppModel(config *Config, ctx context.Context) appModel {
 	return appModel{
 		goals:         []Goal{},
 		config:        config,
-		client:        NewHTTPClient(config),
+		client:        newClient(config),
 		ctx:           ctx,
 		loading:       true,
 		refreshActive: true,

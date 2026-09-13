@@ -85,7 +85,7 @@ func initialReviewModel(goals []Goal, config *Config) reviewModel {
 		details:  make(map[string]*Goal),
 		inFlight: make(map[string]struct{}),
 		ctx:      context.Background(), // overridden with a cancellable ctx by handleReviewCommand
-		client:   NewHTTPClient(config),
+		client:   newClient(config),
 		config:   config,
 		current:  0,
 		loading:  len(goals) > 0,

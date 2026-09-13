@@ -259,7 +259,7 @@ func loadConfigAndGoals() (*Config, Client, []Goal, error) {
 		return nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	client := NewHTTPClient(config)
+	client := newClient(config)
 	goals, err := client.FetchGoals(context.Background())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to fetch goals: %w", err)

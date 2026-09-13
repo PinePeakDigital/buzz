@@ -171,4 +171,34 @@ Piped input is also supported for scripting:
 buzz auth login < creds.json
 ```
 
-See [Authentication](/getting-started/authentication/) for the credential format.
+Logging in as a username you haven't used before **adds** it alongside your
+existing accounts; logging in as one you already have refreshes its token.
+
+See [Authentication](/getting-started/authentication/) for the credential format
+and [multiple accounts](/getting-started/authentication/#multiple-accounts).
+
+## `buzz auth list`
+
+List the accounts buzz is authenticated as, primary first:
+
+```bash
+buzz auth list
+```
+
+```text
+alice (primary)
+bob
+```
+
+Auth tokens are never printed.
+
+## `buzz auth logout`
+
+Remove one account's credentials:
+
+```bash
+buzz auth logout bob
+```
+
+Removing the primary account promotes the next one in its place. Removing the
+last account leaves buzz unauthenticated.

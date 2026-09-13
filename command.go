@@ -26,5 +26,5 @@ func loadClient(stderr io.Writer) (*Config, Client, bool) {
 		fmt.Fprintf(stderr, "Error: Failed to load config: %s\n", redactError(err))
 		return nil, nil, false
 	}
-	return config, NewHTTPClient(config), true
+	return config, newClient(config), true
 }

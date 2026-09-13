@@ -36,6 +36,34 @@ token stays out of your shell history. They're stored in `~/.buzzrc` with
 read/write permissions for your user only.
 </Aside>
 
+## Multiple accounts
+
+Logging in as a username buzz hasn't seen adds it alongside your existing
+accounts rather than replacing them. Goals from every account appear together —
+in the TUI grid and in every command — and a goal shared by two accounts is
+shown once.
+
+```bash
+buzz auth login          # paste alice's credentials
+buzz auth login          # paste bob's credentials
+buzz auth list           # alice (primary), bob
+buzz auth logout bob     # remove an account
+```
+
+Logging in again as a username you already have refreshes that account's token
+in place.
+
+Where the same goal slug exists on more than one account, commands that name a
+goal ask you to say which, and accept a `username/slug` qualifier:
+
+```bash
+buzz add alice/read 30
+```
+
+The **primary** account — the first one you authenticated as — is the one used
+by commands that name no goal: `buzz charge`, `buzz api`, and `buzz create`
+(unless you qualify the new goal's slug).
+
 ## Re-authenticating
 
 The interactive TUI auto-prompts for credentials on first run, so you typically

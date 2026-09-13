@@ -8,6 +8,13 @@ import (
 
 // Goal represents a Beeminder goal with relevant fields
 type Goal struct {
+	// ID is Beeminder's own goal id. It is the identity used to recognise the
+	// same goal arriving from two different accounts (see multiclient.go).
+	ID string `json:"id"`
+	// Account is the buzz-configured username the goal was fetched as. Not an
+	// API field — it is stamped on by multiClient so a goal can be traced back
+	// to its account. Empty for a single-account setup.
+	Account     string                `json:"-"`
 	Slug        string                `json:"slug"`
 	Title       string                `json:"title"`
 	Fineprint   string                `json:"fineprint"` // User-provided description of what they're committing to
