@@ -121,12 +121,16 @@ func (m model) updateApp(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.appModel.inGoalModal() && m.appModel.modalGoal != nil && msg.goal != nil {
-			// Update the modal goal with the detailed information. A detail
-			// fetch returns the owning account's raw goal, which carries no
-			// Account/ambiguous marking — only a multi-account listing stamps
-			// those — so carry them across the replace or the modal's URL
-			// reverts to the primary account's page.
-			if m.appModel.modalGoal.Slug == msg.goal.Slug {
+			// Match on the slug the fetch was DISPATCHED for, not the one that
+			// came back: two accounts can share a slug, so a response for
+			// alice/read would otherwise satisfy a bob/read modal and land one
+			// account's data under the other's name.
+			//
+			// A detail fetch returns the owning account's raw goal, which
+			// carries no Account/ambiguous marking — only a multi-account
+			// listing stamps those — so carry them across the replace, or the
+			// modal's URL reverts to the primary account's page.
+			if m.appModel.modalGoal.routeSlug() == msg.slug {
 				detailed := *msg.goal
 				detailed.Account = m.appModel.modalGoal.Account
 				detailed.ambiguous = m.appModel.modalGoal.ambiguous

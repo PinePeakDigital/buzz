@@ -176,7 +176,10 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		delete(m.inFlight, msg.slug)
 		// Cache the result regardless of which goal is now current (the user
 		// may have navigated on). Only touch loading/err for the current goal.
-		isCurrent := len(m.goals) > 0 && msg.slug == m.goals[m.current].Slug
+		// msg.slug is the routeSlug the fetch was dispatched for, so compare
+		// against the same form — a bare slug would never match it once goals
+		// come from more than one account.
+		isCurrent := len(m.goals) > 0 && msg.slug == m.goals[m.current].routeSlug()
 		if msg.err != nil {
 			if isCurrent {
 				m.loading = false

@@ -341,7 +341,7 @@ func TestModalKeepsAccountAcrossDetailFetch(t *testing.T) {
 
 	// The detail fetch's goal has the same slug but no account provenance.
 	detailed := &Goal{Slug: "read", Title: "Read more"}
-	result, _ := testModel.updateApp(goalDetailsLoadedMsg{goal: detailed})
+	result, _ := testModel.updateApp(goalDetailsLoadedMsg{slug: "bob/read", goal: detailed})
 	got := result.(model).appModel.modalGoal
 
 	if got.Title != "Read more" {
@@ -352,5 +352,27 @@ func TestModalKeepsAccountAcrossDetailFetch(t *testing.T) {
 	}
 	if got.DisplaySlug() != "bob/read" {
 		t.Errorf("DisplaySlug = %q, want bob/read", got.DisplaySlug())
+	}
+}
+
+// TestModalIgnoresAnotherAccountsDetailResponse pins the race that two accounts
+// sharing a slug makes possible: open alice/read, close it, open bob/read, and
+// alice's still-in-flight response arrives with the bare slug "read". Matching
+// on that bare slug would file alice's datapoints under bob's name.
+func TestModalIgnoresAnotherAccountsDetailResponse(t *testing.T) {
+	testModel := model{
+		appModel: appModel{
+			goals:     []Goal{{Slug: "read", Account: "bob", ambiguous: true}},
+			modalGoal: &Goal{Slug: "read", Account: "bob", ambiguous: true, Title: "Bob reads"},
+			mode:      modeGoalDetail,
+		},
+	}
+
+	stale := &Goal{Slug: "read", Title: "Alice reads"}
+	result, _ := testModel.updateApp(goalDetailsLoadedMsg{slug: "alice/read", goal: stale})
+	got := result.(model).appModel.modalGoal
+
+	if got.Title != "Bob reads" {
+		t.Errorf("another account's response must not land in this modal, got title %q", got.Title)
 	}
 }
