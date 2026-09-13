@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -47,12 +48,18 @@ func parseAndSaveCredentials(input string) (*Config, error) {
 		if err != nil {
 			// An unreadable config must not become a dead end: the TUI sends the
 			// user to the auth screen *because* the config won't load, so
-			// refusing to save would leave them no way back in. Start fresh, but
-			// move the old file aside first rather than destroying accounts that
-			// may still be recoverable from it. Best-effort — if the rename
-			// fails there is nothing useful to do but let the save replace it.
-			if path, pathErr := getConfigPath(); pathErr == nil {
-				_ = os.Rename(path, path+".bak")
+			// refusing to save would leave them no way back in. Start fresh —
+			// but only once the old file is safely aside, since SaveConfig
+			// truncates and the unreadable file may still hold recoverable
+			// accounts. A timestamped name so a second attempt can't clobber
+			// the first attempt's backup.
+			path, pathErr := getConfigPath()
+			if pathErr != nil {
+				return nil, fmt.Errorf("failed to locate config: %w", pathErr)
+			}
+			backup := fmt.Sprintf("%s.%d.bak", path, time.Now().Unix())
+			if renameErr := os.Rename(path, backup); renameErr != nil {
+				return nil, fmt.Errorf("existing config could not be read (%v) and could not be backed up: %w", err, renameErr)
 			}
 		} else {
 			config = existing

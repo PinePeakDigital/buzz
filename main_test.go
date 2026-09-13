@@ -184,6 +184,7 @@ func TestParseAccountFlag(t *testing.T) {
 		{"--account=bob (equals)", []string{"buzz", "list", "--account=bob"}, "bob", []string{"buzz", "list"}, false},
 		{"the value is not left in the args", []string{"buzz", "--account", "today", "today"}, "today", []string{"buzz", "today"}, false},
 		{"missing value errors", []string{"buzz", "list", "--account"}, "", nil, true},
+		{"empty value errors rather than meaning all accounts", []string{"buzz", "list", "--account="}, "", nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -46,7 +46,10 @@ func (c *Config) accountConfigs() []*Config {
 	var configs []*Config
 	seen := make(map[string]bool)
 	add := func(username, authToken string) {
-		if username == "" || seen[username] {
+		// Both halves or neither: a username with no token builds a client that
+		// can only ever get 401s, and would still satisfy "some account is
+		// configured" at every entry point.
+		if username == "" || authToken == "" || seen[username] {
 			return
 		}
 		seen[username] = true

@@ -88,7 +88,12 @@ func getBaseURL(config *Config) string {
 // page — a 404, or worse, a different goal that happens to share the slug.
 func goalURL(config *Config, account, slug string) string {
 	if account == "" {
+		// --account scopes the session to one account, so a goal that carries
+		// none belongs to that account, not to the primary.
 		account = config.Username
+		if accountFilter != "" {
+			account = accountFilter
+		}
 	}
 	return fmt.Sprintf("%s/%s/%s", getBaseURL(config), url.PathEscape(account), url.PathEscape(slug))
 }

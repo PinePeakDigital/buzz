@@ -38,7 +38,7 @@ func TestSingleAccountRoutesWithoutAGoalListing(t *testing.T) {
 	m := &multiClient{accounts: []accountClient{{"alice", unreachable}}}
 
 	for _, in := range []string{"read", "alice/read"} {
-		c, slug, err := m.clientFor(context.Background(), in)
+		c, _, slug, err := m.clientFor(context.Background(), in)
 		if err != nil || slug != "read" || c != Client(unreachable) {
 			t.Errorf("clientFor(%q) = %q, %v; want the bare slug with no fetch", in, slug, err)
 		}
@@ -92,15 +92,15 @@ func TestWritesRouteToTheOwningAccount(t *testing.T) {
 
 func TestAmbiguousSlugIsAnErrorAndQualifyingResolvesIt(t *testing.T) {
 	m, _, b := twoAccounts([]Goal{{ID: "1", Slug: "read"}}, []Goal{{ID: "2", Slug: "read"}})
-	_, _, err := m.clientFor(context.Background(), "read")
+	_, _, _, err := m.clientFor(context.Background(), "read")
 	if err == nil || !strings.Contains(err.Error(), "bob/read") {
 		t.Fatalf("want an ambiguity error listing qualified slugs, got %v", err)
 	}
-	c, slug, err := m.clientFor(context.Background(), "bob/read")
+	c, _, slug, err := m.clientFor(context.Background(), "bob/read")
 	if err != nil || slug != "read" || c != Client(b) {
 		t.Fatalf("qualified slug should resolve to bob with the bare slug: %v %q", err, slug)
 	}
-	if _, _, err := m.clientFor(context.Background(), "carol/read"); err == nil {
+	if _, _, _, err := m.clientFor(context.Background(), "carol/read"); err == nil {
 		t.Fatal("unknown account should error")
 	}
 }
@@ -140,7 +140,7 @@ func TestUnknownSlugFallsBackToPrimaryAfterRefresh(t *testing.T) {
 	alice := []Goal{{ID: "1", Slug: "read"}}
 	m, a, _ := twoAccounts(alice, []Goal{{ID: "3", Slug: "walk"}})
 
-	c, slug, err := m.clientFor(context.Background(), "nope")
+	c, _, slug, err := m.clientFor(context.Background(), "nope")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestStaleIndexIsRefreshedForAGoalCreatedMidSession(t *testing.T) {
 	}
 	bobGoals = append(bobGoals, Goal{ID: "4", Slug: "swim"})
 
-	c, _, err := m.clientFor(context.Background(), "swim")
+	c, _, _, err := m.clientFor(context.Background(), "swim")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestArchivedListingFeedsTheRoutingIndex(t *testing.T) {
 	if _, err := m.FetchArchivedGoals(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	c, _, err := m.clientFor(context.Background(), "old")
+	c, _, _, err := m.clientFor(context.Background(), "old")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +296,7 @@ func TestAccountFilterNarrowsToOneAccount(t *testing.T) {
 	unreachable := &FakeClient{} // every method errors if called
 	m.accounts[0].client = unreachable
 	for _, in := range []string{"read", "bob/read"} {
-		c, slug, err := m.clientFor(context.Background(), in)
+		c, _, slug, err := m.clientFor(context.Background(), in)
 		if err != nil || slug != "read" || c != Client(unreachable) {
 			t.Errorf("clientFor(%q) = %q, %v; want bare slug with no index fetch", in, slug, err)
 		}
@@ -378,7 +378,7 @@ func TestOneAccountDisplaysBareButRoutesQualified(t *testing.T) {
 		t.Errorf("routing should carry the account, got %q", goals[0].routeSlug())
 	}
 	// ...and that qualifier round-trips back to the bare slug.
-	if _, slug, err := m.clientFor(context.Background(), goals[0].routeSlug()); err != nil || slug != "read" {
+	if _, _, slug, err := m.clientFor(context.Background(), goals[0].routeSlug()); err != nil || slug != "read" {
 		t.Errorf("routeSlug should resolve back to the bare slug, got %q, %v", slug, err)
 	}
 }
@@ -487,5 +487,63 @@ func TestArchivingSlugsMatchWhatTheTimelineStores(t *testing.T) {
 	}
 	if set[goals[1].DisplaySlug()] {
 		t.Error("a goal not scheduled for archive should not be in the set")
+	}
+}
+
+// TestRoutedFetchesStampTheAccount: a single-goal fetch returns the raw goal,
+// which has no provenance of its own. Without stamping the account it was
+// routed to, `buzz view bob/read` renders the primary account's URL.
+func TestRoutedFetchesStampTheAccount(t *testing.T) {
+	m, _, b := twoAccounts([]Goal{{ID: "1", Slug: "read"}}, []Goal{{ID: "2", Slug: "walk"}})
+	b.FetchGoalWithDatapointsFunc = func(slug string) (*Goal, error) { return &Goal{Slug: slug}, nil }
+	b.FetchGoalFunc = func(slug string) (*Goal, error) { return &Goal{Slug: slug}, nil }
+
+	for _, fetch := range []struct {
+		name string
+		call func() (*Goal, error)
+	}{
+		{"FetchGoal", func() (*Goal, error) { return m.FetchGoal(context.Background(), "bob/read") }},
+		{"FetchGoalWithDatapoints", func() (*Goal, error) {
+			return m.FetchGoalWithDatapoints(context.Background(), "bob/read")
+		}},
+	} {
+		g, err := fetch.call()
+		if err != nil {
+			t.Fatalf("%s: %v", fetch.name, err)
+		}
+		if g.Account != "bob" {
+			t.Errorf("%s: Account = %q, want bob", fetch.name, g.Account)
+		}
+		if got := goalURL(&Config{Username: "alice"}, g.Account, g.Slug); got != "https://www.beeminder.com/bob/read" {
+			t.Errorf("%s: URL = %q, want bob's page", fetch.name, got)
+		}
+	}
+}
+
+// TestGoalURLFallsBackToTheScopedAccount: under --account, a goal carrying no
+// account belongs to the scoped one, not the primary.
+func TestGoalURLFallsBackToTheScopedAccount(t *testing.T) {
+	config := &Config{Username: "alice", AuthToken: "a"}
+	if got := goalURL(config, "", "read"); got != "https://www.beeminder.com/alice/read" {
+		t.Errorf("unscoped should fall back to the primary, got %q", got)
+	}
+
+	t.Cleanup(func() { accountFilter = "" })
+	accountFilter = "bob"
+	if got := goalURL(config, "", "read"); got != "https://www.beeminder.com/bob/read" {
+		t.Errorf("--account bob should fall back to bob, got %q", got)
+	}
+}
+
+// TestAccountsNeedBothHalvesOfACredential: a username with no token would build
+// a client that can only ever get 401s, while still satisfying "some account is
+// configured" at every entry point.
+func TestAccountsNeedBothHalvesOfACredential(t *testing.T) {
+	half := &Config{Accounts: []Account{{Username: "bob"}}}
+	if got := half.accountConfigs(); len(got) != 0 {
+		t.Errorf("a tokenless account should not count as configured, got %+v", got)
+	}
+	if half.checkAccounts() == nil {
+		t.Error("checkAccounts should reject a config whose only account has no token")
 	}
 }

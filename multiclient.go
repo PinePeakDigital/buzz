@@ -209,24 +209,24 @@ func splitAccount(slug string) (account, bare string) {
 	return "", slug
 }
 
-// clientFor resolves a goal slug to the account that owns it, returning the
-// slug stripped of any "username/" qualifier. A bare slug that exists on more
-// than one account is an error rather than a guess — picking one would write a
-// datapoint to the wrong person's goal.
-func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, string, error) {
+// clientFor resolves a goal slug to the account that owns it, returning that
+// account's client, its username, and the slug stripped of any "username/"
+// qualifier. A bare slug that exists on more than one account is an error rather
+// than a guess — picking one would write a datapoint to the wrong person's goal.
+func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, string, string, error) {
 	if account, bare := splitAccount(slug); account != "" {
 		c, err := m.clientByUsername(account)
 		if err != nil {
-			return nil, "", err
+			return nil, "", "", err
 		}
-		return c, bare, nil
+		return c, account, bare, nil
 	}
 
 	// With one account there is nothing to disambiguate, so skip the index
 	// entirely. This is what keeps the ordinary single-account setup (and
 	// --account) paying no more round trips than a bare HTTPClient would.
 	if len(m.accounts) == 1 {
-		return m.accounts[0].client, slug, nil
+		return m.accounts[0].client, m.accounts[0].username, slug, nil
 	}
 
 	m.mu.Lock()
@@ -235,7 +235,7 @@ func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, strin
 
 	owner, err := m.index(ctx, false)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	// A *cached* index can simply be out of date — the goal may have been
 	// created since it was built. Rebuild once before concluding the slug is
@@ -244,22 +244,22 @@ func (m *multiClient) clientFor(ctx context.Context, slug string) (Client, strin
 	// double the round trips.
 	if cached && len(owner[slug]) == 0 {
 		if owner, err = m.index(ctx, true); err != nil {
-			return nil, "", err
+			return nil, "", "", err
 		}
 	}
 	switch owners := owner[slug]; len(owners) {
 	case 0:
 		// Genuinely unknown: hand it to the primary account so the API's own
 		// "goal not found" is what the user sees.
-		return m.primary(), slug, nil
+		return m.primary(), m.accounts[0].username, slug, nil
 	case 1:
-		return m.accounts[owners[0]].client, slug, nil
+		return m.accounts[owners[0]].client, m.accounts[owners[0]].username, slug, nil
 	default:
 		var names []string
 		for _, i := range owners {
 			names = append(names, m.accounts[i].username+"/"+slug)
 		}
-		return nil, "", fmt.Errorf("goal %q exists on several accounts; name one: %s", slug, strings.Join(names, ", "))
+		return nil, "", "", fmt.Errorf("goal %q exists on several accounts; name one: %s", slug, strings.Join(names, ", "))
 	}
 }
 
@@ -317,26 +317,39 @@ func (m *multiClient) CreateGoal(ctx context.Context, slug, title, goalType, gun
 	return client.CreateGoal(ctx, bare, title, goalType, gunits, goaldate, goalval, rate)
 }
 
+// stamped records which account a routed call actually reached. A single-goal
+// fetch returns the raw goal, which carries no provenance of its own — without
+// this, `buzz view bob/read` would render the primary account's URL.
+func stamped(g *Goal, err error, account string) (*Goal, error) {
+	if err != nil || g == nil {
+		return g, err
+	}
+	g.Account = account
+	return g, nil
+}
+
 // Goal-scoped calls: routed to the owning account.
 
 func (m *multiClient) FetchGoal(ctx context.Context, goalSlug string) (*Goal, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, account, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
-	return c.FetchGoal(ctx, slug)
+	g, err := c.FetchGoal(ctx, slug)
+	return stamped(g, err, account)
 }
 
 func (m *multiClient) FetchGoalWithDatapoints(ctx context.Context, goalSlug string) (*Goal, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, account, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
-	return c.FetchGoalWithDatapoints(ctx, slug)
+	g, err := c.FetchGoalWithDatapoints(ctx, slug)
+	return stamped(g, err, account)
 }
 
 func (m *multiClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, includeDatapoints bool) (json.RawMessage, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, _, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +357,7 @@ func (m *multiClient) FetchGoalRawJSON(ctx context.Context, goalSlug string, inc
 }
 
 func (m *multiClient) GetLastDatapointValue(ctx context.Context, goalSlug string) (float64, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, _, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return 0, err
 	}
@@ -356,7 +369,7 @@ func (m *multiClient) CreateDatapoint(ctx context.Context, goalSlug, timestamp, 
 }
 
 func (m *multiClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug, timestamp, daystamp, value, comment, requestid string) (*Datapoint, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, _, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -364,31 +377,34 @@ func (m *multiClient) CreateDatapointWithDaystamp(ctx context.Context, goalSlug,
 }
 
 func (m *multiClient) CallUncle(ctx context.Context, goalSlug string) (*Goal, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, account, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
-	return c.CallUncle(ctx, slug)
+	g, err := c.CallUncle(ctx, slug)
+	return stamped(g, err, account)
 }
 
 func (m *multiClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet int) (*Goal, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, account, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
-	return c.RatchetGoal(ctx, slug, ratchet)
+	g, err := c.RatchetGoal(ctx, slug, ratchet)
+	return stamped(g, err, account)
 }
 
 func (m *multiClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, account, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return nil, err
 	}
-	return c.UpdateGoalDeadline(ctx, slug, deadline)
+	g, err := c.UpdateGoalDeadline(ctx, slug, deadline)
+	return stamped(g, err, account)
 }
 
 func (m *multiClient) RefreshGoal(ctx context.Context, goalSlug string) (bool, error) {
-	c, slug, err := m.clientFor(ctx, goalSlug)
+	c, _, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {
 		return false, err
 	}

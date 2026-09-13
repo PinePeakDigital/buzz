@@ -146,8 +146,35 @@ func TestParseAndSaveCredentials(t *testing.T) {
 		if config.Username != "alice" {
 			t.Errorf("got %+v, want username=alice", config)
 		}
-		if _, err := os.Stat(path + ".bak"); err != nil {
-			t.Errorf("the unreadable config should be kept as .bak: %v", err)
+		backups, _ := filepath.Glob(path + ".*.bak")
+		if len(backups) != 1 {
+			t.Fatalf("the unreadable config should be kept as a .bak, found %v", backups)
+		}
+		if b, err := os.ReadFile(backups[0]); err != nil || string(b) != "{not json" {
+			t.Errorf("the backup should hold the original bytes, got %q (%v)", b, err)
+		}
+	})
+
+	t.Run("credentials are refused rather than destroying an unreadable config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("HOME", tmpDir)
+		path := filepath.Join(tmpDir, ".buzzrc")
+		if err := os.WriteFile(path, []byte("{not json"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		// A read-only HOME makes the backup rename fail. SaveConfig truncates,
+		// so proceeding anyway would destroy accounts still recoverable from
+		// the unreadable file.
+		if err := os.Chmod(tmpDir, 0500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(tmpDir, 0700) })
+
+		if _, err := parseAndSaveCredentials(`{"username":"alice","auth_token":"a"}`); err == nil {
+			t.Fatal("expected an error when the config can neither be read nor backed up")
+		}
+		if b, err := os.ReadFile(path); err != nil || string(b) != "{not json" {
+			t.Errorf("the unreadable config must be left intact, got %q (%v)", b, err)
 		}
 	})
 

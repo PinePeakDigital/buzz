@@ -156,6 +156,11 @@ func parseAccountFlag(args []string) (account string, filteredArgs []string, err
 			i++
 		case strings.HasPrefix(arg, "--account="):
 			account = strings.TrimPrefix(arg, "--account=")
+			if account == "" {
+				// Otherwise "--account=" silently means "every account" — the
+				// opposite of what someone typing it intended.
+				return "", nil, fmt.Errorf("--account requires a username")
+			}
 		default:
 			filteredArgs = append(filteredArgs, arg)
 		}
@@ -191,6 +196,20 @@ func main() {
 	}
 	os.Args = accountFiltered
 	accountFilter = account
+
+	// Validate the filter here, not at first use: a typo'd --account must not
+	// reach the TUI, whose "no usable account" branch prompts for credentials —
+	// asking a user who has perfectly good ones to re-authenticate. Commands
+	// still re-check via checkAccounts; this makes the message early and the
+	// same everywhere.
+	if accountFilter != "" && ConfigExists() {
+		if config, loadErr := LoadConfig(); loadErr == nil {
+			if err := config.checkAccounts(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+				os.Exit(2)
+			}
+		}
+	}
 
 	// Check for CLI arguments
 	if len(os.Args) > 1 {
