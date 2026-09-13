@@ -136,7 +136,7 @@ func RenderModal(goal *Goal, width, height int, inputDate, inputValue, inputComm
 		"Safe Buffer: %d days\n"+
 		"Due Date: %s\n"+
 		"Buffer Color: %s",
-		goal.Slug,
+		goal.DisplaySlug(),
 		goal.Title,
 		pledgeDisplay,
 		goal.Safebuf,

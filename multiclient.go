@@ -142,7 +142,10 @@ func (m *multiClient) FetchArchivedGoals(ctx context.Context) ([]Goal, error) {
 	// Archived goals stay reachable by slug (buzz view/data on an archived
 	// goal), so they belong in the routing index too — added to it, not
 	// replacing it, since a listing of archived goals says nothing about
-	// where the active ones live.
+	// where the active ones live. A later active-goal fetch rebuilds the map
+	// and drops these again, which is what keeps the index self-healing; they
+	// last as long as the command that listed them, and "username/slug" is
+	// the durable way to name an archived goal on a secondary account.
 	m.record(per, true)
 	return merge(m.accounts, per), nil
 }

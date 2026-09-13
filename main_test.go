@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -170,6 +171,39 @@ func TestNoColorFlag(t *testing.T) {
 
 // TestParseFormatFlag covers the global --format extraction: default, both flag
 // spellings, flag removal from args, and error cases (missing/invalid value).
+func TestParseAccountFlag(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantAccount string
+		wantArgs    []string
+		wantErr     bool
+	}{
+		{"no flag means all accounts", []string{"buzz", "list"}, "", []string{"buzz", "list"}, false},
+		{"--account bob (space)", []string{"buzz", "--account", "bob", "list"}, "bob", []string{"buzz", "list"}, false},
+		{"--account=bob (equals)", []string{"buzz", "list", "--account=bob"}, "bob", []string{"buzz", "list"}, false},
+		{"the value is not left in the args", []string{"buzz", "--account", "today", "today"}, "today", []string{"buzz", "today"}, false},
+		{"missing value errors", []string{"buzz", "list", "--account"}, "", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account, filtered, err := parseAccountFlag(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if account != tt.wantAccount {
+				t.Errorf("account = %q, want %q", account, tt.wantAccount)
+			}
+			if !slices.Equal(filtered, tt.wantArgs) {
+				t.Errorf("filtered = %v, want %v", filtered, tt.wantArgs)
+			}
+		})
+	}
+}
+
 func TestParseFormatFlag(t *testing.T) {
 	tests := []struct {
 		name       string

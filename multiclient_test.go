@@ -255,8 +255,9 @@ func TestAccountFilterNarrowsToOneAccount(t *testing.T) {
 		t.Fatal("no filter should build a multiClient")
 	}
 
-	t.Setenv("HOME", t.TempDir()) // accountFilter is global; restore it below.
-	defer func() { accountFilter = "" }()
+	// accountFilter is a package-level global; a leak would corrupt every other
+	// test in the package.
+	t.Cleanup(func() { accountFilter = "" })
 
 	accountFilter = "bob"
 	c, ok := newClient(config).(*HTTPClient)
@@ -322,5 +323,34 @@ func TestSingleAccountGoalsStayBare(t *testing.T) {
 	g := Goal{Slug: "read"}
 	if g.DisplaySlug() != "read" || g.routeSlug() != "read" {
 		t.Errorf("single-account goals should stay bare, got %q / %q", g.DisplaySlug(), g.routeSlug())
+	}
+}
+
+// TestModalKeepsAccountAcrossDetailFetch pins the field-preserving replace in
+// tui.go: a detail fetch returns the owning account's raw goal, which carries
+// no Account (only a multi-account listing stamps one). Replacing modalGoal
+// wholesale would revert the modal's URL to the primary account's page.
+func TestModalKeepsAccountAcrossDetailFetch(t *testing.T) {
+	testModel := model{
+		appModel: appModel{
+			goals:     []Goal{{Slug: "read", Account: "bob", ambiguous: true}},
+			modalGoal: &Goal{Slug: "read", Account: "bob", ambiguous: true},
+			mode:      modeGoalDetail,
+		},
+	}
+
+	// The detail fetch's goal has the same slug but no account provenance.
+	detailed := &Goal{Slug: "read", Title: "Read more"}
+	result, _ := testModel.updateApp(goalDetailsLoadedMsg{goal: detailed})
+	got := result.(model).appModel.modalGoal
+
+	if got.Title != "Read more" {
+		t.Errorf("the detail fetch's fields should land, got title %q", got.Title)
+	}
+	if got.Account != "bob" || !got.ambiguous {
+		t.Errorf("account provenance should survive the replace, got %+v", got)
+	}
+	if got.DisplaySlug() != "bob/read" {
+		t.Errorf("DisplaySlug = %q, want bob/read", got.DisplaySlug())
 	}
 }

@@ -91,7 +91,7 @@ func initialReviewModel(goals []Goal, config *Config) reviewModel {
 		loading:  len(goals) > 0,
 	}
 	if len(goals) > 0 {
-		m.inFlight[goals[0].Slug] = struct{}{}
+		m.inFlight[goals[0].routeSlug()] = struct{}{}
 	}
 	return m
 }
@@ -108,6 +108,11 @@ type goalDetailsMsg struct {
 // context lets the fetch be cancelled when the user quits. The fetch goes through
 // the injected Client seam so the review TUI is testable with a fake, like every
 // other command.
+//
+// The slug used throughout is Goal.routeSlug — account-qualified when the goal
+// came from a multi-account listing. That is both what the Client needs to reach
+// the right account and what keeps two accounts' same-named goals in separate
+// cache entries; in a single-account setup it is just the bare slug.
 func fetchGoalDetailsCmd(ctx context.Context, client Client, slug string) tea.Cmd {
 	return func() tea.Msg {
 		goal, err := client.FetchGoalWithDatapoints(ctx, slug)
@@ -124,7 +129,7 @@ func (m *reviewModel) ensureDetails() tea.Cmd {
 		m.loading = false
 		return nil
 	}
-	slug := m.goals[m.current].Slug
+	slug := m.goals[m.current].routeSlug()
 	if _, ok := m.details[slug]; ok {
 		m.loading = false
 		return nil
@@ -142,7 +147,7 @@ func (m reviewModel) Init() tea.Cmd {
 	if len(m.goals) == 0 {
 		return nil
 	}
-	return fetchGoalDetailsCmd(m.ctx, m.client, m.goals[0].Slug)
+	return fetchGoalDetailsCmd(m.ctx, m.client, m.goals[0].routeSlug())
 }
 
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -284,7 +289,7 @@ func (m reviewModel) contentView() string {
 	// Start from the bulk summary goal, then merge in the detail-only fields;
 	// see Goal.hydrateFrom for which fields and why it merges rather than replaces.
 	goal := m.goals[m.current]
-	if d, ok := m.details[goal.Slug]; ok {
+	if d, ok := m.details[goal.routeSlug()]; ok {
 		goal.hydrateFrom(d)
 	}
 

@@ -91,12 +91,12 @@ func extractTimeSlots(goals []Goal, loc *time.Location) []timeSlot {
 
 		// Add goal to this time slot
 		if slot, exists := slotMap[key]; exists {
-			slot.goals = append(slot.goals, goal.Slug)
+			slot.goals = append(slot.goals, goal.DisplaySlug())
 		} else {
 			slotMap[key] = &timeSlot{
 				hour:   hour,
 				minute: minute,
-				goals:  []string{goal.Slug},
+				goals:  []string{goal.DisplaySlug()},
 			}
 		}
 	}
