@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 // noStdin simulates an unpiped stdin (readValueFromStdin's error path).
@@ -464,4 +465,131 @@ func checkResult(t *testing.T, code int, out, errOut string, wantCode int, wantO
 	if wantErr != "" && !strings.Contains(errOut, wantErr) {
 		t.Errorf("stderr = %q, want contains %q", errOut, wantErr)
 	}
+}
+
+func TestParseArchiveArgs(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		args             []string
+		wantCode         int
+		wantOut, wantErr string
+	}{
+		{"help", []string{"--help"}, 0, "Usage: buzz archive", ""},
+		{"bad flag", []string{"--nope"}, 2, "", "Error parsing flags"},
+		{"no slug", nil, 1, "", "Usage: buzz archive"},
+		{"extra args", []string{"a", "b"}, 1, "", "Too many arguments"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errb bytes.Buffer
+			_, code, done := parseArchiveArgs(tc.args, &out, &errb)
+			if !done {
+				t.Fatal("want done")
+			}
+			checkResult(t, code, out.String(), errb.String(), tc.wantCode, tc.wantOut, tc.wantErr)
+		})
+	}
+
+	for _, flagArg := range []string{"-y", "--yes"} {
+		req, code, done := parseArchiveArgs([]string{flagArg, "goal"}, &bytes.Buffer{}, &bytes.Buffer{})
+		if done || code != 0 || req.goalSlug != "goal" || !req.skipConfirm {
+			t.Errorf("%s: req=%+v code=%d done=%v", flagArg, req, code, done)
+		}
+	}
+}
+
+func TestRunArchiveCommand(t *testing.T) {
+	future := time.Now().Add(7 * 24 * time.Hour)
+	archived := false
+	client := &FakeClient{
+		FetchGoalFunc: func(s string) (*Goal, error) { return &Goal{Slug: s, Pledge: 30}, nil },
+		ArchiveGoalFunc: func(s string) (*Goal, error) {
+			archived = true
+			return &Goal{Slug: s, Archivedate: future.Unix()}, nil
+		},
+	}
+	wantDate := "Scheduled g for archive on " + future.Format("Mon Jan 2, 2006") + "."
+
+	for _, tc := range []struct {
+		name    string
+		in      io.Reader
+		want    bool
+		wantOut string
+	}{
+		{"y", strings.NewReader("y\n"), true, wantDate},
+		{"YES case-insensitive", strings.NewReader("YES\n"), true, wantDate},
+		{"n", strings.NewReader("n\n"), false, "Cancelled.\n"},
+		{"empty line", strings.NewReader("\n"), false, "Cancelled.\n"},
+		{"closed stdin", strings.NewReader(""), false, "Cancelled.\n"},
+		{"other answer", strings.NewReader("maybe\n"), false, "Cancelled.\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			archived = false
+			var out, errb bytes.Buffer
+			code := runArchiveCommand(archiveRequest{goalSlug: "g"}, tc.in, client, &out, &errb)
+			if code != 0 || archived != tc.want || !strings.Contains(out.String(), tc.wantOut) {
+				t.Errorf("code=%d archived=%v out=%q err=%q", code, archived, out.String(), errb.String())
+			}
+			if !strings.HasPrefix(out.String(), "Archive g? $30 pledged. [y/N] ") {
+				t.Errorf("prompt missing: %q", out.String())
+			}
+		})
+	}
+
+	t.Run("skip confirm archives without fetch", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{ArchiveGoalFunc: client.ArchiveGoalFunc} // FetchGoal unset → would error if called
+		code := runArchiveCommand(archiveRequest{goalSlug: "g", skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
+		if code != 0 || out.String() != wantDate+"\n" {
+			t.Errorf("code=%d out=%q err=%q", code, out.String(), errb.String())
+		}
+	})
+
+	t.Run("already won or lost reports archiving now", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{ArchiveGoalFunc: func(s string) (*Goal, error) {
+			return &Goal{Slug: s, Archivedate: time.Now().Add(-time.Hour).Unix()}, nil
+		}}
+		code := runArchiveCommand(archiveRequest{goalSlug: "g", skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
+		if code != 0 || out.String() != "Archiving g now.\n" {
+			t.Errorf("code=%d out=%q err=%q", code, out.String(), errb.String())
+		}
+	})
+
+	t.Run("update notice prints after success but not after cancel", func(t *testing.T) {
+		notice := func() string { return "NOTICE\n" }
+		var out, errb bytes.Buffer
+		runArchiveCommand(archiveRequest{goalSlug: "g", updateNotice: notice}, strings.NewReader("y\n"), client, &out, &errb)
+		if !strings.HasSuffix(out.String(), ".\nNOTICE\n") {
+			t.Errorf("success out=%q", out.String())
+		}
+		out.Reset()
+		runArchiveCommand(archiveRequest{goalSlug: "g", updateNotice: notice}, strings.NewReader("n\n"), client, &out, &errb)
+		if strings.Contains(out.String(), "NOTICE") {
+			t.Errorf("cancel out=%q", out.String())
+		}
+	})
+
+	t.Run("fetch error aborts without archiving", func(t *testing.T) {
+		archived = false
+		var out, errb bytes.Buffer
+		c := &FakeClient{
+			FetchGoalFunc:   func(string) (*Goal, error) { return nil, errors.New("goal not found: g") },
+			ArchiveGoalFunc: client.ArchiveGoalFunc,
+		}
+		code := runArchiveCommand(archiveRequest{goalSlug: "g"}, strings.NewReader("y\n"), c, &out, &errb)
+		if code != 1 || archived || !strings.Contains(errb.String(), "goal not found") {
+			t.Errorf("code=%d archived=%v err=%q", code, archived, errb.String())
+		}
+	})
+
+	t.Run("archive error reaches stderr with the token redacted", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{ArchiveGoalFunc: func(string) (*Goal, error) {
+			return nil, errors.New("API returned status 422: Goal is already archived. auth_token=SECRET")
+		}}
+		code := runArchiveCommand(archiveRequest{goalSlug: "g", skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
+		if code != 1 || !strings.Contains(errb.String(), "Goal is already archived.") || strings.Contains(errb.String(), "SECRET") {
+			t.Errorf("code=%d err=%q", code, errb.String())
+		}
+	})
 }

@@ -54,3 +54,27 @@ that owns both (see #317 and
   within its span, extrapolated backward before the start, held flat past the
   end. Value is defined for all t; slope only *within* the span (outside it,
   callers fall back to `g.Rate`).
+
+## Goal lifecycle vocabulary
+
+Quitting a goal is three distinct states in Beeminder, not one, and buzz renders
+each differently. Archiving is always *scheduled*, never immediate: the akrasia
+horizon applies regardless of pledge (the exceptions are a goal under seven days
+old, which deletes outright, and one that has reached a success state).
+
+- **Scheduled for archive** — the goal is still active, still takes data, still
+  derails, but has an `archivedate` seven days out. Stays in the Browse grid and
+  in `buzz list`, flagged with a coloured dot and a ⚠ banner.
+- **Archived** — inactive: can't take data, can't derail, won't charge. Out of
+  the normal goal list; reachable only via `buzz list --archived` (Beeminder's
+  `goals/archived.json`). The pledge is neither refunded nor charged on archive.
+- **Deleted** — gone. A separate follow-up action on an already-archived goal,
+  distinct from archiving and out of buzz's scope.
+
+- **Restart** (Beeminder's term; sometimes "resurrect") — bringing an archived
+  goal back. Distinct from **cancel archive**, which withdraws a *scheduled*
+  archive during its seven-day countdown. Reserve "unarchive" for neither: it
+  reads as both.
+
+Scheduling and cancelling an archive are both API operations
+(`archive.json` / `cancel_archive.json`); restart and delete are not. See #375.

@@ -394,6 +394,15 @@ func (m *multiClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet 
 	return stamped(g, err, account)
 }
 
+func (m *multiClient) ArchiveGoal(ctx context.Context, goalSlug string) (*Goal, error) {
+	c, account, slug, err := m.clientFor(ctx, goalSlug)
+	if err != nil {
+		return nil, err
+	}
+	g, err := c.ArchiveGoal(ctx, slug)
+	return stamped(g, err, account)
+}
+
 func (m *multiClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {
 	c, account, slug, err := m.clientFor(ctx, goalSlug)
 	if err != nil {

@@ -33,6 +33,7 @@ output and exits — ideal for scripts, cron jobs, and status bars.
 | [`buzz charge`](/commands/managing/#buzz-charge) | Create a charge on your account |
 | [`buzz deadline`](/commands/managing/#buzz-deadline) | Change a goal's deadline |
 | [`buzz ratchet`](/commands/managing/#buzz-ratchet) | Remove safety buffer from a goal |
+| [`buzz archive`](/commands/managing/#buzz-archive) | Schedule a goal for archive |
 | [`buzz auth login`](/commands/managing/#buzz-auth-login) | Authenticate with Beeminder |
 
 ## Global flags
