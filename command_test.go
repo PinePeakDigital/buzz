@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -535,6 +536,15 @@ func TestRunArchiveCommand(t *testing.T) {
 		})
 	}
 
+	t.Run("fractional pledge", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{FetchGoalFunc: func(s string) (*Goal, error) { return &Goal{Slug: s, Pledge: 7.5}, nil }}
+		runArchiveCommand(archiveRequest{goalSlug: "g"}, strings.NewReader("n\n"), c, &out, &errb)
+		if !strings.HasPrefix(out.String(), "Archive g? $7.5 pledged. [y/N] ") {
+			t.Errorf("out=%q", out.String())
+		}
+	})
+
 	t.Run("skip confirm archives without fetch", func(t *testing.T) {
 		var out, errb bytes.Buffer
 		c := &FakeClient{ArchiveGoalFunc: client.ArchiveGoalFunc} // FetchGoal unset → would error if called
@@ -585,7 +595,7 @@ func TestRunArchiveCommand(t *testing.T) {
 	t.Run("archive error reaches stderr with the token redacted", func(t *testing.T) {
 		var out, errb bytes.Buffer
 		c := &FakeClient{ArchiveGoalFunc: func(string) (*Goal, error) {
-			return nil, errors.New("API returned status 422: Goal is already archived. auth_token=SECRET")
+			return nil, fmt.Errorf("failed: %w auth_token=SECRET", &apiStatusError{status: 422, body: "Goal is already archived."})
 		}}
 		code := runArchiveCommand(archiveRequest{goalSlug: "g", skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
 		if code != 1 || !strings.Contains(errb.String(), "Goal is already archived.") || strings.Contains(errb.String(), "SECRET") {
