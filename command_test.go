@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 )
@@ -328,6 +329,125 @@ func TestRunDeadlineCommand(t *testing.T) {
 		code := runDeadlineCommand(deadlineRequest{goalSlug: "g", offset: 54000}, errReader{err: errors.New("disk gone")}, client, &out, &errb)
 		if code != 0 || updateCalled || !strings.Contains(out.String(), "Cancelled") {
 			t.Errorf("code=%d updateCalled=%v out=%q", code, updateCalled, out.String())
+		}
+	})
+}
+
+func TestParseRatchetArgs(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		wantCode int
+		wantDone bool
+		wantErr  string
+	}{
+		{"help", []string{"-h"}, 0, true, "Usage: buzz ratchet"},
+		{"bad flag", []string{"--nope"}, 2, true, "Error parsing flags"},
+		{"missing args", []string{"goal"}, 1, true, "Missing required arguments"},
+		{"too many args", []string{"goal", "2", "3"}, 1, true, "Too many arguments"},
+		{"non-numeric days", []string{"goal", "soon"}, 1, true, "Invalid number of days"},
+		{"negative days", []string{"goal", "-1"}, 1, true, "must not be negative"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var errb bytes.Buffer
+			_, code, done := parseRatchetArgs(tc.args, &errb)
+			if code != tc.wantCode || done != tc.wantDone || !strings.Contains(errb.String(), tc.wantErr) {
+				t.Errorf("code=%d done=%v err=%q", code, done, errb.String())
+			}
+		})
+	}
+
+	t.Run("valid with -y", func(t *testing.T) {
+		req, code, done := parseRatchetArgs([]string{"-y", "goal", "2"}, &bytes.Buffer{})
+		if done || code != 0 || req.goalSlug != "goal" || req.days != 2 || !req.skipConfirm {
+			t.Errorf("req=%+v code=%d done=%v", req, code, done)
+		}
+	})
+}
+
+func TestRunRatchetCommand(t *testing.T) {
+	ratcheted := false
+	client := &FakeClient{
+		FetchGoalFunc: func(s string) (*Goal, error) { return &Goal{Slug: s, Safebuf: 5}, nil },
+		RatchetGoalFunc: func(s string, d int) (*Goal, error) {
+			ratcheted = true
+			return &Goal{Slug: s, Safebuf: d}, nil
+		},
+	}
+	for _, tc := range []struct {
+		name    string
+		in      io.Reader
+		want    bool
+		wantOut string
+	}{
+		{"y", strings.NewReader("y\n"), true, "Ratcheted g to 2 days"},
+		{"YES case-insensitive", strings.NewReader("YES\n"), true, "Ratcheted g to 2 days"},
+		{"n", strings.NewReader("n\n"), false, "Cancelled.\n"},
+		{"empty line", strings.NewReader("\n"), false, "Cancelled.\n"},
+		{"closed reader", strings.NewReader(""), false, "Cancelled.\n"},
+		{"read error", errReader{err: errors.New("disk gone")}, false, "Cancelled.\n"},
+		{"unterminated piped y", strings.NewReader("y"), true, "Ratcheted g to 2 days"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ratcheted = false
+			var out, errb bytes.Buffer
+			code := runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2}, tc.in, client, &out, &errb)
+			if code != 0 || ratcheted != tc.want || !strings.Contains(out.String(), tc.wantOut) {
+				t.Errorf("code=%d ratcheted=%v out=%q err=%q", code, ratcheted, out.String(), errb.String())
+			}
+			if !strings.Contains(out.String(), "Ratchet g from 5 to at most 2 days") {
+				t.Errorf("prompt missing: %q", out.String())
+			}
+		})
+	}
+
+	t.Run("skip confirm ratchets without fetch", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{RatchetGoalFunc: client.RatchetGoalFunc} // FetchGoal unset → would error if called
+		code := runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
+		if code != 0 || out.String() != "Ratcheted g to 2 days of safety buffer.\n" {
+			t.Errorf("code=%d out=%q err=%q", code, out.String(), errb.String())
+		}
+	})
+
+	t.Run("update notice prints after success but not after cancel", func(t *testing.T) {
+		notice := func() string { return "NOTICE\n" }
+		var out, errb bytes.Buffer
+		runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, updateNotice: notice}, strings.NewReader("y\n"), client, &out, &errb)
+		if !strings.HasSuffix(out.String(), "safety buffer.\nNOTICE\n") {
+			t.Errorf("success out=%q", out.String())
+		}
+		out.Reset()
+		runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, updateNotice: notice}, strings.NewReader("n\n"), client, &out, &errb)
+		if strings.Contains(out.String(), "NOTICE") {
+			t.Errorf("cancel out=%q", out.String())
+		}
+	})
+
+	t.Run("already at or below target uses the no-op prompt", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		runRatchetCommand(ratchetRequest{goalSlug: "g", days: 9}, strings.NewReader("n\n"), client, &out, &errb)
+		want := "g already has 5 days of safety buffer, which is at or below 9 days. No buffer will be removed. Continue anyway? [y/N] Cancelled.\n"
+		if out.String() != want {
+			t.Errorf("out=%q", out.String())
+		}
+	})
+
+	t.Run("fetch error", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{FetchGoalFunc: func(string) (*Goal, error) { return nil, errors.New("boom") }}
+		code := runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2}, strings.NewReader("y\n"), c, &out, &errb)
+		if code != 1 || !strings.Contains(errb.String(), "Failed to fetch goal") {
+			t.Errorf("code=%d err=%q", code, errb.String())
+		}
+	})
+
+	t.Run("ratchet error", func(t *testing.T) {
+		var out, errb bytes.Buffer
+		c := &FakeClient{RatchetGoalFunc: func(string, int) (*Goal, error) { return nil, errors.New("boom") }}
+		code := runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
+		if code != 1 || !strings.Contains(errb.String(), "Failed to ratchet goal") {
+			t.Errorf("code=%d err=%q", code, errb.String())
 		}
 	})
 }

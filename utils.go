@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -283,4 +285,25 @@ func detectMisplacedFlag(args []string) string {
 		}
 	}
 	return ""
+}
+
+// confirm writes prompt to stdout and reads one line from stdin, returning true
+// only for "y" or "yes" (case-insensitive). Anything else prints "Cancelled."
+// and returns false. A genuine read error counts as "no" so callers never act
+// without explicit consent; io.EOF is normal for piped input, so its content is
+// still evaluated: `printf y` with no trailing newline confirms, while empty
+// input cancels.
+func confirm(stdin io.Reader, stdout io.Writer, prompt string) bool {
+	fmt.Fprint(stdout, prompt)
+	line, err := bufio.NewReader(stdin).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		fmt.Fprintln(stdout, "Cancelled.")
+		return false
+	}
+	response := strings.TrimSpace(strings.ToLower(line))
+	if response != "y" && response != "yes" {
+		fmt.Fprintln(stdout, "Cancelled.")
+		return false
+	}
+	return true
 }
