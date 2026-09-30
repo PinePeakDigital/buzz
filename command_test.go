@@ -333,6 +333,38 @@ func TestRunDeadlineCommand(t *testing.T) {
 	})
 }
 
+func TestParseRatchetArgs(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		wantCode int
+		wantDone bool
+		wantErr  string
+	}{
+		{"help", []string{"-h"}, 0, true, "Usage: buzz ratchet"},
+		{"bad flag", []string{"--nope"}, 2, true, "Error parsing flags"},
+		{"missing args", []string{"goal"}, 1, true, "Missing required arguments"},
+		{"too many args", []string{"goal", "2", "3"}, 1, true, "Too many arguments"},
+		{"non-numeric days", []string{"goal", "soon"}, 1, true, "Invalid number of days"},
+		{"negative days", []string{"goal", "-1"}, 1, true, "must not be negative"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var errb bytes.Buffer
+			_, code, done := parseRatchetArgs(tc.args, &errb)
+			if code != tc.wantCode || done != tc.wantDone || !strings.Contains(errb.String(), tc.wantErr) {
+				t.Errorf("code=%d done=%v err=%q", code, done, errb.String())
+			}
+		})
+	}
+
+	t.Run("valid with -y", func(t *testing.T) {
+		req, code, done := parseRatchetArgs([]string{"-y", "goal", "2"}, &bytes.Buffer{})
+		if done || code != 0 || req.goalSlug != "goal" || req.days != 2 || !req.skipConfirm {
+			t.Errorf("req=%+v code=%d done=%v", req, code, done)
+		}
+	})
+}
+
 func TestRunRatchetCommand(t *testing.T) {
 	ratcheted := false
 	client := &FakeClient{
@@ -375,6 +407,20 @@ func TestRunRatchetCommand(t *testing.T) {
 		code := runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, skipConfirm: true}, strings.NewReader(""), c, &out, &errb)
 		if code != 0 || out.String() != "Ratcheted g to 2 days of safety buffer.\n" {
 			t.Errorf("code=%d out=%q err=%q", code, out.String(), errb.String())
+		}
+	})
+
+	t.Run("update notice prints after success but not after cancel", func(t *testing.T) {
+		notice := func() string { return "NOTICE\n" }
+		var out, errb bytes.Buffer
+		runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, updateNotice: notice}, strings.NewReader("y\n"), client, &out, &errb)
+		if !strings.HasSuffix(out.String(), "safety buffer.\nNOTICE\n") {
+			t.Errorf("success out=%q", out.String())
+		}
+		out.Reset()
+		runRatchetCommand(ratchetRequest{goalSlug: "g", days: 2, updateNotice: notice}, strings.NewReader("n\n"), client, &out, &errb)
+		if strings.Contains(out.String(), "NOTICE") {
+			t.Errorf("cancel out=%q", out.String())
 		}
 	})
 

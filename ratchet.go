@@ -15,6 +15,10 @@ type ratchetRequest struct {
 	goalSlug    string
 	days        int
 	skipConfirm bool
+	// updateNotice, when set, is printed after a successful ratchet only — a
+	// cancelled prompt must not nag about updates. The handler wires it to
+	// getUpdateMessage; tests leave it nil to stay off the network.
+	updateNotice func() string
 }
 
 // handleRatchetCommand removes safety buffer from a goal, leaving it with at
@@ -32,11 +36,8 @@ func handleRatchetCommand() {
 		os.Exit(1)
 	}
 
-	code = runRatchetCommand(req, os.Stdin, client, os.Stdout, os.Stderr)
-	if code == 0 {
-		fmt.Print(getUpdateMessage())
-	}
-	os.Exit(code)
+	req.updateNotice = getUpdateMessage
+	os.Exit(runRatchetCommand(req, os.Stdin, client, os.Stdout, os.Stderr))
 }
 
 // parseRatchetArgs parses and validates `buzz ratchet` arguments, returning the
@@ -120,5 +121,8 @@ func runRatchetCommand(req ratchetRequest, stdin io.Reader, client Client, stdou
 	}
 
 	fmt.Fprintf(stdout, "Ratcheted %s to %d days of safety buffer.\n", goal.Slug, goal.Safebuf)
+	if req.updateNotice != nil {
+		fmt.Fprint(stdout, req.updateNotice())
+	}
 	return 0
 }
