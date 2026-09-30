@@ -59,8 +59,10 @@ that owns both (see #317 and
 
 Quitting a goal is three distinct states in Beeminder, not one, and buzz renders
 each differently. Archiving is always *scheduled*, never immediate: the akrasia
-horizon applies regardless of pledge (the exceptions are a goal under seven days
-old, which deletes outright, and one that has reached a success state).
+horizon applies regardless of pledge (the exception is a goal that has reached a
+success state). A goal under seven days old additionally offers a separate
+"Delete now" option, which is deletion rather than archiving and is unavailable
+in No-Excuses Mode.
 
 - **Scheduled for archive** — the goal is still active, still takes data, still
   derails, but has an `archivedate` seven days out. Stays in the Browse grid and
@@ -68,8 +70,9 @@ old, which deletes outright, and one that has reached a success state).
 - **Archived** — inactive: can't take data, can't derail, won't charge. Out of
   the normal goal list; reachable only via `buzz list --archived` (Beeminder's
   `goals/archived.json`). The pledge is neither refunded nor charged on archive.
-- **Deleted** — gone. A separate follow-up action on an already-archived goal,
-  distinct from archiving and out of buzz's scope.
+- **Deleted** — gone. A separate action, distinct from archiving and out of
+  buzz's scope: normally a follow-up on an already-archived goal, or "Delete now"
+  for a goal under seven days old.
 
 - **Restart** (Beeminder's term; sometimes "resurrect") — bringing an archived
   goal back. Distinct from **cancel archive**, which withdraws a *scheduled*
