@@ -38,6 +38,7 @@ type FakeClient struct {
 	CreateGoalFunc                  func(slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncleFunc                   func(goalSlug string) (*Goal, error)
 	RatchetGoalFunc                 func(goalSlug string, ratchet int) (*Goal, error)
+	ArchiveGoalFunc                 func(goalSlug string) (*Goal, error)
 	UpdateGoalDeadlineFunc          func(goalSlug string, deadline int) (*Goal, error)
 	RefreshGoalFunc                 func(goalSlug string) (bool, error)
 }
@@ -143,6 +144,13 @@ func (c *FakeClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet i
 		return nil, errFakeNotConfigured
 	}
 	return c.RatchetGoalFunc(goalSlug, ratchet)
+}
+
+func (c *FakeClient) ArchiveGoal(ctx context.Context, goalSlug string) (*Goal, error) {
+	if c.ArchiveGoalFunc == nil {
+		return nil, errFakeNotConfigured
+	}
+	return c.ArchiveGoalFunc(goalSlug)
 }
 
 func (c *FakeClient) UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error) {

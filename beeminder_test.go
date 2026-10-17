@@ -2667,3 +2667,66 @@ func TestHydrateFrom(t *testing.T) {
 		t.Errorf("detail fields not merged: %+v", g)
 	}
 }
+
+// TestArchiveGoalWithMockServer covers the undocumented archive.json member
+// route (see ArchiveGoal): the request shape, and that Beeminder's 422 message
+// reaches the caller intact.
+func TestArchiveGoalWithMockServer(t *testing.T) {
+	t.Run("posts to archive.json and decodes the archive date", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Expected POST request, got %s", r.Method)
+			}
+			if want := "/api/v1/users/testuser/goals/testgoal/archive.json"; r.URL.Path != want {
+				t.Errorf("Expected path %s, got %s", want, r.URL.Path)
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm failed: %v", err)
+			}
+			if r.FormValue("auth_token") != "testtoken" {
+				t.Errorf("Expected auth_token 'testtoken', got %s", r.FormValue("auth_token"))
+			}
+			json.NewEncoder(w).Encode(Goal{Slug: "testgoal", Archivedate: 1234567890})
+		}))
+		defer mockServer.Close()
+
+		config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: mockServer.URL}
+		goal, err := NewHTTPClient(config).ArchiveGoal(context.Background(), "testgoal")
+		if err != nil {
+			t.Fatalf("ArchiveGoal failed: %v", err)
+		}
+		if goal.Slug != "testgoal" || goal.Archivedate != 1234567890 {
+			t.Errorf("Unexpected goal: %+v", goal)
+		}
+	})
+
+	t.Run("422 body reaches the caller verbatim", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.Write([]byte("Goal is already archived."))
+		}))
+		defer mockServer.Close()
+
+		config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: mockServer.URL}
+		goal, err := NewHTTPClient(config).ArchiveGoal(context.Background(), "testgoal")
+		if err == nil || goal != nil {
+			t.Fatalf("Expected error and nil goal, got goal=%+v err=%v", goal, err)
+		}
+		if !strings.Contains(err.Error(), "422") || !strings.Contains(err.Error(), "Goal is already archived.") {
+			t.Errorf("422 message not surfaced intact: %v", err)
+		}
+	})
+
+	t.Run("404 is a goal-not-found error", func(t *testing.T) {
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer mockServer.Close()
+
+		config := &Config{Username: "testuser", AuthToken: "testtoken", BaseURL: mockServer.URL}
+		_, err := NewHTTPClient(config).ArchiveGoal(context.Background(), "nope")
+		if err == nil || !strings.Contains(err.Error(), "goal not found: nope") {
+			t.Errorf("Expected goal not found error, got: %v", err)
+		}
+	})
+}

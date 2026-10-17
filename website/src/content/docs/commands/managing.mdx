@@ -151,6 +151,33 @@ Ratcheting only ever *tightens* a goal — Beeminder ignores requests that would
 buffer, so this cannot be used to give yourself more breathing room.
 </Aside>
 
+## `buzz archive`
+
+Schedule a goal for archive:
+
+```bash
+buzz archive [-y|--yes] <goalslug>
+
+# Examples:
+buzz archive mygoal          # Asks first: "Archive mygoal? $30 pledged. [y/N]"
+buzz archive --yes mygoal    # Skip confirmation
+```
+
+Beeminder never archives a goal instantly: its akrasia horizon applies regardless
+of pledge, so the goal keeps taking data (and can still derail) for seven days,
+and the command prints the date it will be archived. A goal that has already won
+or lost is archived on Beeminder's next sweep instead, and the command says it is
+archiving now. Running it again on the same goal leaves the date unchanged. The
+pledge is neither refunded nor charged.
+
+- **`<goalslug>`** — the slug of the goal to archive
+- **`--yes`, `-y`** — skip the confirmation prompt (useful for scripting)
+
+<Aside type="note">
+Cancelling a scheduled archive is not yet supported from buzz; use the Beeminder
+website.
+</Aside>
+
 ## `buzz auth login`
 
 Authenticate with Beeminder:

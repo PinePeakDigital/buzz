@@ -76,6 +76,12 @@ func (g *Goal) hydrateFrom(detail *Goal) {
 // gating on now (not just presence) means an already-archived goal reachable by
 // slug doesn't read as "scheduled". Shared by the detail banner and the list
 // marker so both agree.
+//
+// Archival *in flight* reads as not scheduled: a goal that has already won or
+// lost gets a past-dated archivedate and stays active until Beeminder's next
+// callback sweep, so it shows no banner or dot during that window. That is
+// deliberate — telling pending from already-archived would need a field the
+// goal payload may not carry.
 func (g Goal) ScheduledForArchive(now time.Time) bool {
 	return g.Archivedate > 0 && g.Archivedate > now.Unix()
 }
