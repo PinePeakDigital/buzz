@@ -75,6 +75,9 @@ func printHelp() {
 	fmt.Println("  buzz ratchet [-y|--yes] <goalslug> <days>")
 	fmt.Println("                                    Remove safety buffer, leaving <days> of buffer on the goal")
 	fmt.Println("                                    -y, --yes: Skip the confirmation prompt")
+	fmt.Println("  buzz archive [-y|--yes] <goalslug>")
+	fmt.Println("                                    Schedule a goal for archive (seven days out, unless already won or lost)")
+	fmt.Println("                                    -y, --yes: Skip the confirmation prompt")
 	fmt.Println("  buzz api [-X <method>] [-d <key=value>]... <path>")
 	fmt.Println("                                    Make a raw authenticated Beeminder API request")
 	fmt.Println("                                    e.g. buzz api users/me.json")
@@ -268,6 +271,9 @@ func main() {
 		case "ratchet":
 			handleRatchetCommand()
 			return
+		case "archive":
+			handleArchiveCommand()
+			return
 		case "api":
 			handleAPICommand()
 			return
@@ -282,7 +288,7 @@ func main() {
 			return
 		default:
 			fmt.Printf("Unknown command: %s\n", os.Args[1])
-			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, data, review, charge, create, deadline, schedule, uncle, ratchet, api, auth, help, version")
+			fmt.Println("Available commands: next, list, all, today, tomorrow, due, less, add, refresh, view, data, review, charge, create, deadline, schedule, uncle, ratchet, archive, api, auth, help, version")
 			fmt.Println("Run 'buzz --help' for more information.")
 			os.Exit(1)
 		}

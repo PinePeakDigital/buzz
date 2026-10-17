@@ -547,3 +547,19 @@ func TestAccountsNeedBothHalvesOfACredential(t *testing.T) {
 		t.Error("checkAccounts should reject a config whose only account has no token")
 	}
 }
+
+func TestArchiveGoalRoutesAndRejectsAmbiguousSlug(t *testing.T) {
+	m, a, b := twoAccounts([]Goal{{ID: "1", Slug: "read"}}, []Goal{{ID: "2", Slug: "read"}})
+	a.ArchiveGoalFunc = func(string) (*Goal, error) {
+		t.Fatal("archive must not reach an account without a qualifier")
+		return nil, nil
+	}
+	if _, err := m.ArchiveGoal(context.Background(), "read"); err == nil || !strings.Contains(err.Error(), "bob/read") {
+		t.Fatalf("want an ambiguity error, got %v", err)
+	}
+	var got string
+	b.ArchiveGoalFunc = func(slug string) (*Goal, error) { got = slug; return &Goal{Slug: slug}, nil }
+	if _, err := m.ArchiveGoal(context.Background(), "bob/read"); err != nil || got != "read" {
+		t.Fatalf("qualified slug should route to bob with the bare slug: %v %q", err, got)
+	}
+}

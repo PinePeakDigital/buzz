@@ -52,6 +52,9 @@ type Client interface {
 	CreateGoal(ctx context.Context, slug, title, goalType, gunits, goaldate, goalval, rate string) (*Goal, error)
 	CallUncle(ctx context.Context, goalSlug string) (*Goal, error)
 	RatchetGoal(ctx context.Context, goalSlug string, ratchet int) (*Goal, error)
+	// ArchiveGoal schedules a goal for archive and returns it with its archive
+	// date set. Repeat calls are a server-side no-op, not a countdown reset.
+	ArchiveGoal(ctx context.Context, goalSlug string) (*Goal, error)
 	UpdateGoalDeadline(ctx context.Context, goalSlug string, deadline int) (*Goal, error)
 	RefreshGoal(ctx context.Context, goalSlug string) (bool, error)
 }
@@ -364,6 +367,36 @@ func (c *HTTPClient) RatchetGoal(ctx context.Context, goalSlug string, ratchet i
 
 	goal, err := doJSON[Goal](ctx, c, http.MethodPost, apiURL, "failed to ratchet goal", strings.NewReader(data.Encode()), formContentType)
 	if err != nil {
+		return nil, err
+	}
+	return &goal, nil
+}
+
+// ArchiveGoal schedules a goal for archive. Beeminder's akrasia horizon applies
+// regardless of pledge, so the returned goal normally carries an archivedate
+// seven days out; a goal that has already won or lost comes back with a past
+// date and is archived on the next callback sweep.
+//
+// The archive.json member route (a sibling of stepdown) is absent from the
+// published Beeminder API reference: it was added in
+// https://github.com/beeminder/beeminder/pull/5710 (merged 2026-08-18), whose
+// companion apidocs PR was never written. The dependency is deliberate.
+//
+// A non-200 (e.g. 422 "Goal is already archived.") comes back as an
+// *apiStatusError whose body is Beeminder's message, untouched.
+func (c *HTTPClient) ArchiveGoal(ctx context.Context, goalSlug string) (*Goal, error) {
+	apiURL := fmt.Sprintf("%s/api/v1/users/%s/goals/%s/archive.json",
+		c.baseURL(), c.config.Username, url.PathEscape(goalSlug))
+
+	data := url.Values{}
+	data.Set("auth_token", c.config.AuthToken)
+
+	goal, err := doJSON[Goal](ctx, c, http.MethodPost, apiURL, "failed to archive goal", strings.NewReader(data.Encode()), formContentType)
+	if err != nil {
+		var se *apiStatusError
+		if errors.As(err, &se) && se.status == http.StatusNotFound {
+			return nil, fmt.Errorf("goal not found: %s", goalSlug)
+		}
 		return nil, err
 	}
 	return &goal, nil
