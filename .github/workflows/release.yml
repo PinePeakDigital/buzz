@@ -38,7 +38,7 @@ jobs:
       - name: Calculate semantic version
         id: semver
         if: github.event_name == 'push' || github.event.inputs.version == ''
-        uses: ietf-tools/semver-action@c90370b2958652d71c06a3484129a4d423a6d8a8 # v1.11.0
+        uses: ietf-tools/semver-action@46feaa27e7375da0e3d602721e9fb9573598b880 # v1.12.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
@@ -87,7 +87,7 @@ jobs:
 
       - name: Create Release
         if: steps.version.outputs.skip == 'false'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
