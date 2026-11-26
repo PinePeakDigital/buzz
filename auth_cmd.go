@@ -2,9 +2,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"strings"
+
+	"github.com/charmbracelet/x/term"
 )
 
 // printAuthHelp prints usage for the `buzz auth` command group.
@@ -56,36 +61,30 @@ func handleAuthLoginCommand() {
 	fmt.Println("Get them from: https://www.beeminder.com/api/v1/auth_token.json")
 	fmt.Println("")
 	fmt.Println(`Format: {"username":"your_username","auth_token":"your_token"}`)
-	fmt.Print("> ")
+	fmt.Print(credentialsPrompt(term.IsTerminal(os.Stdin.Fd())))
 
-	// When stdin is piped (not a terminal), read the whole stream so
-	// pretty-printed/multiline JSON survives intact. For an interactive
-	// terminal, read a single line so the prompt returns as soon as the user
-	// pastes their one-line credentials and presses Enter (reading to EOF
-	// would instead block until Ctrl+D).
-	var input string
-	if fi, statErr := os.Stdin.Stat(); statErr == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
-		b, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
-			os.Exit(1)
+	input, hidden, err := readCredentialsInput(os.Stdin)
+	if err != nil {
+		if term.IsTerminal(os.Stdin.Fd()) {
+			// No echo, so no newline after the prompt: keep the error off it.
+			fmt.Fprintln(os.Stderr)
 		}
-		input = string(b)
-	} else {
-		// ReadString returns io.EOF along with any data read before the stream
-		// ended (e.g. piped input with no trailing newline). Only treat it as a
-		// failure when nothing was read at all.
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil && line == "" {
-			fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
-			os.Exit(1)
-		}
-		input = line
+		fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
+		os.Exit(1)
+	}
+	if hidden {
+		// No echo means the Enter keypress produced no newline either.
+		fmt.Println("")
 	}
 
 	if _, err := parseAndSaveCredentials(input); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
+	}
+
+	if hidden {
+		fmt.Printf("✓ Saved token for %s\n", credentialsUsername(input))
+		return
 	}
 
 	fmt.Println("")
@@ -142,4 +141,85 @@ func runAuthLogoutCommand(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "Removed account: %s\n", args[0])
 	return 0
+}
+
+// credentialsPrompt returns the prompt shown before the credentials are read.
+// Only the terminal path reads without echo, so only it carries the hint.
+func credentialsPrompt(interactive bool) string {
+	if interactive {
+		return "(input hidden) > "
+	}
+	return "> "
+}
+
+// readCredentialsInput reads the pasted credentials from f. hidden reports
+// that f is an interactive terminal and the input was read without echo, so
+// the auth token never lands in scrollback or terminal recordings.
+//
+// When f is piped (not a terminal), the whole stream is read so
+// pretty-printed/multiline JSON survives intact. A character device that is
+// not a terminal falls back to a single line.
+func readCredentialsInput(f *os.File) (input string, hidden bool, err error) {
+	if term.IsTerminal(f.Fd()) {
+		b, err := readHidden(f)
+		if err != nil {
+			return "", false, err
+		}
+		return string(b), true, nil
+	}
+	if fi, statErr := f.Stat(); statErr == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
+		b, err := io.ReadAll(f)
+		if err != nil {
+			return "", false, err
+		}
+		return string(b), false, nil
+	}
+	// ReadString returns io.EOF along with any data read before the stream
+	// ended. Only treat it as a failure when nothing was read at all.
+	line, err := bufio.NewReader(f).ReadString('\n')
+	if err != nil && line == "" {
+		return "", false, err
+	}
+	return line, false, nil
+}
+
+// credentialsUsername extracts the username from already-validated
+// credentials JSON, for the confirmation message.
+func credentialsUsername(input string) string {
+	var creds Account
+	_ = json.Unmarshal([]byte(strings.TrimSpace(input)), &creds)
+	return strings.TrimSpace(creds.Username)
+}
+
+// readHidden reads a line from the terminal f without echo. ReadPassword's
+// deferred restore does not run if Ctrl-C kills the process, which would leave
+// the shell in no-echo mode, so SIGINT is caught for the duration of the read
+// to restore the terminal state and exit 130.
+func readHidden(f *os.File) ([]byte, error) {
+	fd := f.Fd()
+	state, stateErr := term.GetState(fd)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+	done := make(chan struct{})
+	defer func() {
+		signal.Stop(sigs)
+		close(done)
+	}()
+	go func() {
+		select {
+		case <-sigs:
+			select {
+			case <-done:
+				return // the read already finished; nothing to abort
+			default:
+			}
+			if stateErr == nil {
+				_ = term.Restore(fd, state)
+			}
+			fmt.Fprintln(os.Stderr)
+			os.Exit(130)
+		case <-done:
+		}
+	}()
+	return term.ReadPassword(fd)
 }
