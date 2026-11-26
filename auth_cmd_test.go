@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/bubbles/textinput"
 )
 
 // TestRunAuthListCommand covers the account listing. HOME is redirected to a
@@ -116,4 +119,38 @@ func TestRunAuthLogoutCommand(t *testing.T) {
 			t.Errorf("config should be unchanged, got %+v (%v)", config, err)
 		}
 	})
+}
+
+// TestReadCredentialsInputPiped covers the non-terminal path used by
+// `buzz auth login < creds.json`: the whole stream is read, multiline JSON
+// included, and nothing is treated as hidden terminal input.
+func TestReadCredentialsInputPiped(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const payload = "{\n  \"username\": \"alice\",\n  \"auth_token\": \"tok\"\n}\n"
+	go func() {
+		_, _ = w.WriteString(payload)
+		_ = w.Close()
+	}()
+	got, hidden, err := readCredentialsInput(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hidden {
+		t.Error("piped input must not be reported as hidden terminal input")
+	}
+	if got != payload {
+		t.Errorf("got %q", got)
+	}
+	if u := credentialsUsername(got); u != "alice" {
+		t.Errorf("username = %q", u)
+	}
+}
+
+func TestInitialAuthModelMasksToken(t *testing.T) {
+	if m := initialAuthModel(); m.textInput.EchoMode != textinput.EchoPassword {
+		t.Errorf("EchoMode = %v, want EchoPassword", m.textInput.EchoMode)
+	}
 }

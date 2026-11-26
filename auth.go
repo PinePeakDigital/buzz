@@ -91,6 +91,8 @@ func initialAuthModel() authModel {
 	ti.Focus()
 	ti.CharLimit = 500
 	ti.Width = 80
+	// The pasted blob contains the auth token; keep it off the screen.
+	ti.EchoMode = textinput.EchoPassword
 
 	return authModel{
 		textInput: ti,
