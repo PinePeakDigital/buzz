@@ -64,6 +64,10 @@ func handleAuthLoginCommand() {
 
 	input, hidden, err := readCredentialsInput(os.Stdin)
 	if err != nil {
+		if term.IsTerminal(os.Stdin.Fd()) {
+			// No echo, so no newline after the prompt: keep the error off it.
+			fmt.Fprintln(os.Stderr)
+		}
 		fmt.Fprintf(os.Stderr, "Error: failed to read credentials: %s\n", err)
 		os.Exit(1)
 	}
