@@ -208,6 +208,11 @@ func readHidden(f *os.File) ([]byte, error) {
 	go func() {
 		select {
 		case <-sigs:
+			select {
+			case <-done:
+				return // the read already finished; nothing to abort
+			default:
+			}
 			if stateErr == nil {
 				_ = term.Restore(fd, state)
 			}
