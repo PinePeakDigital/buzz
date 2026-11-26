@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/charmbracelet/x/term"
@@ -60,7 +61,7 @@ func handleAuthLoginCommand() {
 	fmt.Println("Get them from: https://www.beeminder.com/api/v1/auth_token.json")
 	fmt.Println("")
 	fmt.Println(`Format: {"username":"your_username","auth_token":"your_token"}`)
-	fmt.Print("> ")
+	fmt.Print(credentialsPrompt(term.IsTerminal(os.Stdin.Fd())))
 
 	input, hidden, err := readCredentialsInput(os.Stdin)
 	if err != nil {
@@ -142,6 +143,15 @@ func runAuthLogoutCommand(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// credentialsPrompt returns the prompt shown before the credentials are read.
+// Only the terminal path reads without echo, so only it carries the hint.
+func credentialsPrompt(interactive bool) string {
+	if interactive {
+		return "(input hidden) > "
+	}
+	return "> "
+}
+
 // readCredentialsInput reads the pasted credentials from f. hidden reports
 // that f is an interactive terminal and the input was read without echo, so
 // the auth token never lands in scrollback or terminal recordings.
@@ -151,7 +161,7 @@ func runAuthLogoutCommand(args []string, stdout, stderr io.Writer) int {
 // not a terminal falls back to a single line.
 func readCredentialsInput(f *os.File) (input string, hidden bool, err error) {
 	if term.IsTerminal(f.Fd()) {
-		b, err := term.ReadPassword(f.Fd())
+		b, err := readHidden(f)
 		if err != nil {
 			return "", false, err
 		}
@@ -179,4 +189,32 @@ func credentialsUsername(input string) string {
 	var creds Account
 	_ = json.Unmarshal([]byte(strings.TrimSpace(input)), &creds)
 	return strings.TrimSpace(creds.Username)
+}
+
+// readHidden reads a line from the terminal f without echo. ReadPassword's
+// deferred restore does not run if Ctrl-C kills the process, which would leave
+// the shell in no-echo mode, so SIGINT is caught for the duration of the read
+// to restore the terminal state and exit 130.
+func readHidden(f *os.File) ([]byte, error) {
+	fd := f.Fd()
+	state, stateErr := term.GetState(fd)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+	done := make(chan struct{})
+	defer func() {
+		signal.Stop(sigs)
+		close(done)
+	}()
+	go func() {
+		select {
+		case <-sigs:
+			if stateErr == nil {
+				_ = term.Restore(fd, state)
+			}
+			fmt.Fprintln(os.Stderr)
+			os.Exit(130)
+		case <-done:
+		}
+	}()
+	return term.ReadPassword(fd)
 }

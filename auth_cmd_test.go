@@ -154,3 +154,12 @@ func TestInitialAuthModelMasksToken(t *testing.T) {
 		t.Errorf("EchoMode = %v, want EchoPassword", m.textInput.EchoMode)
 	}
 }
+
+func TestCredentialsPrompt(t *testing.T) {
+	if got := credentialsPrompt(true); got != "(input hidden) > " {
+		t.Errorf("terminal prompt = %q", got)
+	}
+	if got := credentialsPrompt(false); got != "> " {
+		t.Errorf("piped prompt = %q", got)
+	}
+}
